@@ -59,7 +59,7 @@ func (c *pongGameClient) StreamUpdates(ctx context.Context, in *GameStreamReques
 }
 
 type PongGame_StreamUpdatesClient interface {
-	Recv() (*GameUpdate, error)
+	Recv() (*GameUpdateBytes, error)
 	grpc.ClientStream
 }
 
@@ -67,8 +67,8 @@ type pongGameStreamUpdatesClient struct {
 	grpc.ClientStream
 }
 
-func (x *pongGameStreamUpdatesClient) Recv() (*GameUpdate, error) {
-	m := new(GameUpdate)
+func (x *pongGameStreamUpdatesClient) Recv() (*GameUpdateBytes, error) {
+	m := new(GameUpdateBytes)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -134,7 +134,7 @@ func _PongGame_StreamUpdates_Handler(srv interface{}, stream grpc.ServerStream) 
 }
 
 type PongGame_StreamUpdatesServer interface {
-	Send(*GameUpdate) error
+	Send(*GameUpdateBytes) error
 	grpc.ServerStream
 }
 
@@ -142,7 +142,7 @@ type pongGameStreamUpdatesServer struct {
 	grpc.ServerStream
 }
 
-func (x *pongGameStreamUpdatesServer) Send(m *GameUpdate) error {
+func (x *pongGameStreamUpdatesServer) Send(m *GameUpdateBytes) error {
 	return x.ServerStream.SendMsg(m)
 }
 

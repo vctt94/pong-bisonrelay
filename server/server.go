@@ -17,9 +17,8 @@ import (
 
 var (
 	serverLogger = log.New(os.Stdout, "[SERVER] ", 0)
-
-	debug = flag.Bool("debug", false, "")
-	fps   = flag.Uint("fps", canvas.DEFAULT_FPS, "")
+	debug        = flag.Bool("debug", false, "")
+	fps          = flag.Uint("fps", canvas.DEFAULT_FPS, "")
 )
 
 type server struct {
@@ -30,7 +29,7 @@ type server struct {
 }
 
 func (s *server) SendInput(ctx context.Context, in *pong.PlayerInput) (*pong.GameUpdate, error) {
-	// Example: Convert and forward input to the game engine
+	// Convert and forward input to the game engine
 	input := fmt.Sprintf("%s", in.Input) // Assuming Key is something like "ArrowUp" or "ArrowDown"
 	s.inputch <- []byte(input)
 
@@ -44,55 +43,27 @@ func (s *server) StreamUpdates(req *pong.GameStreamRequest, stream pong.PongGame
 		case <-stream.Context().Done():
 			return stream.Context().Err()
 		case frame := <-s.framesch:
-			// Deserialize the game state from JSON
-			var engineOutput *canvas.CanvasEngine // Assuming GameState is the structured representation of your game state
-			if err := json.Unmarshal(frame, &engineOutput); err != nil {
-				serverLogger.Printf("error unmarshalling frame: %v", err)
-				continue // or handle the error appropriately
-			}
 
-			// Convert the game state to a pong.GameUpdate message
-			update, err := convertToGameUpdate(s.engine)
-			if err != nil {
-				return err
+			// Wrap the bytes in a GameUpdateBytes message
+			gameUpdateBytes := &pong.GameUpdateBytes{
+				Data: frame,
 			}
 
 			// Send the update to the client
-			if err := stream.Send(update); err != nil {
+			if err := stream.Send(gameUpdateBytes); err != nil {
 				return err
 			}
 		}
 	}
 }
 
-func convertToGameUpdate(engineOutput *canvas.CanvasEngine) (*pong.GameUpdate, error) {
-	// Assuming engineOutput.MarshalJSON() returns ([]byte, error)
-	// But since we're directly converting, we won't use MarshalJSON here.
-
-	return &pong.GameUpdate{
-		GameWidth:     int32(engineOutput.Game.Width),
-		GameHeight:    int32(engineOutput.Game.Height),
-		P1Width:       int32(engineOutput.Game.P1.Width),
-		P1Height:      int32(engineOutput.Game.P1.Height),
-		P2Width:       int32(engineOutput.Game.P2.Width),
-		P2Height:      int32(engineOutput.Game.P2.Height),
-		BallWidth:     int32(engineOutput.Game.Ball.Width),
-		BallHeight:    int32(engineOutput.Game.Ball.Height),
-		P1Score:       int32(engineOutput.P1Score),
-		P2Score:       int32(engineOutput.P2Score),
-		BallX:         int32(engineOutput.BallX),
-		BallY:         int32(engineOutput.BallY),
-		P1X:           int32(engineOutput.P1X),
-		P1Y:           int32(engineOutput.P1Y),
-		P2X:           int32(engineOutput.P2X),
-		P2Y:           int32(engineOutput.P2Y),
-		P1YVelocity:   int32(engineOutput.P1YVelocity),
-		P2YVelocity:   int32(engineOutput.P2YVelocity),
-		BallXVelocity: int32(engineOutput.BallXVelocity),
-		BallYVelocity: int32(engineOutput.BallYVelocity),
-		Fps:           float32(engineOutput.FPS),
-		Tps:           float32(engineOutput.TPS),
-	}, nil
+func (s *server) prepareGameUpdate(frame []byte) (*pong.GameUpdate, error) {
+	// Assuming frame is already a serialized pong.GameUpdate for simplicity
+	var update pong.GameUpdate
+	if err := json.Unmarshal(frame, &update); err != nil {
+		return nil, fmt.Errorf("error unmarshalling game update: %v", err)
+	}
+	return &update, nil
 }
 
 func main() {
@@ -106,7 +77,7 @@ func main() {
 	)
 
 	canvasEngine := canvas.New(game)
-	canvasEngine.SetDebug(false).SetFPS(60)
+	canvasEngine.SetDebug(*debug).SetFPS(*fps)
 
 	// Set up channels
 	framesch := make(chan []byte, 100) // Buffer based on expected frame rate and network delay

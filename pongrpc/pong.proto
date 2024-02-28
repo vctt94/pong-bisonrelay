@@ -6,7 +6,11 @@ package pong;
 
 service PongGame {
   rpc SendInput (PlayerInput) returns (GameUpdate) {}
-  rpc StreamUpdates (GameStreamRequest) returns (stream GameUpdate) {}
+  rpc StreamUpdates (GameStreamRequest) returns (stream GameUpdateBytes) {}
+}
+
+message GameUpdateBytes {
+  bytes data = 1; // Serialized GameUpdate message
 }
 
 message PlayerInput {

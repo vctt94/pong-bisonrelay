@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -157,15 +158,21 @@ func (pc *pongClient) receiveUpdates(m *model, client pong.PongGameClient, playe
 	}
 
 	for {
-		update, err := stream.Recv()
+		updateBytes, err := stream.Recv()
 		if err == io.EOF || m.ctx.Err() != nil {
 			break // Stream closed by server or context canceled
 		}
 		if err != nil {
-			log.Fatalf("error receiving game update: %v", err)
+			log.Fatalf("error receiving game update bytes: %v", err)
 		}
 
-		p.Send(GameUpdateMsg(update)) // Send update to Bubble Tea program
+		// Deserialize the bytes back into a GameUpdate object
+		var update pong.GameUpdate
+		if err := json.Unmarshal(updateBytes.Data, &update); err != nil {
+			log.Fatalf("error unmarshalling game update: %v", err)
+		}
+
+		p.Send(GameUpdateMsg(&update)) // Send update to Bubble Tea program
 	}
 }
 
