@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+option go_package = "grpc/types/pong";
+
+package pong;
+
+service PongGame {
+  rpc SendInput (PlayerInput) returns (GameUpdate) {}
+  rpc StreamUpdates (GameStreamRequest) returns (stream GameUpdate) {}
+}
+
+message PlayerInput {
+  string playerId = 1;
+  string input = 2; // e.g., "ArrowUp", "ArrowDown"
+}
+
+message GameUpdate {
+  int32 gameWidth = 13;
+  int32 gameHeight = 14;
+  int32 p1Width = 15;
+  int32 p1Height = 16;
+  int32 p2Width = 17;
+  int32 p2Height = 18;
+  int32 ballWidth = 19;
+  int32 ballHeight = 20;
+
+  int32 p1Score = 21;
+  int32 p2Score = 22;
+
+  int32 ballX = 1;
+  int32 ballY = 2;
+  int32 p1X = 3;
+  int32 p1Y = 4;
+  int32 p2X = 5;
+  int32 p2Y = 6;
+
+  int32 p1YVelocity = 7;
+  int32 p2YVelocity = 8;
+  int32 ballXVelocity = 9;
+  int32 ballYVelocity = 10;
+
+  float fps = 11;
+  float tps = 12;
+
+  // Optional: if you want to send error messages or debug information
+  string error = 23;
+  bool debug = 24;
+}
+
+message GameStreamRequest {
+  string playerId = 1;
+}
