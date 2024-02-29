@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 
 	"pingpongexample/pongrpc/grpc/types/pong"
 
@@ -92,14 +93,15 @@ func (pc *pongClient) StreamUpdates() error {
 type GameUpdateMsg *pong.GameUpdate
 
 type model struct {
-	mode          appMode
-	gameState     *pong.GameUpdate
-	err           error
-	ctx           context.Context
-	cancel        context.CancelFunc
-	pc            *pongClient
-	chatClient    *types.ChatServiceClient // Assuming this is the correct type for your chat client
-	versionClient *types.VersionServiceClient
+	mode           appMode
+	gameStateMutex sync.Mutex
+	gameState      *pong.GameUpdate
+	err            error
+	ctx            context.Context
+	cancel         context.CancelFunc
+	pc             *pongClient
+	chatClient     *types.ChatServiceClient // Assuming this is the correct type for your chat client
+	versionClient  *types.VersionServiceClient
 }
 
 func initialModel(pc *pongClient, chatClient *types.ChatServiceClient, versionClient *types.VersionServiceClient) model {
@@ -158,7 +160,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		fmt.Printf("AppName: %s\nversion: %s\nGoRuntime: %s\n", msg.AppName, msg.AppVersion, msg.GoRuntime)
 		// Handle other message types as before...
 	case GameUpdateMsg:
+		m.gameStateMutex.Lock()
 		m.gameState = msg
+		m.gameStateMutex.Unlock()
 		return m, nil
 	}
 
@@ -236,6 +240,7 @@ func (m model) View() string {
 
 		return gameView.String()
 	}
+
 	return b.String()
 }
 
