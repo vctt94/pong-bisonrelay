@@ -63,7 +63,7 @@ func (e *CanvasEngine) tick() {
 
 const (
 	baseline                 = 0
-	default_padding          = 15
+	default_padding          = 0
 	canvas_border_correction = 1
 
 	default_ball_x_vel_ratio = 0.25
@@ -72,7 +72,7 @@ const (
 
 	magic_p = 3
 
-	player_input_dist = 4
+	player_input_dist = 2
 )
 
 // State
@@ -271,14 +271,12 @@ func (e *CanvasEngine) advancePlayers() *CanvasEngine {
 func (e *CanvasEngine) p1Up() *CanvasEngine {
 	e.P1YVelocity = player_input_dist
 	e.P1Y += player_input_dist
-	e.P1YVelocity = 0
 	return e
 }
 
 func (e *CanvasEngine) p1Down() *CanvasEngine {
 	e.P1YVelocity = player_input_dist
 	e.P1Y -= player_input_dist
-	e.P1YVelocity = 0
 	return e
 }
 

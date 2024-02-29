@@ -71,8 +71,8 @@ func main() {
 	game := engine.NewGame(
 		80,
 		40,
-		engine.NewPlayer(10, 15),
-		engine.NewPlayer(10, 15),
+		engine.NewPlayer(1, 5),
+		engine.NewPlayer(1, 5),
 		engine.NewBall(3, 3),
 	)
 

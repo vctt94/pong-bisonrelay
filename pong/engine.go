@@ -184,38 +184,3 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 
 	close(framesch)
 }
-
-// func (e *CanvasEngine) MarshalJSON() ([]byte, error) {
-// 	return json.Marshal(map[string]interface{}{
-// 		"fps": e.fps,
-// 		"tps": e.tps,
-
-// 		"gameWidth":  int(e.game.Width),
-// 		"gameHeight": int(e.game.Height),
-// 		"p1Width":    int(e.game.P1.Width),
-// 		"p1Height":   int(e.game.P1.Height),
-// 		"p2Width":    int(e.game.P2.Width),
-// 		"p2Height":   int(e.game.P2.Height),
-// 		"ballWidth":  int(e.game.Ball.Width),
-// 		"ballHeight": int(e.game.Ball.Height),
-
-// 		"p1Score": e.p1Score,
-// 		"p2Score": e.p2Score,
-
-// 		"ballX": int(e.ballX),
-// 		"ballY": int(e.ballY),
-// 		"p1X":   int(e.p1X),
-// 		"p1Y":   int(e.p1Y),
-// 		"p2X":   int(e.p2X),
-// 		"p2Y":   int(e.p2Y),
-
-// 		"p1YVelocity":   int(e.p1YVelocity),
-// 		"p2YVelocity":   int(e.p2YVelocity),
-// 		"ballXVelocity": int(e.ballXVelocity),
-// 		"ballYVelocity": int(e.ballYVelocity),
-
-// 		"error": e.err,
-
-// 		"debug": e.debug,
-// 	})
-// }
