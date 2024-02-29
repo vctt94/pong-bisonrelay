@@ -3,17 +3,39 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
 	"math"
+	"os"
 	"strings"
 
 	"pingpongexample/pongrpc/grpc/types/pong"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/companyzero/bisonrelay/clientrpc/types"
+	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/decred/slog"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
+)
+
+type ID = zkidentity.ShortID
+
+type appMode int
+
+const (
+	chatMode appMode = iota
+	gameMode
+)
+
+var (
+	serverAddr         = flag.String("server_addr", "localhost:50051", "The server address in the format of host:port")
+	flagURL            = flag.String("url", "wss://127.0.0.1:7676/ws", "URL of the websocket endpoint")
+	flagServerCertPath = flag.String("servercert", "~/.brclient/rpc.cert", "Path to rpc.cert file")
+	flagClientCertPath = flag.String("clientcert", "~/.brclient/rpc-client.cert", "Path to rpc-client.cert file")
+	flagClientKeyPath  = flag.String("clientkey", "~/.brclient/rpc-client.key", "Path to rpc-client.key file")
 )
 
 type PongClientCfg struct {
@@ -22,6 +44,7 @@ type PongClientCfg struct {
 }
 
 type pongClient struct {
+	ID         ID
 	cfg        *PongClientCfg
 	conn       *grpc.ClientConn
 	pongClient pong.PongGameClient
@@ -29,8 +52,11 @@ type pongClient struct {
 }
 
 func (pc *pongClient) SendInput(input string) error {
-	// Example input could be "ArrowUp" or "ArrowDown"
-	_, err := pc.pongClient.SendInput(context.Background(), &pong.PlayerInput{Input: input})
+	// Example client ID; replace "yourClientID" with the actual client ID
+	clientID := "player1"
+	ctx := attachClientIDToContext(context.Background(), clientID)
+
+	_, err := pc.pongClient.SendInput(ctx, &pong.PlayerInput{Input: input})
 	if err != nil {
 		pc.cfg.Log.Errorf("Error sending input: %v", err)
 		return fmt.Errorf("error sending input: %v", err)
@@ -39,7 +65,11 @@ func (pc *pongClient) SendInput(input string) error {
 }
 
 func (pc *pongClient) StreamUpdates() error {
-	stream, err := pc.pongClient.StreamUpdates(context.Background(), &pong.GameStreamRequest{})
+	// Use the same client ID as in SendInput
+	clientID := "player1"
+	ctx := attachClientIDToContext(context.Background(), clientID)
+
+	stream, err := pc.pongClient.StreamUpdates(ctx, &pong.GameStreamRequest{})
 	if err != nil {
 		pc.cfg.Log.Errorf("Error creating updates stream: %v", err)
 		return fmt.Errorf("error creating updates stream: %v", err)
@@ -63,98 +93,159 @@ func (pc *pongClient) StreamUpdates() error {
 type GameUpdateMsg *pong.GameUpdate
 
 type model struct {
-	gameState *pong.GameUpdate
-	err       error
-	ctx       context.Context
-	cancel    context.CancelFunc
-	pc        *pongClient // Add this line
+	mode          appMode
+	gameState     *pong.GameUpdate
+	err           error
+	ctx           context.Context
+	cancel        context.CancelFunc
+	pc            *pongClient
+	chatClient    *types.ChatServiceClient // Assuming this is the correct type for your chat client
+	versionClient *types.VersionServiceClient
 }
 
-func initialModel(pc *pongClient) model {
+func initialModel(pc *pongClient, chatClient *types.ChatServiceClient, versionClient *types.VersionServiceClient) model {
 	ctx, cancel := context.WithCancel(context.Background())
-	return model{ctx: ctx, cancel: cancel, pc: pc}
+	return model{
+		mode:          chatMode,
+		ctx:           ctx,
+		cancel:        cancel,
+		pc:            pc,
+		chatClient:    chatClient,
+		versionClient: versionClient,
+	}
 }
 
 func (m model) Init() tea.Cmd {
-	return nil // Return nil if no initial command is needed
+	return func() tea.Msg {
+
+		return nil
+	}
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		// Check if the game is in game mode
+		if m.mode == gameMode {
+			// Directly handle game inputs here
+			switch msg.String() {
+			case "w", "s", "up", "down":
+				// Call handleGameInput for handling game-related inputs
+				return m, m.handleGameInput(msg)
+			}
+		}
+
+		switch msg.Type {
+		case tea.KeyEsc:
+			// Toggle between modes
+			if m.mode == chatMode {
+				m.mode = gameMode
+			} else if m.mode == gameMode {
+				m.mode = chatMode
+			}
+		case tea.KeySpace:
+			// Handle space separately if needed, e.g., to make the client ready
+			if m.mode == gameMode {
+				return m, m.makeClientReady()
+			}
+		case tea.KeyRunes:
+			// Handle character input for quitting the game
+			if msg.String() == "q" {
+				return m, tea.Quit
+			}
+		}
+		return m, nil
+	case types.VersionResponse:
+		fmt.Printf("AppName: %s\nversion: %s\nGoRuntime: %s\n", msg.AppName, msg.AppVersion, msg.GoRuntime)
+		// Handle other message types as before...
 	case GameUpdateMsg:
 		m.gameState = msg
-		return m, nil // No command to return
-
-	case tea.KeyMsg:
-		// Handle quitting the program
-		if msg.String() == "q" {
-			m.cancel() // Cancel the context to stop receiving updates
-			return m, tea.Quit
-		}
-
-		// Example: handle up and down key presses for player 1
-		var cmd tea.Cmd
-		switch msg.String() {
-		case "w", "up":
-			// Send "ArrowUp" to the server
-			cmd = func() tea.Msg {
-				err := m.pc.SendInput("ArrowUp")
-				if err != nil {
-					log.Println("Error sending input:", err)
-				}
-				return nil // You might want to define a message type for handling errors
-			}
-		case "s", "down":
-			// Send "ArrowDown" to the server
-			cmd = func() tea.Msg {
-				err := m.pc.SendInput("ArrowDown")
-				if err != nil {
-					log.Println("Error sending input:", err)
-				}
-				return nil // Similar to above, handle errors appropriately
-			}
-		}
-
-		return m, cmd
+		return m, nil
 	}
+
+	// Keep the rest of your switch cases as they are...
 
 	return m, nil
 }
 
-func (m model) View() string {
-	if m.gameState == nil {
-		return "Waiting for game to start..."
-	}
-
-	var gameView strings.Builder
-	for y := 0; y < int(m.gameState.GameHeight); y++ {
-		for x := 0; x < int(m.gameState.GameWidth); x++ {
-			// Round ball's position before comparing
-			ballX := int(math.Round(float64(m.gameState.BallX)))
-			ballY := int(math.Round(float64(m.gameState.BallY)))
-			switch {
-			case x == ballX && y == ballY:
-				gameView.WriteString("O")
-			case x == 0 && y >= int(m.gameState.P1Y) && y < int(m.gameState.P1Y)+int(m.gameState.P1Height):
-				gameView.WriteString("|")
-			case x == int(m.gameState.GameWidth)-1 && y >= int(m.gameState.P2Y) && y < int(m.gameState.P2Y)+int(m.gameState.P2Height):
-				gameView.WriteString("|")
-			default:
-				gameView.WriteString(" ")
-			}
+func (m *model) makeClientReady() tea.Cmd {
+	// Example: Signal to the server that this client is ready. Adjust according to your server's API.
+	log.Println("Client signaling readiness")
+	// Replace the following with the actual call to your server.
+	go func() {
+		log.Printf("pongClient signaling readiness: %v", m.pc.pongClient)
+		_, err := m.pc.pongClient.SignalReady(context.Background(), &pong.SignalReadyRequest{ClientId: "player1"})
+		if err != nil {
+			log.Printf("Error signaling readiness: %v", err)
 		}
-		gameView.WriteString("\n")
-	}
-	gameView.WriteString(fmt.Sprintf("Score: %d - %d\n", m.gameState.P1Score, m.gameState.P2Score))
-	gameView.WriteString("Controls: W/S and O/L - Q to quit")
-
-	return gameView.String()
+	}()
+	return nil
 }
 
-func (pc *pongClient) receiveUpdates(m *model, client pong.PongGameClient, playerID string, p *tea.Program) {
-	stream, err := client.StreamUpdates(m.ctx, &pong.GameStreamRequest{PlayerId: playerID})
+func (m *model) handleGameInput(msg tea.KeyMsg) tea.Cmd {
+	// Example: Handling up and down inputs
+	return func() tea.Msg {
+		var input string
+		switch msg.String() {
+		case "w", "up":
+			input = "ArrowUp"
+		case "s", "down":
+			input = "ArrowDown"
+		}
+		if input != "" {
+			err := m.pc.SendInput(input)
+			if err != nil {
+				log.Printf("Error sending game input: %v", err)
+			}
+		}
+		return nil
+	}
+}
+
+func (m model) View() string {
+	var b strings.Builder
+	if m.mode == chatMode {
+		fmt.Fprintln(&b, "Chat mode: Press space to join the game. 'q' to quit.")
+		// Include logic to display chat messages
+	} else if m.mode == gameMode {
+		fmt.Fprintln(&b, "Game mode: 'q' to return to chat.")
+		if m.gameState == nil {
+			return "Waiting for game to start..."
+		}
+
+		var gameView strings.Builder
+		for y := 0; y < int(m.gameState.GameHeight); y++ {
+			for x := 0; x < int(m.gameState.GameWidth); x++ {
+				// Round ball's position before comparing
+				ballX := int(math.Round(float64(m.gameState.BallX)))
+				ballY := int(math.Round(float64(m.gameState.BallY)))
+				switch {
+				case x == ballX && y == ballY:
+					gameView.WriteString("O")
+				case x == 0 && y >= int(m.gameState.P1Y) && y < int(m.gameState.P1Y)+int(m.gameState.P1Height):
+					gameView.WriteString("|")
+				case x == int(m.gameState.GameWidth)-1 && y >= int(m.gameState.P2Y) && y < int(m.gameState.P2Y)+int(m.gameState.P2Height):
+					gameView.WriteString("|")
+				default:
+					gameView.WriteString(" ")
+				}
+			}
+			gameView.WriteString("\n")
+		}
+		gameView.WriteString(fmt.Sprintf("Score: %d - %d\n", m.gameState.P1Score, m.gameState.P2Score))
+		gameView.WriteString("Controls: W/S and O/L - Q to quit")
+
+		return gameView.String()
+	}
+	return b.String()
+}
+
+func (pc *pongClient) receiveUpdates(m *model, playerID string, p *tea.Program) error {
+	ctx := attachClientIDToContext(context.Background(), playerID)
+	stream, err := pc.pongClient.StreamUpdates(ctx, &pong.GameStreamRequest{PlayerId: playerID})
 	if err != nil {
 		log.Fatalf("could not subscribe to game updates: %v", err)
+		return err
 	}
 
 	for {
@@ -164,41 +255,69 @@ func (pc *pongClient) receiveUpdates(m *model, client pong.PongGameClient, playe
 		}
 		if err != nil {
 			log.Fatalf("error receiving game update bytes: %v", err)
+			return err
 		}
 
 		// Deserialize the bytes back into a GameUpdate object
 		var update pong.GameUpdate
 		if err := json.Unmarshal(updateBytes.Data, &update); err != nil {
 			log.Fatalf("error unmarshalling game update: %v", err)
+			return err
 		}
 
 		p.Send(GameUpdateMsg(&update)) // Send update to Bubble Tea program
 	}
+	return nil
+}
+
+// attachClientIDToContext creates a new context with the client-id metadata.
+func attachClientIDToContext(ctx context.Context, clientID string) context.Context {
+	md := metadata.New(map[string]string{
+		"client-id": clientID, // The key must match what the server expects
+	})
+	return metadata.NewOutgoingContext(ctx, md)
+}
+
+func realMain() error {
+
+	flag.Parse()
+	*flagServerCertPath = expandPath(*flagServerCertPath)
+	*flagClientCertPath = expandPath(*flagClientCertPath)
+	*flagClientKeyPath = expandPath(*flagClientKeyPath)
+
+	cfg := &PongClientCfg{
+		ServerAddr: *serverAddr,
+	}
+
+	pongConn, err := grpc.Dial(cfg.ServerAddr, grpc.WithInsecure())
+	if err != nil {
+		return err
+	}
+	defer pongConn.Close()
+
+	pc := &pongClient{
+		cfg:        cfg,
+		conn:       pongConn,
+		pongClient: pong.NewPongGameClient(pongConn),
+	}
+
+	m := initialModel(pc, nil, nil)
+	p := tea.NewProgram(m)
+
+	go pc.receiveUpdates(&m, "player1", p)
+
+	// Start the Bubble Tea program
+	if err := p.Start(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func main() {
-
-	cfg := &PongClientCfg{
-		ServerAddr: "localhost:50051",
-	}
-	conn, err := grpc.Dial(cfg.ServerAddr, grpc.WithInsecure())
+	err := realMain()
 	if err != nil {
-		log.Fatalf("did not connect: %v", err)
-	}
-	client := pong.NewPongGameClient(conn)
-	pc := &pongClient{
-		cfg:        cfg,
-		conn:       conn,
-		pongClient: client,
-	}
-
-	m := initialModel(pc)
-	p := tea.NewProgram(m)
-
-	// Start receiving game updates in a separate goroutine
-	go pc.receiveUpdates(&m, client, "player1", p)
-
-	if err := p.Start(); err != nil {
-		log.Fatalf("Could not start Bubble Tea program: %v", err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 }

@@ -7,7 +7,15 @@ package pong;
 service PongGame {
   rpc SendInput (PlayerInput) returns (GameUpdate) {}
   rpc StreamUpdates (GameStreamRequest) returns (stream GameUpdateBytes) {}
+  rpc SignalReady(SignalReadyRequest) returns (SignalReadyResponse);
 }
+
+// SignalReadyRequest contains information about the client signaling readiness
+message SignalReadyRequest {
+  string client_id = 1; // The ID of the client signaling readiness
+}
+
+message SignalReadyResponse {}
 
 message GameUpdateBytes {
   bytes data = 1; // Serialized GameUpdate message

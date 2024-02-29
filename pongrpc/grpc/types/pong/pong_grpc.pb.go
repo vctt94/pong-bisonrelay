@@ -24,6 +24,7 @@ const _ = grpc.SupportPackageIsVersion7
 type PongGameClient interface {
 	SendInput(ctx context.Context, in *PlayerInput, opts ...grpc.CallOption) (*GameUpdate, error)
 	StreamUpdates(ctx context.Context, in *GameStreamRequest, opts ...grpc.CallOption) (PongGame_StreamUpdatesClient, error)
+	SignalReady(ctx context.Context, in *SignalReadyRequest, opts ...grpc.CallOption) (*SignalReadyResponse, error)
 }
 
 type pongGameClient struct {
@@ -75,12 +76,22 @@ func (x *pongGameStreamUpdatesClient) Recv() (*GameUpdateBytes, error) {
 	return m, nil
 }
 
+func (c *pongGameClient) SignalReady(ctx context.Context, in *SignalReadyRequest, opts ...grpc.CallOption) (*SignalReadyResponse, error) {
+	out := new(SignalReadyResponse)
+	err := c.cc.Invoke(ctx, "/pong.PongGame/SignalReady", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PongGameServer is the server API for PongGame service.
 // All implementations must embed UnimplementedPongGameServer
 // for forward compatibility
 type PongGameServer interface {
 	SendInput(context.Context, *PlayerInput) (*GameUpdate, error)
 	StreamUpdates(*GameStreamRequest, PongGame_StreamUpdatesServer) error
+	SignalReady(context.Context, *SignalReadyRequest) (*SignalReadyResponse, error)
 	mustEmbedUnimplementedPongGameServer()
 }
 
@@ -93,6 +104,9 @@ func (UnimplementedPongGameServer) SendInput(context.Context, *PlayerInput) (*Ga
 }
 func (UnimplementedPongGameServer) StreamUpdates(*GameStreamRequest, PongGame_StreamUpdatesServer) error {
 	return status.Errorf(codes.Unimplemented, "method StreamUpdates not implemented")
+}
+func (UnimplementedPongGameServer) SignalReady(context.Context, *SignalReadyRequest) (*SignalReadyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SignalReady not implemented")
 }
 func (UnimplementedPongGameServer) mustEmbedUnimplementedPongGameServer() {}
 
@@ -146,6 +160,24 @@ func (x *pongGameStreamUpdatesServer) Send(m *GameUpdateBytes) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _PongGame_SignalReady_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SignalReadyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PongGameServer).SignalReady(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pong.PongGame/SignalReady",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PongGameServer).SignalReady(ctx, req.(*SignalReadyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PongGame_ServiceDesc is the grpc.ServiceDesc for PongGame service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -156,6 +188,10 @@ var PongGame_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SendInput",
 			Handler:    _PongGame_SendInput_Handler,
+		},
+		{
+			MethodName: "SignalReady",
+			Handler:    _PongGame_SignalReady_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
