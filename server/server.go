@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -10,7 +9,7 @@ import (
 	"os"
 	canvas "pingpongexample/pong"
 	"pingpongexample/pongrpc/grpc/types/pong"
-	"time"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/ndabAP/ping-pong/engine"
@@ -26,6 +25,7 @@ var (
 
 type server struct {
 	pong.UnimplementedPongGameServer
+	mu             sync.Mutex
 	clientReady    chan string              // Channel to signal a client is ready
 	games          map[string]*gameInstance // Map to hold game instances, indexed by a game ID
 	waitingClients []string
@@ -68,7 +68,6 @@ func (s *server) StreamUpdates(req *pong.GameStreamRequest, stream pong.PongGame
 		// Wait for the game instance to become available. This might involve a loop with a condition variable or a channel that notifies when the game is ready.
 		// For illustration purposes only. Implement proper synchronization based on your application's architecture.
 		for {
-			time.Sleep(1 * time.Second) // Simplified wait. Replace with your synchronization mechanism.
 			gameInstance, exists = s.findGameInstanceByClientID(clientID)
 			if exists {
 				break // Exit the loop when the game instance becomes available.
@@ -102,6 +101,8 @@ func (s *server) SignalReady(ctx context.Context, req *pong.SignalReadyRequest) 
 }
 
 func (s *server) findGameInstanceByClientID(clientID string) (*gameInstance, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, game := range s.games {
 		for _, playerID := range game.players {
 			if playerID == clientID {
@@ -110,15 +111,6 @@ func (s *server) findGameInstanceByClientID(clientID string) (*gameInstance, boo
 		}
 	}
 	return nil, false
-}
-
-func (s *server) prepareGameUpdate(frame []byte) (*pong.GameUpdate, error) {
-	// Assuming frame is already a serialized pong.GameUpdate for simplicity
-	var update pong.GameUpdate
-	if err := json.Unmarshal(frame, &update); err != nil {
-		return nil, fmt.Errorf("error unmarshalling game update: %v", err)
-	}
-	return &update, nil
 }
 
 func newServer() *server {
@@ -173,17 +165,18 @@ func (s *server) manageGames(ctx context.Context) {
 }
 
 func (s *server) checkAndStartGame(ctx context.Context) {
-	// Locking might be required here if you're accessing `waitingClients` from multiple goroutines
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	// Check if we have enough clients ready for a game
-	if len(s.waitingClients) >= 2 {
+	if len(s.waitingClients) >= 1 {
 		// Extract the first two clients
-		player1, player2 := s.waitingClients[0], s.waitingClients[1]
-		s.waitingClients = s.waitingClients[2:] // Remove them from the waiting list
+		player1 := s.waitingClients[0]
+		s.waitingClients = s.waitingClients[1:] // Remove them from the waiting list
 
 		// Start a new game with these clients
 		newGame := s.startNewGame(ctx)
-		newGame.players = []string{player1, player2}
+		newGame.players = []string{player1}
 
 		// Notify these clients that a game has started
 		// Implementation depends on your game logic

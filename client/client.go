@@ -2,21 +2,23 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"log"
-	"math"
 	"os"
 	"strings"
 
 	"pingpongexample/pongrpc/grpc/types/pong"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/companyzero/bisonrelay/clientrpc/jsonrpc"
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/decred/slog"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -44,17 +46,15 @@ type PongClientCfg struct {
 }
 
 type pongClient struct {
-	ID         ID
+	ID         string
 	cfg        *PongClientCfg
 	conn       *grpc.ClientConn
 	pongClient pong.PongGameClient
-	pc         *pongClient // Add this line
 }
 
 func (pc *pongClient) SendInput(input string) error {
 	// Example client ID; replace "yourClientID" with the actual client ID
-	clientID := "player1"
-	ctx := attachClientIDToContext(context.Background(), clientID)
+	ctx := attachClientIDToContext(context.Background(), pc.ID)
 
 	_, err := pc.pongClient.SendInput(ctx, &pong.PlayerInput{Input: input})
 	if err != nil {
@@ -66,8 +66,7 @@ func (pc *pongClient) SendInput(input string) error {
 
 func (pc *pongClient) StreamUpdates() error {
 	// Use the same client ID as in SendInput
-	clientID := "player1"
-	ctx := attachClientIDToContext(context.Background(), clientID)
+	ctx := attachClientIDToContext(context.Background(), pc.ID)
 
 	stream, err := pc.pongClient.StreamUpdates(ctx, &pong.GameStreamRequest{})
 	if err != nil {
@@ -174,7 +173,7 @@ func (m *model) makeClientReady() tea.Cmd {
 	// Replace the following with the actual call to your server.
 	go func() {
 		log.Printf("pongClient signaling readiness: %v", m.pc.pongClient)
-		_, err := m.pc.pongClient.SignalReady(context.Background(), &pong.SignalReadyRequest{ClientId: "player1"})
+		_, err := m.pc.pongClient.SignalReady(context.Background(), &pong.SignalReadyRequest{ClientId: m.pc.ID})
 		if err != nil {
 			log.Printf("Error signaling readiness: %v", err)
 		}
@@ -217,8 +216,8 @@ func (m model) View() string {
 		for y := 0; y < int(m.gameState.GameHeight); y++ {
 			for x := 0; x < int(m.gameState.GameWidth); x++ {
 				// Round ball's position before comparing
-				ballX := int(math.Round(float64(m.gameState.BallX)))
-				ballY := int(math.Round(float64(m.gameState.BallY)))
+				ballX := int(m.gameState.BallX)
+				ballY := int(m.gameState.BallY)
 				switch {
 				case x == ballX && y == ballY:
 					gameView.WriteString("O")
@@ -240,9 +239,9 @@ func (m model) View() string {
 	return b.String()
 }
 
-func (pc *pongClient) receiveUpdates(m *model, playerID string, p *tea.Program) error {
-	ctx := attachClientIDToContext(context.Background(), playerID)
-	stream, err := pc.pongClient.StreamUpdates(ctx, &pong.GameStreamRequest{PlayerId: playerID})
+func (pc *pongClient) receiveUpdates(m *model, p *tea.Program) error {
+	ctx := attachClientIDToContext(context.Background(), pc.ID)
+	stream, err := pc.pongClient.StreamUpdates(ctx, &pong.GameStreamRequest{PlayerId: pc.ID})
 	if err != nil {
 		log.Fatalf("could not subscribe to game updates: %v", err)
 		return err
@@ -284,11 +283,43 @@ func realMain() error {
 	*flagServerCertPath = expandPath(*flagServerCertPath)
 	*flagClientCertPath = expandPath(*flagClientCertPath)
 	*flagClientKeyPath = expandPath(*flagClientKeyPath)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	g, gctx := errgroup.WithContext(ctx)
 
+	bknd := slog.NewBackend(os.Stderr)
+	log := bknd.Logger("EXMP")
+	log.SetLevel(slog.LevelInfo)
+
+	c, err := jsonrpc.NewWSClient(
+		jsonrpc.WithWebsocketURL(*flagURL),
+		jsonrpc.WithServerTLSCertPath(*flagServerCertPath),
+		jsonrpc.WithClientTLSCert(*flagClientCertPath, *flagClientKeyPath),
+		jsonrpc.WithClientLog(log),
+	)
+	if err != nil {
+		return err
+	}
+
+	versionClient := types.NewVersionServiceClient(c)
+	var clientID string
+	g.Go(func() error { return c.Run(gctx) })
+
+	resp := &types.PublicIdentity{}
+	err = versionClient.Public(ctx, &types.PublicIdentityReq{}, resp)
+	if err != nil {
+		return fmt.Errorf("failed to get public identity: %w", err)
+	}
+
+	clientID = hex.EncodeToString(resp.Identity[:])
+
+	// Check if clientID is still empty here, which it shouldn't be now
+	if clientID == "" {
+		return fmt.Errorf("client ID is empty after fetching")
+	}
 	cfg := &PongClientCfg{
 		ServerAddr: *serverAddr,
 	}
-
 	pongConn, err := grpc.Dial(cfg.ServerAddr, grpc.WithInsecure())
 	if err != nil {
 		return err
@@ -296,6 +327,7 @@ func realMain() error {
 	defer pongConn.Close()
 
 	pc := &pongClient{
+		ID:         clientID,
 		cfg:        cfg,
 		conn:       pongConn,
 		pongClient: pong.NewPongGameClient(pongConn),
@@ -304,7 +336,7 @@ func realMain() error {
 	m := initialModel(pc, nil, nil)
 	p := tea.NewProgram(m)
 
-	go pc.receiveUpdates(&m, "player1", p)
+	go pc.receiveUpdates(&m, p)
 
 	// Start the Bubble Tea program
 	if err := p.Start(); err != nil {
