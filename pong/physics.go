@@ -256,10 +256,10 @@ func (e *CanvasEngine) advancePlayers() *CanvasEngine {
 		switch y := (e.P2Y + (e.Game.P2.Height / 2)) - e.BallY; {
 		case y > 0:
 			e.P2YVelocity = max_y_vel_ratio * e.Game.Height
-			e.P2Y -= e.P2YVelocity / e.FPS
+			// e.P2Y -= e.P2YVelocity / e.FPS
 		case y < 0:
 			e.P2YVelocity = max_y_vel_ratio * e.Game.Height
-			e.P2Y += e.P2YVelocity / e.FPS
+			// e.P2Y += e.P2YVelocity / e.FPS
 		case y > -0.9 && y < 0.9:
 			e.P2YVelocity = 0
 		}
@@ -277,6 +277,18 @@ func (e *CanvasEngine) p1Up() *CanvasEngine {
 func (e *CanvasEngine) p1Down() *CanvasEngine {
 	e.P1YVelocity = player_input_dist
 	e.P1Y -= player_input_dist
+	return e
+}
+
+func (e *CanvasEngine) p2Up() *CanvasEngine {
+	e.P2YVelocity = player_input_dist
+	e.P2Y += player_input_dist
+	return e
+}
+
+func (e *CanvasEngine) p2Down() *CanvasEngine {
+	e.P2YVelocity = player_input_dist
+	e.P2Y -= player_input_dist
 	return e
 }
 

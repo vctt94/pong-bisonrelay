@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"pingpongexample/pongrpc/grpc/types/pong"
+	"pingpongexample/pongrpc/grpc/pong"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/companyzero/bisonrelay/clientrpc/jsonrpc"
@@ -47,17 +47,22 @@ type PongClientCfg struct {
 }
 
 type pongClient struct {
-	ID         string
-	cfg        *PongClientCfg
-	conn       *grpc.ClientConn
-	pongClient pong.PongGameClient
+	ID string
+
+	playerNumber int32
+	cfg          *PongClientCfg
+	conn         *grpc.ClientConn
+	pongClient   pong.PongGameClient
 }
 
 func (pc *pongClient) SendInput(input string) error {
 	// Example client ID; replace "yourClientID" with the actual client ID
 	ctx := attachClientIDToContext(context.Background(), pc.ID)
 
-	_, err := pc.pongClient.SendInput(ctx, &pong.PlayerInput{Input: input})
+	_, err := pc.pongClient.SendInput(ctx, &pong.PlayerInput{
+		Input:    input,
+		PlayerId: pc.ID,
+	})
 	if err != nil {
 		pc.cfg.Log.Errorf("Error sending input: %v", err)
 		return fmt.Errorf("error sending input: %v", err)
@@ -262,7 +267,6 @@ func (pc *pongClient) receiveUpdates(m *model, p *tea.Program) error {
 			return err
 		}
 
-		// Deserialize the bytes back into a GameUpdate object
 		var update pong.GameUpdate
 		if err := json.Unmarshal(updateBytes.Data, &update); err != nil {
 			log.Fatalf("error unmarshalling game update: %v", err)

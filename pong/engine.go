@@ -1,11 +1,11 @@
 package canvas
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"log"
 	"os"
+	"pingpongexample/pongrpc/grpc/pong"
 	"time"
 
 	"github.com/ndabAP/ping-pong/engine"
@@ -165,16 +165,33 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 	// Reads user input and moves player one according to it
 	go func() {
 		for key := range inputch {
-			key = bytes.Trim(key, "\x00")
+			in := pong.PlayerInput{}
+			err := json.Unmarshal(key, &in)
+			if err != nil {
+				engineLogger.Panicf("err: %v", err)
+				return
+			}
 
-			switch k := string(key); k {
-			case "ArrowUp":
-				engineLogger.Printf("key %s", k)
-				e.p1Down() // The Canvas origin is top left
+			if in.PlayerNumber == int32(1) {
+				switch k := string(in.Input); k {
+				case "ArrowUp":
+					engineLogger.Printf("key %s", k)
+					e.p1Down() // The Canvas origin is top left
 
-			case "ArrowDown":
-				engineLogger.Printf("key %s", k)
-				e.p1Up()
+				case "ArrowDown":
+					engineLogger.Printf("key %s", k)
+					e.p1Up()
+				}
+			} else {
+				switch k := string(in.Input); k {
+				case "ArrowUp":
+					engineLogger.Printf("key %s", k)
+					e.p2Down() // The Canvas origin is top left
+
+				case "ArrowDown":
+					engineLogger.Printf("key %s", k)
+					e.p2Up()
+				}
 			}
 		}
 	}()

@@ -2,19 +2,34 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	canvas "pingpongexample/pong"
-	"pingpongexample/pongrpc/grpc/types/pong"
+	"pingpongexample/pongrpc/grpc/pong"
 	"sync"
+	"time"
 
+	"github.com/companyzero/bisonrelay/clientrpc/jsonrpc"
+	"github.com/companyzero/bisonrelay/clientrpc/types"
+	"github.com/decred/slog"
 	"github.com/google/uuid"
 	"github.com/ndabAP/ping-pong/engine"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+)
+
+var (
+	flagURL            = flag.String("url", "wss://127.0.0.1:7777/ws", "URL of the websocket endpoint")
+	flagServerCertPath = flag.String("servercert", "/home/pokerbot/brclient/rpc.cert", "Path to rpc.cert file")
+	flagClientCertPath = flag.String("clientcert", "/home/pokerbot/brclient/rpc-client.cert", "Path to rpc-client.cert file")
+	flagClientKeyPath  = flag.String("clientkey", "/home/pokerbot/brclient/rpc-client.key", "Path to rpc-client.key file")
 )
 
 var (
@@ -25,17 +40,25 @@ var (
 
 type server struct {
 	pong.UnimplementedPongGameServer
+	ID             string
 	mu             sync.Mutex
 	clientReady    chan string              // Channel to signal a client is ready
 	games          map[string]*gameInstance // Map to hold game instances, indexed by a game ID
-	waitingClients []string
+	waitingClients []*Player
+	paymentService types.PaymentsServiceClient
+}
+
+type Player struct {
+	ID           string
+	PlayerNumber int32 // 1 for player 1, 2 for player 2
+	stream       pong.PongGame_StreamUpdatesServer
 }
 
 type gameInstance struct {
 	engine   *canvas.CanvasEngine
 	framesch chan []byte
 	inputch  chan []byte
-	players  []string // Track players (client IDs) in this game
+	players  []*Player
 }
 
 func (s *server) SendInput(ctx context.Context, in *pong.PlayerInput) (*pong.GameUpdate, error) {
@@ -44,14 +67,19 @@ func (s *server) SendInput(ctx context.Context, in *pong.PlayerInput) (*pong.Gam
 	if err != nil {
 		return nil, err
 	}
-	gameInstance, exists := s.findGameInstanceByClientID(clientID)
+	gameInstance, player, exists := s.findGameInstanceAndPlayerByClientID(clientID)
 	if !exists {
 		return nil, fmt.Errorf("game instance not found for client ID %s", clientID)
 	}
 
+	in.PlayerNumber = player.PlayerNumber
+	inputBytes, err := json.Marshal(in)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize input: %v", err)
+	}
 	// Forward input to the correct game instance
-	input := fmt.Sprintf("%s", in.Input)
-	gameInstance.inputch <- []byte(input)
+
+	gameInstance.inputch <- inputBytes
 
 	return &pong.GameUpdate{}, nil
 }
@@ -63,12 +91,12 @@ func (s *server) StreamUpdates(req *pong.GameStreamRequest, stream pong.PongGame
 	}
 
 	// Initially, check if a game instance exists.
-	gameInstance, exists := s.findGameInstanceByClientID(clientID)
+	gameInstance, _, exists := s.findGameInstanceAndPlayerByClientID(clientID)
 	if !exists {
 		// Wait for the game instance to become available. This might involve a loop with a condition variable or a channel that notifies when the game is ready.
 		// For illustration purposes only. Implement proper synchronization based on your application's architecture.
 		for {
-			gameInstance, exists = s.findGameInstanceByClientID(clientID)
+			gameInstance, _, exists = s.findGameInstanceAndPlayerByClientID(clientID)
 			if exists {
 				break // Exit the loop when the game instance becomes available.
 			}
@@ -100,24 +128,26 @@ func (s *server) SignalReady(ctx context.Context, req *pong.SignalReadyRequest) 
 	return &pong.SignalReadyResponse{}, nil
 }
 
-func (s *server) findGameInstanceByClientID(clientID string) (*gameInstance, bool) {
+func (s *server) findGameInstanceAndPlayerByClientID(clientID string) (*gameInstance, *Player, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, game := range s.games {
-		for _, playerID := range game.players {
-			if playerID == clientID {
-				return game, true
+		for _, player := range game.players {
+			if player.ID == clientID {
+				return game, player, true
 			}
 		}
 	}
-	return nil, false
+	return nil, nil, false
 }
 
-func newServer() *server {
+func newServer(id string, paymentService types.PaymentsServiceClient) *server {
 	return &server{
+		ID:             id,
 		clientReady:    make(chan string, 10), // Buffer based on expected simultaneous ready signals
 		games:          make(map[string]*gameInstance),
-		waitingClients: make([]string, 0), // Initialize the waitingClients slice
+		waitingClients: make([]*Player, 0), // Initialize the waitingClients slice
+		paymentService: paymentService,
 	}
 }
 
@@ -148,15 +178,15 @@ func (s *server) signalClientReady(clientID string) {
 	s.clientReady <- clientID
 }
 
-func allGamesFull(map[string]*gameInstance) bool {
-	return false
-}
-
 func (s *server) manageGames(ctx context.Context) {
 	for {
 		select {
 		case clientID := <-s.clientReady:
-			s.waitingClients = append(s.waitingClients, clientID)
+			if len(s.waitingClients) == 0 {
+				s.waitingClients = append(s.waitingClients, &Player{ID: clientID, PlayerNumber: 1})
+			} else {
+				s.waitingClients = append(s.waitingClients, &Player{ID: clientID, PlayerNumber: 2})
+			}
 			s.checkAndStartGame(ctx)
 		case <-ctx.Done():
 			return // Exit if the context is canceled
@@ -169,14 +199,17 @@ func (s *server) checkAndStartGame(ctx context.Context) {
 	defer s.mu.Unlock()
 
 	// Check if we have enough clients ready for a game
-	if len(s.waitingClients) >= 1 {
+	if len(s.waitingClients) >= 2 {
 		// Extract the first two clients
-		player1 := s.waitingClients[0]
-		s.waitingClients = s.waitingClients[1:] // Remove them from the waiting list
+
+		players := []*Player{s.waitingClients[0], s.waitingClients[1]}
+		// Remove them from the waiting list
+		s.waitingClients = s.waitingClients[2:]
+		// Notify both clients
 
 		// Start a new game with these clients
 		newGame := s.startNewGame(ctx)
-		newGame.players = []string{player1}
+		newGame.players = players
 
 		// Notify these clients that a game has started
 		// Implementation depends on your game logic
@@ -214,33 +247,123 @@ func (s *server) startNewGame(ctx context.Context) *gameInstance {
 		engine:   canvasEngine,
 		framesch: framesch,
 		inputch:  inputch,
-		players:  make([]string, 0, 2),
 	}
 	s.games[gameID] = instance
 
 	return instance
 }
 
-func main() {
-	flag.Parse()
+func receivePaymentLoop(ctx context.Context, payment types.PaymentsServiceClient, log slog.Logger) error {
+	var ackRes types.AckResponse
+	var ackReq types.AckRequest
+	for {
+		// Keep requesting a new stream if the connection breaks. Also
+		// request any messages received since the last one we acked.
+		streamReq := types.TipProgressRequest{UnackedFrom: ackReq.SequenceId}
+		stream, err := payment.TipProgress(ctx, &streamReq)
+		if errors.Is(err, context.Canceled) {
+			// Program is done.
+			return err
+		}
+		if err != nil {
+			log.Warn("Error while obtaining PM stream: %v", err)
+			time.Sleep(time.Second) // Wait to try again.
+			continue
+		}
 
-	srv := newServer()
+		for {
+			var tip types.TipProgressEvent
+			err := stream.Recv(&tip)
+			if errors.Is(err, context.Canceled) {
+				// Program is done.
+				return err
+			}
+			if err != nil {
+				log.Warnf("Error while receiving stream: %v", err)
+				break
+			}
+
+			ruid := hex.EncodeToString(tip.Uid)
+			fmt.Printf("received from id: %+v\n\n", ruid)
+			// Ack to client that message is processed.
+			ackReq.SequenceId = tip.SequenceId
+			err = payment.AckTipProgress(ctx, &ackReq, &ackRes)
+			if err != nil {
+				log.Warnf("Error while ack'ing received pm: %v", err)
+				break
+			}
+		}
+
+		time.Sleep(time.Second)
+	}
+}
+
+func realMain() error {
+	flag.Parse()
 
 	// Initialize and start managing games in the background
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	g, gctx := errgroup.WithContext(ctx)
+	bknd := slog.NewBackend(os.Stderr)
+	log := bknd.Logger("EXMP")
+	log.SetLevel(slog.LevelInfo)
+
+	c, err := jsonrpc.NewWSClient(
+		jsonrpc.WithWebsocketURL(*flagURL),
+		jsonrpc.WithServerTLSCertPath(*flagServerCertPath),
+		jsonrpc.WithClientTLSCert(*flagClientCertPath, *flagClientKeyPath),
+		jsonrpc.WithClientLog(log),
+	)
+	if err != nil {
+		return err
+	}
+
+	versionClient := types.NewVersionServiceClient(c)
+	paymentService := types.NewPaymentsServiceClient(c)
+
+	var clientID string
+	g.Go(func() error { return c.Run(gctx) })
+	g.Go(func() error { return receivePaymentLoop(gctx, paymentService, log) })
+
+	resp := &types.PublicIdentity{}
+	err = versionClient.Public(ctx, &types.PublicIdentityReq{}, resp)
+	if err != nil {
+		return fmt.Errorf("failed to get public identity: %w", err)
+	}
+
+	clientID = hex.EncodeToString(resp.Identity[:])
+
+	// Check if clientID is still empty here, which it shouldn't be now
+	if clientID == "" {
+		return fmt.Errorf("client ID is empty after fetching")
+	}
+	fmt.Printf("client:%+v\n\n", clientID)
+	srv := newServer(clientID, paymentService)
 
 	go srv.manageGames(ctx)
 
 	// Set up gRPC server
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		log.Errorf("failed to listen: %v", err)
+		return err
 	}
 	grpcServer := grpc.NewServer()
 	pong.RegisterPongGameServer(grpcServer, srv)
-	log.Println("server listening at", lis.Addr())
+	fmt.Println("server listening at", lis.Addr())
 	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+		log.Errorf("failed to serve: %v", err)
+		return err
+	}
+	return nil
+}
+
+func main() {
+	err := realMain()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
 	}
 }

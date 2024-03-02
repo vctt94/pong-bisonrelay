@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "grpc/types/pong";
+option go_package = "grpc/pong";
 
 package pong;
 
@@ -24,6 +24,7 @@ message GameUpdateBytes {
 message PlayerInput {
   string playerId = 1;
   string input = 2; // e.g., "ArrowUp", "ArrowDown"
+  int32 playerNumber = 3; // player 1 or player 2.
 }
 
 message GameUpdate {
