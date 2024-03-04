@@ -93,8 +93,6 @@ func (s *server) StreamUpdates(req *pong.GameStreamRequest, stream pong.PongGame
 	// Initially, check if a game instance exists.
 	gameInstance, _, exists := s.findGameInstanceAndPlayerByClientID(clientID)
 	if !exists {
-		// Wait for the game instance to become available. This might involve a loop with a condition variable or a channel that notifies when the game is ready.
-		// For illustration purposes only. Implement proper synchronization based on your application's architecture.
 		for {
 			gameInstance, _, exists = s.findGameInstanceAndPlayerByClientID(clientID)
 			if exists {
@@ -172,22 +170,37 @@ func getClientIDFromStream(stream grpc.ServerStream) (string, error) {
 }
 
 func (s *server) signalClientReady(clientID string) {
-	// Clients call this method to signal readiness
 	fmt.Printf("Client %s is ready\n", clientID)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Check if the client is already waiting
+	for _, waitingClient := range s.waitingClients {
+		if waitingClient.ID == clientID {
+			fmt.Printf("Client %s is already waiting\n", clientID)
+			return // Client is already in the list, so just return
+		}
+	}
 
 	s.clientReady <- clientID
 }
-
 func (s *server) manageGames(ctx context.Context) {
 	for {
 		select {
 		case clientID := <-s.clientReady:
-			if len(s.waitingClients) == 0 {
-				s.waitingClients = append(s.waitingClients, &Player{ID: clientID, PlayerNumber: 1})
-			} else {
-				s.waitingClients = append(s.waitingClients, &Player{ID: clientID, PlayerNumber: 2})
+			s.mu.Lock()
+
+			// Always append the new client as a waiting client
+			playerNumber := int32(len(s.waitingClients)) + 1 // This will be 1 or 2, depending on the position in the waitingClients slice
+
+			s.waitingClients = append(s.waitingClients, &Player{ID: clientID, PlayerNumber: playerNumber})
+			s.mu.Unlock()
+
+			// If we have 2 or more clients waiting, start a game
+			if len(s.waitingClients) >= 2 {
+				s.checkAndStartGame(ctx)
 			}
-			s.checkAndStartGame(ctx)
 		case <-ctx.Done():
 			return // Exit if the context is canceled
 		}
@@ -214,8 +227,6 @@ func (s *server) checkAndStartGame(ctx context.Context) {
 		// Notify these clients that a game has started
 		// Implementation depends on your game logic
 	}
-
-	// Unlock if you used locking
 }
 
 func generateGameID() string {

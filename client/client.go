@@ -29,7 +29,7 @@ type ID = zkidentity.ShortID
 type appMode int
 
 const (
-	chatMode appMode = iota
+	gameIdle appMode = iota
 	gameMode
 )
 
@@ -112,7 +112,7 @@ type model struct {
 func initialModel(pc *pongClient, chatClient *types.ChatServiceClient, versionClient *types.VersionServiceClient) model {
 	ctx, cancel := context.WithCancel(context.Background())
 	return model{
-		mode:          chatMode,
+		mode:          gameIdle,
 		ctx:           ctx,
 		cancel:        cancel,
 		pc:            pc,
@@ -144,10 +144,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyEsc:
 			// Toggle between modes
-			if m.mode == chatMode {
+			if m.mode == gameIdle {
 				m.mode = gameMode
 			} else if m.mode == gameMode {
-				m.mode = chatMode
+				m.mode = gameIdle
 			}
 		case tea.KeySpace:
 			// Handle space separately if needed, e.g., to make the client ready
@@ -212,13 +212,13 @@ func (m *model) handleGameInput(msg tea.KeyMsg) tea.Cmd {
 
 func (m model) View() string {
 	var b strings.Builder
-	if m.mode == chatMode {
-		fmt.Fprintln(&b, "Chat mode: Press space to join the game. 'q' to quit.")
+	if m.mode == gameIdle {
+		fmt.Fprintln(&b, "Idle mode: Press esc to go to the game. 'q' to quit.")
 		// Include logic to display chat messages
 	} else if m.mode == gameMode {
 		fmt.Fprintln(&b, "Game mode: 'q' to return to chat.")
 		if m.gameState == nil {
-			return "Waiting for game to start..."
+			return "Waiting for game to start... Press Space to signal you are ready"
 		}
 
 		var gameView strings.Builder
