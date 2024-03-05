@@ -310,12 +310,12 @@ func realMain() error {
 		return err
 	}
 
-	versionClient := types.NewVersionServiceClient(c)
+	chatClient := types.NewChatServiceClient(c)
 	var clientID string
 	g.Go(func() error { return c.Run(gctx) })
 
 	resp := &types.PublicIdentity{}
-	err = versionClient.Public(ctx, &types.PublicIdentityReq{}, resp)
+	err = chatClient.UserPublicIdentity(ctx, &types.PublicIdentityReq{}, resp)
 	if err != nil {
 		return fmt.Errorf("failed to get public identity: %w", err)
 	}

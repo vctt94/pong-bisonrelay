@@ -331,7 +331,7 @@ func realMain() error {
 		return err
 	}
 
-	versionClient := types.NewVersionServiceClient(c)
+	chatClient := types.NewChatServiceClient(c)
 	paymentService := types.NewPaymentsServiceClient(c)
 
 	var clientID string
@@ -339,7 +339,7 @@ func realMain() error {
 	g.Go(func() error { return receivePaymentLoop(gctx, paymentService, log) })
 
 	resp := &types.PublicIdentity{}
-	err = versionClient.Public(ctx, &types.PublicIdentityReq{}, resp)
+	err = chatClient.UserPublicIdentity(ctx, &types.PublicIdentityReq{}, resp)
 	if err != nil {
 		return fmt.Errorf("failed to get public identity: %w", err)
 	}
