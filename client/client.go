@@ -250,7 +250,9 @@ func (m model) View() string {
 }
 
 func (pc *pongClient) receiveUpdates(m *model, p *tea.Program) error {
-	ctx := attachClientIDToContext(context.Background(), pc.ID)
+	ctx, cancel := context.WithCancel(attachClientIDToContext(context.Background(), pc.ID))
+	defer cancel()
+
 	stream, err := pc.pongClient.StreamUpdates(ctx, &pong.GameStreamRequest{PlayerId: pc.ID})
 	if err != nil {
 		log.Fatalf("could not subscribe to game updates: %v", err)
@@ -258,24 +260,29 @@ func (pc *pongClient) receiveUpdates(m *model, p *tea.Program) error {
 	}
 
 	for {
-		updateBytes, err := stream.Recv()
-		if err == io.EOF || m.ctx.Err() != nil {
-			break // Stream closed by server or context canceled
-		}
-		if err != nil {
-			log.Fatalf("error receiving game update bytes: %v", err)
-			return err
-		}
+		select {
+		case <-m.ctx.Done():
+			log.Println("Stopping updates stream due to cancellation.")
+			return nil
+		default:
+			updateBytes, err := stream.Recv()
+			if err == io.EOF {
+				break // Stream closed by server
+			}
+			if err != nil {
+				log.Fatalf("error receiving game update bytes: %v", err)
+				return err
+			}
 
-		var update pong.GameUpdate
-		if err := json.Unmarshal(updateBytes.Data, &update); err != nil {
-			log.Fatalf("error unmarshalling game update: %v", err)
-			return err
-		}
+			var update pong.GameUpdate
+			if err := json.Unmarshal(updateBytes.Data, &update); err != nil {
+				log.Fatalf("error unmarshalling game update: %v", err)
+				return err
+			}
 
-		p.Send(GameUpdateMsg(&update)) // Send update to Bubble Tea program
+			p.Send(GameUpdateMsg(&update)) // Send update to Bubble Tea program
+		}
 	}
-	return nil
 }
 
 // attachClientIDToContext creates a new context with the client-id metadata.
@@ -343,6 +350,8 @@ func realMain() error {
 	}
 
 	m := initialModel(pc, nil, nil)
+	defer m.cancel()
+
 	p := tea.NewProgram(m)
 
 	go pc.receiveUpdates(&m, p)
