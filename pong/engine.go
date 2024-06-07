@@ -112,93 +112,101 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 		clock := time.NewTicker(time.Duration(e.TPS) * time.Millisecond)
 		defer clock.Stop()
 
-		for range clock.C {
-			e.tick()
-
-			switch e.Err {
-			case engine.ErrP1Win:
-				engineLogger.Println("p1 wins")
-				e.P1Score += 1
-
-				e.NewRound(ctx, framesch, inputch)
+		for {
+			select {
+			case <-ctx.Done():
+				engineLogger.Println("exiting")
 				return
+			case <-clock.C:
+				e.tick()
 
-			case engine.ErrP2Win:
-				engineLogger.Println("p2 wins")
-				e.P2Score += 1
+				switch e.Err {
+				case engine.ErrP1Win:
+					engineLogger.Println("p1 wins")
+					e.P1Score += 1
 
-				e.NewRound(ctx, framesch, inputch)
-				return
+					go e.NewRound(ctx, framesch, inputch)
+					return
+
+				case engine.ErrP2Win:
+					engineLogger.Println("p2 wins")
+					e.P2Score += 1
+
+					go e.NewRound(ctx, framesch, inputch)
+					return
+				}
+
+				gameUpdateFrame := GameUpdate{
+					GameWidth:     int32(e.Game.Width),
+					GameHeight:    int32(e.Game.Height),
+					P1Width:       int32(e.Game.P1.Width),
+					P1Height:      int32(e.Game.P1.Height),
+					P2Width:       int32(e.Game.P2.Width),
+					P2Height:      int32(e.Game.P2.Height),
+					BallWidth:     int32(e.Game.Ball.Width),
+					BallHeight:    int32(e.Game.Ball.Height),
+					P1Score:       int32(e.P1Score),
+					P2Score:       int32(e.P2Score),
+					BallX:         int32(e.BallX),
+					BallY:         int32(e.BallY),
+					P1X:           int32(e.P1X),
+					P1Y:           int32(e.P1Y),
+					P2X:           int32(e.P2X),
+					P2Y:           int32(e.P2Y),
+					P1YVelocity:   int32(e.P1YVelocity),
+					P2YVelocity:   int32(e.P2YVelocity),
+					BallXVelocity: int32(e.BallXVelocity),
+					BallYVelocity: int32(e.BallYVelocity),
+					Fps:           float32(e.FPS),
+					Tps:           float32(e.TPS),
+				}
+				jsonTick, _ := json.Marshal(gameUpdateFrame)
+				select {
+				case framesch <- jsonTick:
+					engineLogger.Printf("tick: %s", string(jsonTick))
+				case <-ctx.Done():
+					return
+				}
 			}
-
-			// jsonTick, _ := json.Marshal(e)
-			gameUpdateFrame := GameUpdate{
-				GameWidth:     int32(e.Game.Width),
-				GameHeight:    int32(e.Game.Height),
-				P1Width:       int32(e.Game.P1.Width),
-				P1Height:      int32(e.Game.P1.Height),
-				P2Width:       int32(e.Game.P2.Width),
-				P2Height:      int32(e.Game.P2.Height),
-				BallWidth:     int32(e.Game.Ball.Width),
-				BallHeight:    int32(e.Game.Ball.Height),
-				P1Score:       int32(e.P1Score),
-				P2Score:       int32(e.P2Score),
-				BallX:         int32(e.BallX),
-				BallY:         int32(e.BallY),
-				P1X:           int32(e.P1X),
-				P1Y:           int32(e.P1Y),
-				P2X:           int32(e.P2X),
-				P2Y:           int32(e.P2Y),
-				P1YVelocity:   int32(e.P1YVelocity),
-				P2YVelocity:   int32(e.P2YVelocity),
-				BallXVelocity: int32(e.BallXVelocity),
-				BallYVelocity: int32(e.BallYVelocity),
-				Fps:           float32(e.FPS),
-				Tps:           float32(e.TPS),
-			}
-			jsonTick, _ := json.Marshal(gameUpdateFrame)
-			framesch <- jsonTick
-
-			engineLogger.Printf("tick: %s", string(jsonTick))
 		}
 	}()
 
 	// Reads user input and moves player one according to it
 	go func() {
-		for key := range inputch {
-			in := pong.PlayerInput{}
-			err := json.Unmarshal(key, &in)
-			if err != nil {
-				engineLogger.Panicf("err: %v", err)
+		for {
+			select {
+			case key := <-inputch:
+				in := pong.PlayerInput{}
+				err := json.Unmarshal(key, &in)
+				if err != nil {
+					engineLogger.Panicf("err: %v", err)
+					return
+				}
+
+				if in.PlayerNumber == int32(1) {
+					switch k := string(in.Input); k {
+					case "ArrowUp":
+						engineLogger.Printf("key %s", k)
+						e.p1Down() // The Canvas origin is top left
+
+					case "ArrowDown":
+						engineLogger.Printf("key %s", k)
+						e.p1Up()
+					}
+				} else {
+					switch k := string(in.Input); k {
+					case "ArrowUp":
+						engineLogger.Printf("key %s", k)
+						e.p2Down() // The Canvas origin is top left
+
+					case "ArrowDown":
+						engineLogger.Printf("key %s", k)
+						e.p2Up()
+					}
+				}
+			case <-ctx.Done():
 				return
-			}
-
-			if in.PlayerNumber == int32(1) {
-				switch k := string(in.Input); k {
-				case "ArrowUp":
-					engineLogger.Printf("key %s", k)
-					e.p1Down() // The Canvas origin is top left
-
-				case "ArrowDown":
-					engineLogger.Printf("key %s", k)
-					e.p1Up()
-				}
-			} else {
-				switch k := string(in.Input); k {
-				case "ArrowUp":
-					engineLogger.Printf("key %s", k)
-					e.p2Down() // The Canvas origin is top left
-
-				case "ArrowDown":
-					engineLogger.Printf("key %s", k)
-					e.p2Up()
-				}
 			}
 		}
 	}()
-
-	<-ctx.Done()
-	engineLogger.Println("exiting")
-
-	close(framesch)
 }

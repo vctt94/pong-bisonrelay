@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -67,12 +66,12 @@ type PongClientCfg struct {
 }
 
 type pongClient struct {
-	ID string
-
+	ID           string
 	playerNumber int32
 	cfg          *PongClientCfg
 	conn         *grpc.ClientConn
 	pongClient   pong.PongGameClient
+	stream       pong.PongGame_StreamUpdatesClient
 }
 
 func (pc *pongClient) SendInput(input string) error {
@@ -187,7 +186,7 @@ func (m *model) makeClientReady() tea.Cmd {
 	log.Println("Client signaling readiness")
 	go func() {
 		log.Printf("pongClient signaling readiness: %v", m.pc.pongClient)
-		_, err := m.pc.pongClient.SignalReady(context.Background(), &pong.SignalReadyRequest{ClientId: m.pc.ID})
+		err := m.pc.SignalReady()
 		if err != nil {
 			log.Printf("Error signaling readiness: %v", err)
 		}
@@ -254,6 +253,7 @@ func (m model) View() string {
 func (pc *pongClient) SignalReady() error {
 	ctx := attachClientIDToContext(context.Background(), pc.ID)
 
+	// Signal readiness after stream is initialized
 	_, err := pc.pongClient.SignalReady(ctx, &pong.SignalReadyRequest{
 		ClientId: pc.ID,
 	})
@@ -261,68 +261,48 @@ func (pc *pongClient) SignalReady() error {
 		pc.cfg.Log.Errorf("Error signaling readiness: %v", err)
 		return fmt.Errorf("error signaling readiness: %v", err)
 	}
+	streamErr := pc.initializeStream(ctx)
+	if streamErr != nil {
+		pc.cfg.Log.Errorf("Error initializing stream: %v", streamErr)
+		return fmt.Errorf("error initializing stream: %v", streamErr)
+	}
+
 	return nil
 }
 
-func (pc *pongClient) waitForGameStart(ctx context.Context) error {
-	gameStartCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
+func (pc *pongClient) initializeStream(ctx context.Context) error {
+	if pc.pongClient == nil {
+		return fmt.Errorf("pongClient is nil")
+	}
 
-	stream, err := pc.pongClient.NotifyGameStarted(gameStartCtx, &pong.GameStartedStreamRequest{ClientId: pc.ID})
+	// Initialize the stream
+	stream, err := pc.pongClient.StreamUpdates(ctx, &pong.GameStreamRequest{})
 	if err != nil {
-		return fmt.Errorf("could not subscribe to game start notifications: %v", err)
+		// pc.cfg.Log.Errorf("Error creating updates stream: %v", err)
+		return fmt.Errorf("error creating updates stream: %v", err)
 	}
 
-	res, err := stream.Recv()
-	if err != nil {
-		return fmt.Errorf("error receiving game start notification: %v", err)
-	}
+	// Set the stream before starting the goroutine
+	pc.stream = stream
 
-	fmt.Printf("res: %+v\n", res)
-	return nil
-}
-
-func (pc *pongClient) receiveUpdates(m *model, p *tea.Program) error {
-	ctx, cancel := context.WithCancel(attachClientIDToContext(context.Background(), pc.ID))
-	defer cancel()
-
-	// Wait for the game to start before subscribing to updates
-	if err := pc.waitForGameStart(ctx); err != nil {
-		log.Fatalf("error waiting for game start: %v", err)
-		return err
-	}
-
-	fmt.Printf("pong client: %+v\n\n", pc.pongClient)
-	stream, err := pc.pongClient.StreamUpdates(ctx, &pong.GameStreamRequest{PlayerId: pc.ID})
-	if err != nil {
-		log.Fatalf("could not subscribe to game updates: %v", err)
-		return err
-	}
-
-	for {
-		select {
-		case <-m.ctx.Done():
-			log.Println("Stopping updates stream due to cancellation.")
-			return nil
-		default:
-			updateBytes, err := stream.Recv()
+	// Use a separate goroutine to handle the stream
+	go func() {
+		for {
+			update, err := stream.Recv()
 			if err == io.EOF {
+				// pc.cfg.Log.Info("Stream closed by server")
 				break
 			}
 			if err != nil {
-				log.Fatalf("error receiving game update bytes: %v", err)
-				return err
+				// pc.cfg.Log.Errorf("Error receiving update: %v", err)
+				return
 			}
-
-			var update pong.GameUpdate
-			if err := json.Unmarshal(updateBytes.Data, &update); err != nil {
-				log.Fatalf("error unmarshalling game update: %v", err)
-				return err
-			}
-
-			p.Send(GameUpdateMsg(&update))
+			// pc.cfg.Log.Infof("Received game update: %+v", update)
+			fmt.Printf("Game Update: %+v\n", update)
 		}
-	}
+	}()
+
+	return nil
 }
 
 func attachClientIDToContext(ctx context.Context, clientID string) context.Context {

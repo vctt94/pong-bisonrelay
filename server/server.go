@@ -89,7 +89,11 @@ func (s *server) StreamUpdates(req *pong.GameStreamRequest, stream pong.PongGame
 		s.playerSessions.AddOrUpdatePlayer(player)
 		serverLogger.Printf("Player %s stream initialized in StreamUpdates", clientID)
 	}
+	s.waitingRoom.AddPlayer(player)
 	s.mu.Unlock()
+
+	// Signal readiness after initializing the stream
+	s.clientReady <- clientID
 
 	gameInstance, _, exists := s.findGameInstanceAndPlayerByClientID(clientID)
 	if !exists {
@@ -113,19 +117,32 @@ func (s *server) StreamUpdates(req *pong.GameStreamRequest, stream pong.PongGame
 	}
 }
 
+func (s *server) cleanupGameInstance(instance *gameInstance) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	close(instance.framesch)
+	close(instance.inputch)
+
+	for gameID, game := range s.games {
+		if game == instance {
+			delete(s.games, gameID)
+			serverLogger.Printf("[SERVER] Game %s cleaned up", gameID)
+			break
+		}
+	}
+}
+
 func (s *server) handleDisconnect(clientID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for gameID, game := range s.games {
+	for _, game := range s.games {
 		for i, player := range game.players {
 			if player.ID == clientID {
 				game.players = append(game.players[:i], game.players[i+1:]...)
 				if len(game.players) == 0 {
-					close(game.framesch)
-					close(game.inputch)
-					delete(s.games, gameID)
-					log.Printf("[SERVER] Game %s cleaned up after player %s disconnected", gameID, clientID)
+					s.cleanupGameInstance(game)
 				}
 				return
 			}
@@ -142,7 +159,6 @@ func (s *server) SignalReady(ctx context.Context, req *pong.SignalReadyRequest) 
 	s.mu.Unlock()
 
 	if !exists {
-		// serverLogger.Panic("player not found for client ID")
 		player = NewPlayer(clientID, nil)
 		s.playerSessions.AddOrUpdatePlayer(player)
 		serverLogger.Printf("Player %s registered in SignalReady", clientID)
@@ -151,20 +167,7 @@ func (s *server) SignalReady(ctx context.Context, req *pong.SignalReadyRequest) 
 	s.waitingRoom.AddPlayer(player)
 	s.clientReady <- clientID
 
-	// Ensure both players' streams are initialized before starting the game
-	if players, ready := s.waitingRoom.ReadyPlayers(); ready {
-		for _, p := range players {
-			if p.stream == nil {
-				serverLogger.Printf("Player %s stream not initialized, waiting...", p.ID)
-				return &pong.SignalReadyResponse{}, nil
-			}
-		}
-
-		serverLogger.Printf("Starting game with players: %v and %v", players[0].ID, players[1].ID)
-		s.startGameWithPlayers(ctx, players)
-	} else {
-		serverLogger.Printf("Waiting for more players. Current ready players: %v", s.waitingRoom.queue)
-	}
+	serverLogger.Printf("Player %s added to waiting room. Current ready players: %v", clientID, s.waitingRoom.queue)
 
 	return &pong.SignalReadyResponse{}, nil
 }
@@ -196,16 +199,12 @@ func (s *server) manageGames(ctx context.Context) {
 	for {
 		select {
 		case clientID := <-s.clientReady:
-			if player, exists := s.waitingRoom.GetPlayer(clientID); exists && player.stream != nil {
-				serverLogger.Printf("Player %s is ready", clientID)
-				if players, ready := s.waitingRoom.ReadyPlayers(); ready {
-					serverLogger.Printf("Ready to start a game with players: %v and %v", players[0].ID, players[1].ID)
-					s.startGameWithPlayers(ctx, players)
-				} else {
-					serverLogger.Printf("Waiting for more players. Current ready players: %v", s.waitingRoom.queue)
-				}
+			serverLogger.Printf("Received client ready signal for client ID: %s", clientID)
+			if players, ready := s.waitingRoom.ReadyPlayers(); ready {
+				serverLogger.Printf("Starting game with players: %v and %v", players[0].ID, players[1].ID)
+				s.startGame(ctx, players)
 			} else {
-				fmt.Printf("Waiting for player %s to initialize stream\n", clientID)
+				serverLogger.Printf("Not enough players ready. Current ready players: %v", s.waitingRoom.queue)
 			}
 		case <-ctx.Done():
 			return
@@ -215,13 +214,13 @@ func (s *server) manageGames(ctx context.Context) {
 
 func (s *server) NotifyGameStarted(req *pong.GameStartedStreamRequest, stream pong.PongGame_NotifyGameStartedServer) error {
 	clientID := req.ClientId
+	serverLogger.Printf("NotifyGameStarted called by client ID: %s", clientID)
+
+	s.mu.Lock()
 	player, exists := s.playerSessions.GetPlayer(clientID)
 	if !exists {
-		return fmt.Errorf("player not found for client ID %s", clientID)
+		return fmt.Errorf("player not found for client ID %s", player.ID)
 	}
-
-	// Store the stream in the player's startNotifier
-	s.mu.Lock()
 	player.startNotifier = stream
 	s.mu.Unlock()
 
@@ -234,7 +233,7 @@ func (s *server) NotifyGameStarted(req *pong.GameStartedStreamRequest, stream po
 	}
 }
 
-func (s *server) startGameWithPlayers(ctx context.Context, players []*Player) {
+func (s *server) startGame(ctx context.Context, players []*Player) {
 	gameID := generateGameID()
 	serverLogger.Printf("Starting new game with ID: %s", gameID)
 
