@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"log"
 	"os"
-	"pingpongexample/pongrpc/grpc/pong"
 	"time"
+
+	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 
 	"github.com/ndabAP/ping-pong/engine"
 )
