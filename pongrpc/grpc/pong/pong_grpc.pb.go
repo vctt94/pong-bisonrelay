@@ -26,7 +26,6 @@ type PongGameClient interface {
 	StreamUpdates(ctx context.Context, in *GameStreamRequest, opts ...grpc.CallOption) (PongGame_StreamUpdatesClient, error)
 	SignalReady(ctx context.Context, in *SignalReadyRequest, opts ...grpc.CallOption) (*SignalReadyResponse, error)
 	StartNotifier(ctx context.Context, in *GameStartedStreamRequest, opts ...grpc.CallOption) (PongGame_StartNotifierClient, error)
-	ClientRegister(ctx context.Context, in *ClientRegisterRequest, opts ...grpc.CallOption) (PongGame_ClientRegisterClient, error)
 }
 
 type pongGameClient struct {
@@ -119,38 +118,6 @@ func (x *pongGameStartNotifierClient) Recv() (*GameStartedStreamResponse, error)
 	return m, nil
 }
 
-func (c *pongGameClient) ClientRegister(ctx context.Context, in *ClientRegisterRequest, opts ...grpc.CallOption) (PongGame_ClientRegisterClient, error) {
-	stream, err := c.cc.NewStream(ctx, &PongGame_ServiceDesc.Streams[2], "/pong.PongGame/ClientRegister", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &pongGameClientRegisterClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type PongGame_ClientRegisterClient interface {
-	Recv() (*ClientRegisterResponse, error)
-	grpc.ClientStream
-}
-
-type pongGameClientRegisterClient struct {
-	grpc.ClientStream
-}
-
-func (x *pongGameClientRegisterClient) Recv() (*ClientRegisterResponse, error) {
-	m := new(ClientRegisterResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
 // PongGameServer is the server API for PongGame service.
 // All implementations must embed UnimplementedPongGameServer
 // for forward compatibility
@@ -159,7 +126,6 @@ type PongGameServer interface {
 	StreamUpdates(*GameStreamRequest, PongGame_StreamUpdatesServer) error
 	SignalReady(context.Context, *SignalReadyRequest) (*SignalReadyResponse, error)
 	StartNotifier(*GameStartedStreamRequest, PongGame_StartNotifierServer) error
-	ClientRegister(*ClientRegisterRequest, PongGame_ClientRegisterServer) error
 	mustEmbedUnimplementedPongGameServer()
 }
 
@@ -178,9 +144,6 @@ func (UnimplementedPongGameServer) SignalReady(context.Context, *SignalReadyRequ
 }
 func (UnimplementedPongGameServer) StartNotifier(*GameStartedStreamRequest, PongGame_StartNotifierServer) error {
 	return status.Errorf(codes.Unimplemented, "method StartNotifier not implemented")
-}
-func (UnimplementedPongGameServer) ClientRegister(*ClientRegisterRequest, PongGame_ClientRegisterServer) error {
-	return status.Errorf(codes.Unimplemented, "method ClientRegister not implemented")
 }
 func (UnimplementedPongGameServer) mustEmbedUnimplementedPongGameServer() {}
 
@@ -273,27 +236,6 @@ func (x *pongGameStartNotifierServer) Send(m *GameStartedStreamResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _PongGame_ClientRegister_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(ClientRegisterRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(PongGameServer).ClientRegister(m, &pongGameClientRegisterServer{stream})
-}
-
-type PongGame_ClientRegisterServer interface {
-	Send(*ClientRegisterResponse) error
-	grpc.ServerStream
-}
-
-type pongGameClientRegisterServer struct {
-	grpc.ServerStream
-}
-
-func (x *pongGameClientRegisterServer) Send(m *ClientRegisterResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
-
 // PongGame_ServiceDesc is the grpc.ServiceDesc for PongGame service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -319,11 +261,6 @@ var PongGame_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "StartNotifier",
 			Handler:       _PongGame_StartNotifier_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "ClientRegister",
-			Handler:       _PongGame_ClientRegister_Handler,
 			ServerStreams: true,
 		},
 	},

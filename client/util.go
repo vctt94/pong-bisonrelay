@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"google.golang.org/grpc/metadata"
 )
 
 func expandPath(path string) string {
@@ -16,4 +19,11 @@ func expandPath(path string) string {
 		return filepath.Join(home, path[2:])
 	}
 	return path
+}
+
+func attachClientIDToContext(ctx context.Context, clientID string) context.Context {
+	md := metadata.New(map[string]string{
+		"client-id": clientID,
+	})
+	return metadata.NewOutgoingContext(ctx, md)
 }

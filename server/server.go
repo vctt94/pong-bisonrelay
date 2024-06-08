@@ -149,7 +149,10 @@ func (s *server) handleDisconnect(clientID string) {
 }
 
 func (s *server) SignalReady(ctx context.Context, req *pong.SignalReadyRequest) (*pong.SignalReadyResponse, error) {
-	clientID := req.ClientId
+	clientID, err := getClientIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	serverLogger.Printf("SignalReady called by client ID: %s", clientID)
 
 	player, exists := s.playerSessions.GetPlayer(clientID)
@@ -207,7 +210,12 @@ func (s *server) manageGames(ctx context.Context) {
 }
 
 func (s *server) StartNotifier(req *pong.GameStartedStreamRequest, stream pong.PongGame_StartNotifierServer) error {
-	clientID := req.ClientId
+	ctx := stream.Context()
+	clientID, err := getClientIDFromContext(ctx)
+	if err != nil {
+		return err
+	}
+
 	serverLogger.Printf("StartNotifier called by client ID: %s", clientID)
 
 	var player *Player
@@ -219,7 +227,6 @@ func (s *server) StartNotifier(req *pong.GameStartedStreamRequest, stream pong.P
 	}
 	player.startNotifier = stream
 
-	ctx := stream.Context()
 	for {
 		select {
 		case <-ctx.Done():
@@ -233,6 +240,8 @@ func (s *server) startGame(ctx context.Context, players []*Player) {
 	serverLogger.Printf("Starting new game with ID: %s", gameID)
 
 	newGameInstance := s.startNewGame(ctx)
+	players[0].PlayerNumber = 1
+	players[1].PlayerNumber = 2
 	newGameInstance.players = players
 
 	s.mu.Lock()
@@ -245,7 +254,7 @@ func (s *server) startGame(ctx context.Context, players []*Player) {
 			serverLogger.Panic("startNotifier nil")
 		}
 		if player.startNotifier != nil {
-			if err := player.startNotifier.Send(&pong.GameStartedStreamResponse{Message: "Game has started with ID: " + gameID, Started: true}); err != nil {
+			if err := player.startNotifier.Send(&pong.GameStartedStreamResponse{Message: "Game has started with ID: " + gameID, Started: true, PlayerNumber: player.PlayerNumber}); err != nil {
 				serverLogger.Printf("Failed to send game start notification to player %s: %v", player.ID, err)
 			}
 		}

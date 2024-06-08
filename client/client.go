@@ -23,7 +23,6 @@ import (
 
 	"github.com/decred/slog"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 )
 
 type ID = zkidentity.ShortID
@@ -77,16 +76,15 @@ type pongClient struct {
 }
 
 type GameStartedMsg struct {
-	Started bool
+	Started      bool
+	PlayerNumber int32
 }
 
 func (pc *pongClient) StartNotifier() error {
 	ctx := attachClientIDToContext(context.Background(), pc.ID)
 
 	// Creates game start stream so we can notify when the game starts
-	gameStartedStream, err := pc.pongClient.StartNotifier(ctx, &pong.GameStartedStreamRequest{
-		ClientId: pc.ID,
-	})
+	gameStartedStream, err := pc.pongClient.StartNotifier(ctx, &pong.GameStartedStreamRequest{})
 	if err != nil {
 		return fmt.Errorf("error creating game started stream: %v", err)
 	}
@@ -94,7 +92,7 @@ func (pc *pongClient) StartNotifier() error {
 	go func() {
 		for {
 			started, err := gameStartedStream.Recv()
-			fmt.Printf("started: %+v\n\n", started)
+			pc.playerNumber = started.PlayerNumber
 			if err == io.EOF {
 				break
 			}
@@ -102,7 +100,6 @@ func (pc *pongClient) StartNotifier() error {
 				log.Printf("Error receiving game started notification: %v", err)
 				return
 			}
-			fmt.Printf("started: %+v\n\n", started)
 			pc.updatesCh <- GameStartedMsg{Started: started.Started}
 		}
 	}()
@@ -114,8 +111,9 @@ func (pc *pongClient) SendInput(input string) error {
 	ctx := attachClientIDToContext(context.Background(), pc.ID)
 
 	_, err := pc.pongClient.SendInput(ctx, &pong.PlayerInput{
-		Input:    input,
-		PlayerId: pc.ID,
+		Input:        input,
+		PlayerId:     pc.ID,
+		PlayerNumber: pc.playerNumber,
 	})
 	if err != nil {
 		return fmt.Errorf("error sending input: %v", err)
@@ -276,9 +274,7 @@ func (pc *pongClient) SignalReady() error {
 	ctx := attachClientIDToContext(context.Background(), pc.ID)
 
 	// Signal readiness after stream is initialized
-	_, err := pc.pongClient.SignalReady(ctx, &pong.SignalReadyRequest{
-		ClientId: pc.ID,
-	})
+	_, err := pc.pongClient.SignalReady(ctx, &pong.SignalReadyRequest{})
 	if err != nil {
 		return fmt.Errorf("error signaling readiness: %v", err)
 	}
@@ -321,13 +317,6 @@ func (pc *pongClient) initializeStream(ctx context.Context) error {
 	}()
 
 	return nil
-}
-
-func attachClientIDToContext(ctx context.Context, clientID string) context.Context {
-	md := metadata.New(map[string]string{
-		"client-id": clientID,
-	})
-	return metadata.NewOutgoingContext(ctx, md)
 }
 
 func realMain() error {
