@@ -8,7 +8,7 @@ service PongGame {
   rpc SendInput (PlayerInput) returns (GameUpdate) {}
   rpc StreamUpdates (GameStreamRequest) returns (stream GameUpdateBytes) {}
   rpc SignalReady(SignalReadyRequest) returns (SignalReadyResponse);
-  rpc NotifyGameStarted(GameStartedStreamRequest) returns (stream GameStartedStreamResponse);
+  rpc StartNotifier(GameStartedStreamRequest) returns (stream GameStartedStreamResponse);
   rpc ClientRegister (ClientRegisterRequest) returns (stream ClientRegisterResponse);
 }
 
@@ -19,7 +19,8 @@ message GameStartedStreamRequest {
 }
 
 message GameStartedStreamResponse {
-  string message = 1; // Confirmation message or additional details
+  bool started = 1;
+  string message = 2; // Confirmation message or additional details
 }
 
 // ClientRegisterRequest contains client_id for registering the client.

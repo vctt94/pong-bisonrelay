@@ -2,18 +2,23 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"sync"
 
-	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
-
-	canvas "github.com/vctt94/pong-bisonrelay/pong"
-
+	"github.com/companyzero/bisonrelay/clientrpc/jsonrpc"
+	"github.com/companyzero/bisonrelay/clientrpc/types"
+	"github.com/decred/slog"
 	"github.com/ndabAP/ping-pong/engine"
+	canvas "github.com/vctt94/pong-bisonrelay/pong"
+	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 )
 
 var (
@@ -78,19 +83,15 @@ func (s *server) StreamUpdates(req *pong.GameStreamRequest, stream pong.PongGame
 		return err
 	}
 
-	s.mu.Lock()
 	player, exists := s.playerSessions.GetPlayer(clientID)
 	if !exists {
-		player = NewPlayer(clientID, stream)
-		s.playerSessions.AddOrUpdatePlayer(player)
-		serverLogger.Printf("Player %s registered and stream initialized in StreamUpdates", clientID)
-	} else {
-		player.stream = stream
-		s.playerSessions.AddOrUpdatePlayer(player)
-		serverLogger.Printf("Player %s stream initialized in StreamUpdates", clientID)
+		return fmt.Errorf("player not found for client ID %s", player.ID)
 	}
+	player.stream = stream
+	s.playerSessions.AddOrUpdatePlayer(player)
+	serverLogger.Printf("Player %s stream initialized in StreamUpdates", clientID)
+
 	s.waitingRoom.AddPlayer(player)
-	s.mu.Unlock()
 
 	// Signal readiness after initializing the stream
 	s.clientReady <- clientID
@@ -118,9 +119,6 @@ func (s *server) StreamUpdates(req *pong.GameStreamRequest, stream pong.PongGame
 }
 
 func (s *server) cleanupGameInstance(instance *gameInstance) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	close(instance.framesch)
 	close(instance.inputch)
 
@@ -154,14 +152,10 @@ func (s *server) SignalReady(ctx context.Context, req *pong.SignalReadyRequest) 
 	clientID := req.ClientId
 	serverLogger.Printf("SignalReady called by client ID: %s", clientID)
 
-	s.mu.Lock()
 	player, exists := s.playerSessions.GetPlayer(clientID)
-	s.mu.Unlock()
 
 	if !exists {
-		player = NewPlayer(clientID, nil)
-		s.playerSessions.AddOrUpdatePlayer(player)
-		serverLogger.Printf("Player %s registered in SignalReady", clientID)
+		return &pong.SignalReadyResponse{}, fmt.Errorf("player not found for client ID %s", player.ID)
 	}
 
 	s.waitingRoom.AddPlayer(player)
@@ -212,17 +206,18 @@ func (s *server) manageGames(ctx context.Context) {
 	}
 }
 
-func (s *server) NotifyGameStarted(req *pong.GameStartedStreamRequest, stream pong.PongGame_NotifyGameStartedServer) error {
+func (s *server) StartNotifier(req *pong.GameStartedStreamRequest, stream pong.PongGame_StartNotifierServer) error {
 	clientID := req.ClientId
-	serverLogger.Printf("NotifyGameStarted called by client ID: %s", clientID)
+	serverLogger.Printf("StartNotifier called by client ID: %s", clientID)
 
-	s.mu.Lock()
-	player, exists := s.playerSessions.GetPlayer(clientID)
+	var player *Player
+	_, exists := s.playerSessions.GetPlayer(clientID)
 	if !exists {
-		return fmt.Errorf("player not found for client ID %s", player.ID)
+		player = NewPlayer(clientID, nil)
+		s.playerSessions.AddOrUpdatePlayer(player)
+		serverLogger.Printf("Player %s registered in StartNotifier", clientID)
 	}
 	player.startNotifier = stream
-	s.mu.Unlock()
 
 	ctx := stream.Context()
 	for {
@@ -246,8 +241,11 @@ func (s *server) startGame(ctx context.Context, players []*Player) {
 
 	for _, player := range players {
 		serverLogger.Printf("Notifying player %s that game %s started", player.ID, gameID)
+		if player.startNotifier == nil {
+			serverLogger.Panic("startNotifier nil")
+		}
 		if player.startNotifier != nil {
-			if err := player.startNotifier.Send(&pong.GameStartedStreamResponse{Message: "Game has started with ID: " + gameID}); err != nil {
+			if err := player.startNotifier.Send(&pong.GameStartedStreamResponse{Message: "Game has started with ID: " + gameID, Started: true}); err != nil {
 				serverLogger.Printf("Failed to send game start notification to player %s: %v", player.ID, err)
 			}
 		}
@@ -278,4 +276,69 @@ func (s *server) startNewGame(ctx context.Context) *gameInstance {
 	}()
 
 	return instance
+}
+
+func realMain() error {
+	flag.Parse()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	g, gctx := errgroup.WithContext(ctx)
+	bknd := slog.NewBackend(os.Stderr)
+	log := bknd.Logger("EXMP")
+	log.SetLevel(slog.LevelInfo)
+
+	c, err := jsonrpc.NewWSClient(
+		jsonrpc.WithWebsocketURL(*flagURL),
+		jsonrpc.WithServerTLSCertPath(*flagServerCertPath),
+		jsonrpc.WithClientTLSCert(*flagClientCertPath, *flagClientKeyPath),
+		jsonrpc.WithClientLog(log),
+	)
+	if err != nil {
+		return err
+	}
+
+	chatClient := types.NewChatServiceClient(c)
+	paymentService := types.NewPaymentsServiceClient(c)
+
+	var clientID string
+	g.Go(func() error { return c.Run(gctx) })
+	g.Go(func() error { return receivePaymentLoop(gctx, paymentService, log) })
+
+	resp := &types.PublicIdentity{}
+	err = chatClient.UserPublicIdentity(ctx, &types.PublicIdentityReq{}, resp)
+	if err != nil {
+		return fmt.Errorf("failed to get public identity: %w", err)
+	}
+
+	clientID = hex.EncodeToString(resp.Identity[:])
+
+	if clientID == "" {
+		return fmt.Errorf("client ID is empty after fetching")
+	}
+	srv := newServer(clientID)
+
+	go srv.manageGames(ctx)
+
+	lis, err := net.Listen("tcp", ":50051")
+	if err != nil {
+		log.Errorf("failed to listen: %v", err)
+		return err
+	}
+	grpcServer := grpc.NewServer()
+	pong.RegisterPongGameServer(grpcServer, srv)
+	fmt.Println("server listening at", lis.Addr())
+	if err := grpcServer.Serve(lis); err != nil {
+		log.Errorf("failed to serve: %v", err)
+		return err
+	}
+	return nil
+}
+
+func main() {
+	if err := realMain(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }

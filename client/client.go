@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -72,6 +73,41 @@ type pongClient struct {
 	conn         *grpc.ClientConn
 	pongClient   pong.PongGameClient
 	stream       pong.PongGame_StreamUpdatesClient
+	updatesCh    chan tea.Msg
+}
+
+type GameStartedMsg struct {
+	Started bool
+}
+
+func (pc *pongClient) StartNotifier() error {
+	ctx := attachClientIDToContext(context.Background(), pc.ID)
+
+	// Creates game start stream so we can notify when the game starts
+	gameStartedStream, err := pc.pongClient.StartNotifier(ctx, &pong.GameStartedStreamRequest{
+		ClientId: pc.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("error creating game started stream: %v", err)
+	}
+
+	go func() {
+		for {
+			started, err := gameStartedStream.Recv()
+			fmt.Printf("started: %+v\n\n", started)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				log.Printf("Error receiving game started notification: %v", err)
+				return
+			}
+			fmt.Printf("started: %+v\n\n", started)
+			pc.updatesCh <- GameStartedMsg{Started: started.Started}
+		}
+	}()
+
+	return nil
 }
 
 func (pc *pongClient) SendInput(input string) error {
@@ -82,36 +118,12 @@ func (pc *pongClient) SendInput(input string) error {
 		PlayerId: pc.ID,
 	})
 	if err != nil {
-		pc.cfg.Log.Errorf("Error sending input: %v", err)
 		return fmt.Errorf("error sending input: %v", err)
 	}
 	return nil
 }
 
-func (pc *pongClient) StreamUpdates() error {
-	ctx := attachClientIDToContext(context.Background(), pc.ID)
-	fmt.Printf("AQUI NO STREAM UPDATES")
-
-	stream, err := pc.pongClient.StreamUpdates(ctx, &pong.GameStreamRequest{})
-	if err != nil {
-		pc.cfg.Log.Errorf("Error creating updates stream: %v", err)
-		return fmt.Errorf("error creating updates stream: %v", err)
-	}
-	for {
-		update, err := stream.Recv()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			pc.cfg.Log.Errorf("Error receiving update: %v", err)
-			return fmt.Errorf("error receiving update: %v", err)
-		}
-		fmt.Printf("Game Update: %+v\n", update)
-	}
-	return nil
-}
-
-type GameUpdateMsg *pong.GameUpdate
+type GameUpdateMsg *pong.GameUpdateBytes
 
 type model struct {
 	mode           appMode
@@ -137,32 +149,33 @@ func initialModel(pc *pongClient, chatClient *types.ChatServiceClient, versionCl
 	}
 }
 
-func (m model) Init() tea.Cmd {
+func (m model) listenForUpdates() tea.Cmd {
 	return func() tea.Msg {
-
+		for msg := range m.pc.updatesCh {
+			return msg
+		}
 		return nil
 	}
+}
+
+func (m model) Init() tea.Cmd {
+	return tea.Batch(m.listenForUpdates(), func() tea.Msg {
+		for msg := range m.pc.updatesCh {
+			return msg
+		}
+		return nil
+	})
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.Type {
-		case tea.KeyEsc:
-			if m.mode == gameIdle {
-				m.mode = gameMode
-			} else if m.mode == gameMode {
-				m.mode = gameIdle
-			}
 		case tea.KeySpace:
-			if m.mode == gameIdle {
-				m.mode = gameMode
-				return m, m.makeClientReady()
-			}
-		case tea.KeyRunes:
-			if msg.String() == "q" {
-				return m, tea.Quit
-			}
+			m.mode = gameMode
+			return m, m.makeClientReady()
+		case tea.KeyEsc:
+			return m, tea.Quit
 		}
 		if m.mode == gameMode {
 			switch msg.String() {
@@ -171,13 +184,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
-	case types.VersionResponse:
-		fmt.Printf("AppName: %s\nversion: %s\nGoRuntime: %s\n", msg.AppName, msg.AppVersion, msg.GoRuntime)
 	case GameUpdateMsg:
 		m.gameStateMutex.Lock()
-		m.gameState = msg
+		var gameUpdate pong.GameUpdate
+		if err := json.Unmarshal(msg.Data, &gameUpdate); err != nil {
+			m.err = err
+			m.gameStateMutex.Unlock()
+			return m, nil
+		}
+		m.gameState = &gameUpdate
 		m.gameStateMutex.Unlock()
-		return m, nil
+		return m, m.listenForUpdates()
+	case GameStartedMsg:
+		m.gameState = &pong.GameUpdate{}
+		return m, m.listenForUpdates()
+	case types.VersionResponse:
+		fmt.Printf("AppName: %s\nversion: %s\nGoRuntime: %s\n", msg.AppName, msg.AppVersion, msg.GoRuntime)
 	}
 	return m, nil
 }
@@ -185,7 +207,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *model) makeClientReady() tea.Cmd {
 	log.Println("Client signaling readiness")
 	go func() {
-		log.Printf("pongClient signaling readiness: %v", m.pc.pongClient)
 		err := m.pc.SignalReady()
 		if err != nil {
 			log.Printf("Error signaling readiness: %v", err)
@@ -216,11 +237,12 @@ func (m *model) handleGameInput(msg tea.KeyMsg) tea.Cmd {
 func (m model) View() string {
 	var b strings.Builder
 	if m.mode == gameIdle {
-		fmt.Fprintln(&b, "Idle mode: Press esc to go to the game. 'q' to quit.")
+		fmt.Fprintln(&b, "Idle mode: Press space to get ready for the game")
+		fmt.Fprintln(&b, "Idle mode: Press esc to quit.")
 	} else if m.mode == gameMode {
 		fmt.Fprintln(&b, "Game mode: 'q' to return to chat.")
 		if m.gameState == nil {
-			return "Waiting for game to start... Press Space to signal you are ready"
+			return "Waiting for game to start..."
 		}
 
 		var gameView strings.Builder
@@ -242,7 +264,7 @@ func (m model) View() string {
 			gameView.WriteString("\n")
 		}
 		gameView.WriteString(fmt.Sprintf("Score: %d - %d\n", m.gameState.P1Score, m.gameState.P2Score))
-		gameView.WriteString("Controls: W/S and O/L - Q to quit")
+		gameView.WriteString("Controls: W/S and Arrow Keys - Q to quit")
 
 		return gameView.String()
 	}
@@ -258,15 +280,15 @@ func (pc *pongClient) SignalReady() error {
 		ClientId: pc.ID,
 	})
 	if err != nil {
-		pc.cfg.Log.Errorf("Error signaling readiness: %v", err)
 		return fmt.Errorf("error signaling readiness: %v", err)
 	}
-	streamErr := pc.initializeStream(ctx)
-	if streamErr != nil {
-		pc.cfg.Log.Errorf("Error initializing stream: %v", streamErr)
-		return fmt.Errorf("error initializing stream: %v", streamErr)
+
+	err = pc.initializeStream(ctx)
+	if err != nil {
+		return fmt.Errorf("error initializing stream: %v", err)
 	}
 
+	log.Println("Stream initialized successfully")
 	return nil
 }
 
@@ -278,7 +300,6 @@ func (pc *pongClient) initializeStream(ctx context.Context) error {
 	// Initialize the stream
 	stream, err := pc.pongClient.StreamUpdates(ctx, &pong.GameStreamRequest{})
 	if err != nil {
-		// pc.cfg.Log.Errorf("Error creating updates stream: %v", err)
 		return fmt.Errorf("error creating updates stream: %v", err)
 	}
 
@@ -290,15 +311,12 @@ func (pc *pongClient) initializeStream(ctx context.Context) error {
 		for {
 			update, err := stream.Recv()
 			if err == io.EOF {
-				// pc.cfg.Log.Info("Stream closed by server")
 				break
 			}
 			if err != nil {
-				// pc.cfg.Log.Errorf("Error receiving update: %v", err)
 				return
 			}
-			// pc.cfg.Log.Infof("Received game update: %+v", update)
-			fmt.Printf("Game Update: %+v\n", update)
+			pc.updatesCh <- GameUpdateMsg(update)
 		}
 	}()
 
@@ -353,12 +371,20 @@ func realMain() error {
 		return err
 	}
 	defer pongConn.Close()
+	updatesCh := make(chan tea.Msg)
 
 	pc := &pongClient{
 		ID:         clientID,
 		cfg:        cfg,
 		conn:       pongConn,
 		pongClient: pong.NewPongGameClient(pongConn),
+		updatesCh:  updatesCh,
+	}
+
+	// Perform authentication during initialization
+	err = pc.StartNotifier()
+	if err != nil {
+		return fmt.Errorf("failed to StartNotifier: %w", err)
 	}
 
 	m := initialModel(pc, nil, nil)

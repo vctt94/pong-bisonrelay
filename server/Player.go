@@ -10,7 +10,7 @@ type Player struct {
 	ID            string
 	PlayerNumber  int32 // 1 for player 1, 2 for player 2
 	stream        pong.PongGame_StreamUpdatesServer
-	startNotifier pong.PongGame_NotifyGameStartedServer
+	startNotifier pong.PongGame_StartNotifierServer
 }
 
 func NewPlayer(id string, stream pong.PongGame_StreamUpdatesServer) *Player {
@@ -64,6 +64,12 @@ func NewWaitingRoom() *WaitingRoom {
 func (wr *WaitingRoom) AddPlayer(player *Player) {
 	wr.mu.Lock()
 	defer wr.mu.Unlock()
+	// don't add repeated players
+	for _, p := range wr.queue {
+		if p.ID == player.ID {
+			return
+		}
+	}
 	wr.queue = append(wr.queue, player)
 }
 
