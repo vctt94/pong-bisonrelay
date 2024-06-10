@@ -135,9 +135,9 @@ type model struct {
 	versionClient  *types.VersionServiceClient
 }
 
-func initialModel(pc *pongClient, chatClient *types.ChatServiceClient, versionClient *types.VersionServiceClient) model {
+func initialModel(pc *pongClient, chatClient *types.ChatServiceClient, versionClient *types.VersionServiceClient) *model {
 	ctx, cancel := context.WithCancel(context.Background())
-	return model{
+	return &model{
 		mode:          gameIdle,
 		ctx:           ctx,
 		cancel:        cancel,
@@ -147,7 +147,7 @@ func initialModel(pc *pongClient, chatClient *types.ChatServiceClient, versionCl
 	}
 }
 
-func (m model) listenForUpdates() tea.Cmd {
+func (m *model) listenForUpdates() tea.Cmd {
 	return func() tea.Msg {
 		for msg := range m.pc.updatesCh {
 			return msg
@@ -156,7 +156,7 @@ func (m model) listenForUpdates() tea.Cmd {
 	}
 }
 
-func (m model) Init() tea.Cmd {
+func (m *model) Init() tea.Cmd {
 	return tea.Batch(m.listenForUpdates(), func() tea.Msg {
 		for msg := range m.pc.updatesCh {
 			return msg
@@ -165,7 +165,7 @@ func (m model) Init() tea.Cmd {
 	})
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.Type {
@@ -232,7 +232,7 @@ func (m *model) handleGameInput(msg tea.KeyMsg) tea.Cmd {
 	}
 }
 
-func (m model) View() string {
+func (m *model) View() string {
 	var b strings.Builder
 	if m.mode == gameIdle {
 		fmt.Fprintln(&b, "Idle mode: Press space to get ready for the game")
