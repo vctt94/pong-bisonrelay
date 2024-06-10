@@ -92,3 +92,15 @@ func (wr *WaitingRoom) GetPlayer(clientID string) (*Player, bool) {
 	}
 	return nil, false
 }
+
+func (wr *WaitingRoom) RemovePlayer(clientID string) {
+	wr.mu.Lock()
+	defer wr.mu.Unlock()
+
+	for i, player := range wr.queue {
+		if player.ID == clientID {
+			wr.queue = append(wr.queue[:i], wr.queue[i+1:]...)
+			break
+		}
+	}
+}
