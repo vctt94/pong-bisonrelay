@@ -100,7 +100,7 @@ type GameUpdate struct {
 
 // NewRound resets the ball, players and starts a new round. It accepts
 // a frames channel to write into and input channel to read from
-func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inputch <-chan []byte) {
+func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inputch <-chan []byte, roundResult chan<- int32) {
 	engineLogger.Println("new round")
 
 	// time.Sleep(time.Millisecond * 1500) // 1.5 seconds
@@ -125,14 +125,28 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 					engineLogger.Println("p1 wins")
 					e.P1Score += 1
 
-					go e.NewRound(ctx, framesch, inputch)
+					// Send the winner's ID through the roundResult channel
+					select {
+					case roundResult <- 1:
+					case <-ctx.Done():
+						return
+					}
+
+					go e.NewRound(ctx, framesch, inputch, roundResult)
 					return
 
 				case engine.ErrP2Win:
 					engineLogger.Println("p2 wins")
 					e.P2Score += 1
 
-					go e.NewRound(ctx, framesch, inputch)
+					// Send the winner's ID through the roundResult channel
+					select {
+					case roundResult <- 2:
+					case <-ctx.Done():
+						return
+					}
+
+					go e.NewRound(ctx, framesch, inputch, roundResult)
 					return
 				}
 
@@ -163,7 +177,9 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 				jsonTick, _ := json.Marshal(gameUpdateFrame)
 				select {
 				case framesch <- jsonTick:
-					engineLogger.Printf("tick: %s", string(jsonTick))
+					if e.Debug {
+						engineLogger.Printf("tick: %s", string(jsonTick))
+					}
 				case <-ctx.Done():
 					return
 				}

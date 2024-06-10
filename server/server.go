@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/companyzero/bisonrelay/clientrpc/jsonrpc"
 	"github.com/companyzero/bisonrelay/clientrpc/types"
@@ -42,6 +43,7 @@ type server struct {
 	games          map[string]*gameInstance
 	waitingRoom    *WaitingRoom
 	playerSessions *PlayerSessions
+	paymentService types.PaymentsServiceClient
 }
 
 type GameStartNotification struct {
@@ -50,10 +52,13 @@ type GameStartNotification struct {
 }
 
 type gameInstance struct {
-	engine   *canvas.CanvasEngine
-	framesch chan []byte
-	inputch  chan []byte
-	players  []*Player
+	engine      *canvas.CanvasEngine
+	framesch    chan []byte
+	inputch     chan []byte
+	roundResult chan int32
+	players     []*Player
+	cleanedUp   bool
+	running     bool
 }
 
 func (s *server) SendInput(ctx context.Context, in *pong.PlayerInput) (*pong.GameUpdate, error) {
@@ -85,15 +90,13 @@ func (s *server) StreamUpdates(req *pong.GameStreamRequest, stream pong.PongGame
 
 	player, exists := s.playerSessions.GetPlayer(clientID)
 	if !exists {
-		return fmt.Errorf("player not found for client ID %s", player.ID)
+		return fmt.Errorf("player not found for client ID %s", clientID)
 	}
 	player.stream = stream
 	s.playerSessions.AddOrUpdatePlayer(player)
 	serverLogger.Printf("Player %s stream initialized in StreamUpdates", clientID)
 
 	s.waitingRoom.AddPlayer(player)
-
-	// Signal readiness after initializing the stream
 	s.clientReady <- clientID
 
 	gameInstance, _, exists := s.findGameInstanceAndPlayerByClientID(clientID)
@@ -119,8 +122,12 @@ func (s *server) StreamUpdates(req *pong.GameStreamRequest, stream pong.PongGame
 }
 
 func (s *server) cleanupGameInstance(instance *gameInstance) {
-	close(instance.framesch)
-	close(instance.inputch)
+	if !instance.cleanedUp {
+		instance.cleanedUp = true
+		close(instance.framesch)
+		close(instance.inputch)
+		close(instance.roundResult)
+	}
 
 	for gameID, game := range s.games {
 		if game == instance {
@@ -135,17 +142,40 @@ func (s *server) handleDisconnect(clientID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	var instanceToCleanup *gameInstance
+	var remainingPlayer *Player
+
 	for _, game := range s.games {
 		for i, player := range game.players {
 			if player.ID == clientID {
+				// Remove the player from the game
 				game.players = append(game.players[:i], game.players[i+1:]...)
 				if len(game.players) == 0 {
-					s.cleanupGameInstance(game)
+					instanceToCleanup = game
+				} else {
+					game.running = false
+					remainingPlayer = game.players[0]
 				}
-				return
+				break
 			}
 		}
 	}
+
+	if instanceToCleanup != nil {
+		s.cleanupGameInstance(instanceToCleanup)
+	} else if remainingPlayer != nil {
+		// Notify the remaining player about the disconnection
+		if remainingPlayer.stream != nil {
+			remainingPlayer.startNotifier.Send(&pong.GameStartedStreamResponse{
+				Message: "Opponent disconnected. Game over.",
+				Started: false,
+			})
+		}
+	}
+
+	// Remove player session
+	s.playerSessions.RemovePlayer(clientID)
+	serverLogger.Printf("Player %s disconnected and cleaned up", clientID)
 }
 
 func (s *server) SignalReady(ctx context.Context, req *pong.SignalReadyRequest) (*pong.SignalReadyResponse, error) {
@@ -156,7 +186,6 @@ func (s *server) SignalReady(ctx context.Context, req *pong.SignalReadyRequest) 
 	serverLogger.Printf("SignalReady called by client ID: %s", clientID)
 
 	player, exists := s.playerSessions.GetPlayer(clientID)
-
 	if !exists {
 		return &pong.SignalReadyResponse{}, fmt.Errorf("player not found for client ID %s", player.ID)
 	}
@@ -219,7 +248,7 @@ func (s *server) StartNotifier(req *pong.GameStartedStreamRequest, stream pong.P
 	serverLogger.Printf("StartNotifier called by client ID: %s", clientID)
 
 	var player *Player
-	_, exists := s.playerSessions.GetPlayer(clientID)
+	player, exists := s.playerSessions.GetPlayer(clientID)
 	if !exists {
 		player = NewPlayer(clientID, nil)
 		s.playerSessions.AddOrUpdatePlayer(player)
@@ -230,6 +259,7 @@ func (s *server) StartNotifier(req *pong.GameStartedStreamRequest, stream pong.P
 	for {
 		select {
 		case <-ctx.Done():
+			s.handleDisconnect(clientID)
 			return ctx.Err()
 		}
 	}
@@ -274,17 +304,69 @@ func (s *server) startNewGame(ctx context.Context) *gameInstance {
 
 	framesch := make(chan []byte, 100)
 	inputch := make(chan []byte, 10)
+	roundResult := make(chan int32)
 	instance := &gameInstance{
-		engine:   canvasEngine,
-		framesch: framesch,
-		inputch:  inputch,
+		engine:      canvasEngine,
+		framesch:    framesch,
+		inputch:     inputch,
+		roundResult: roundResult,
+		running:     true,
 	}
 
 	go func() {
-		canvasEngine.NewRound(ctx, instance.framesch, instance.inputch)
+		defer func() {
+			if r := recover(); r != nil {
+				serverLogger.Printf("Recovered from panic in NewRound: %v", r)
+			}
+		}()
+		if !instance.running {
+			return
+		}
+		canvasEngine.NewRound(ctx, instance.framesch, instance.inputch, instance.roundResult)
+	}()
+
+	go func() {
+		for winnerID := range roundResult {
+			if !instance.running {
+				return
+			}
+			s.handleRoundResult(winnerID, instance)
+		}
 	}()
 
 	return instance
+}
+
+func (s *server) handleRoundResult(playerNumber int32, instance *gameInstance) {
+	var winner *Player
+	for _, player := range instance.players {
+		if player.PlayerNumber == playerNumber {
+			winner = player
+			break
+		}
+	}
+
+	if winner == nil {
+		serverLogger.Printf("Winner not found in game instance")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req := &types.TipUserRequest{
+		User:        winner.ID,
+		DcrAmount:   0.00000001,
+		MaxAttempts: 3,
+	}
+	var res types.TipUserResponse
+	err := s.paymentService.TipUser(ctx, req, &res)
+	if err != nil {
+		serverLogger.Printf("Failed to send payment to winner %s: %v", winner.ID, err)
+		return
+	}
+
+	serverLogger.Printf("Successfully sent payment to winner %s", winner.ID)
 }
 
 func realMain() error {
@@ -327,6 +409,7 @@ func realMain() error {
 		return fmt.Errorf("client ID is empty after fetching")
 	}
 	srv := newServer(clientID)
+	srv.paymentService = paymentService
 
 	go srv.manageGames(ctx)
 
