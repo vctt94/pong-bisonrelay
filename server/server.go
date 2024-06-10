@@ -24,15 +24,16 @@ import (
 
 var (
 	flagURL            = flag.String("url", "wss://127.0.0.1:7777/ws", "URL of the websocket endpoint")
-	flagServerCertPath = flag.String("servercert", "/home/pokerbot/brclient/rpc.cert", "Path to rpc.cert file")
-	flagClientCertPath = flag.String("clientcert", "/home/pokerbot/brclient/rpc-client.cert", "Path to rpc-client.cert file")
-	flagClientKeyPath  = flag.String("clientkey", "/home/pokerbot/brclient/rpc-client.key", "Path to rpc-client.key file")
+	flagServerCertPath = flag.String("servercert", "/home/pongbot/brclient/rpc.cert", "Path to rpc.cert file")
+	flagClientCertPath = flag.String("clientcert", "/home/pongbot/brclient/rpc-client.cert", "Path to rpc-client.cert file")
+	flagClientKeyPath  = flag.String("clientkey", "/home/pongbot/brclient/rpc-client.key", "Path to rpc-client.key file")
 )
 
 var (
-	serverLogger = log.New(os.Stdout, "[SERVER] ", 0)
-	debug        = flag.Bool("debug", false, "")
-	fps          = flag.Uint("fps", canvas.DEFAULT_FPS, "")
+	serverLogger  = log.New(os.Stdout, "[SERVER] ", 0)
+	debug         = flag.Bool("debug", false, "")
+	fps           = flag.Uint("fps", canvas.DEFAULT_FPS, "")
+	flagDCRAmount = flag.Float64("dcramount", 0.0000000, "Amount of DCR to tip the winner")
 )
 
 type server struct {
@@ -44,6 +45,7 @@ type server struct {
 	waitingRoom    *WaitingRoom
 	playerSessions *PlayerSessions
 	paymentService types.PaymentsServiceClient
+	dcrAmount      float64
 }
 
 type GameStartNotification struct {
@@ -415,6 +417,7 @@ func realMain() error {
 	}
 	srv := newServer(clientID)
 	srv.paymentService = paymentService
+	srv.dcrAmount = *flagDCRAmount
 
 	go srv.manageGames(ctx)
 
@@ -430,7 +433,7 @@ func realMain() error {
 		log.Errorf("failed to serve: %v", err)
 		return err
 	}
-	return nil
+	return g.Wait()
 }
 
 func main() {

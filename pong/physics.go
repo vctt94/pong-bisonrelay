@@ -54,6 +54,8 @@ func (e *CanvasEngine) tick() {
 		return
 
 	case engine.CollNone:
+		fallthrough
+	default:
 	}
 
 	e.advance().deOutOfBoundsPlayers()
