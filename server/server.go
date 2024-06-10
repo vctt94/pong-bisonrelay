@@ -59,6 +59,8 @@ type gameInstance struct {
 	players     []*Player
 	cleanedUp   bool
 	running     bool
+	ctx         context.Context
+	cancel      context.CancelFunc
 }
 
 func (s *server) SendInput(ctx context.Context, in *pong.PlayerInput) (*pong.GameUpdate, error) {
@@ -124,6 +126,7 @@ func (s *server) StreamUpdates(req *pong.GameStreamRequest, stream pong.PongGame
 func (s *server) cleanupGameInstance(instance *gameInstance) {
 	if !instance.cleanedUp {
 		instance.cleanedUp = true
+		instance.cancel()
 		close(instance.framesch)
 		close(instance.inputch)
 		close(instance.roundResult)
@@ -305,12 +308,15 @@ func (s *server) startNewGame(ctx context.Context) *gameInstance {
 	framesch := make(chan []byte, 100)
 	inputch := make(chan []byte, 10)
 	roundResult := make(chan int32)
+	instanceCtx, cancel := context.WithCancel(ctx)
 	instance := &gameInstance{
 		engine:      canvasEngine,
 		framesch:    framesch,
 		inputch:     inputch,
 		roundResult: roundResult,
 		running:     true,
+		ctx:         instanceCtx,
+		cancel:      cancel,
 	}
 
 	go func() {
@@ -322,7 +328,7 @@ func (s *server) startNewGame(ctx context.Context) *gameInstance {
 		if !instance.running {
 			return
 		}
-		canvasEngine.NewRound(ctx, instance.framesch, instance.inputch, instance.roundResult)
+		canvasEngine.NewRound(instance.ctx, instance.framesch, instance.inputch, instance.roundResult)
 	}()
 
 	go func() {
