@@ -3,6 +3,7 @@ package canvas
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"os"
 	"time"
@@ -120,8 +121,7 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 			case <-clock.C:
 				e.tick()
 
-				switch e.Err {
-				case engine.ErrP1Win:
+				if errors.Is(e.Err, engine.ErrP1Win) {
 					engineLogger.Println("p1 wins")
 					e.P1Score += 1
 
@@ -134,8 +134,7 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 
 					go e.NewRound(ctx, framesch, inputch, roundResult)
 					return
-
-				case engine.ErrP2Win:
+				} else if errors.Is(e.Err, engine.ErrP2Win) {
 					engineLogger.Println("p2 wins")
 					e.P2Score += 1
 
@@ -174,7 +173,10 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 					Fps:           float32(e.FPS),
 					Tps:           float32(e.TPS),
 				}
-				jsonTick, _ := json.Marshal(gameUpdateFrame)
+				jsonTick, err := json.Marshal(gameUpdateFrame)
+				if err != nil {
+					engineLogger.Printf("Err: %v", err)
+				}
 				select {
 				case framesch <- jsonTick:
 					if e.Debug {
@@ -200,7 +202,7 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 				}
 
 				if in.PlayerNumber == int32(1) {
-					switch k := string(in.Input); k {
+					switch k := in.Input; k {
 					case "ArrowUp":
 						engineLogger.Printf("key %s", k)
 						e.p1Down() // The Canvas origin is top left
@@ -210,7 +212,7 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 						e.p1Up()
 					}
 				} else {
-					switch k := string(in.Input); k {
+					switch k := in.Input; k {
 					case "ArrowUp":
 						engineLogger.Printf("key %s", k)
 						e.p2Down() // The Canvas origin is top left

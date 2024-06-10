@@ -76,7 +76,7 @@ func (s *server) SendInput(ctx context.Context, in *pong.PlayerInput) (*pong.Gam
 	in.PlayerNumber = player.PlayerNumber
 	inputBytes, err := json.Marshal(in)
 	if err != nil {
-		return nil, fmt.Errorf("failed to serialize input: %v", err)
+		return nil, fmt.Errorf("failed to serialize input: %w", err)
 	}
 	gameInstance.inputch <- inputBytes
 
@@ -259,13 +259,12 @@ func (s *server) StartNotifier(req *pong.GameStartedStreamRequest, stream pong.P
 	}
 	player.startNotifier = stream
 
-	for {
-		select {
-		case <-ctx.Done():
-			s.handleDisconnect(clientID)
-			return ctx.Err()
-		}
+	for range ctx.Done() {
+		s.handleDisconnect(clientID)
+		return ctx.Err()
 	}
+
+	return nil
 }
 
 func (s *server) startGame(ctx context.Context, players []*Player) {

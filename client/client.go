@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -86,14 +87,14 @@ func (pc *pongClient) StartNotifier() error {
 	// Creates game start stream so we can notify when the game starts
 	gameStartedStream, err := pc.pongClient.StartNotifier(ctx, &pong.GameStartedStreamRequest{})
 	if err != nil {
-		return fmt.Errorf("error creating game started stream: %v", err)
+		return fmt.Errorf("error creating game started stream: %w", err)
 	}
 
 	go func() {
 		for {
 			started, err := gameStartedStream.Recv()
 			pc.playerNumber = started.PlayerNumber
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			if err != nil {
@@ -116,7 +117,7 @@ func (pc *pongClient) SendInput(input string) error {
 		PlayerNumber: pc.playerNumber,
 	})
 	if err != nil {
-		return fmt.Errorf("error sending input: %v", err)
+		return fmt.Errorf("error sending input: %w", err)
 	}
 	return nil
 }
@@ -276,12 +277,12 @@ func (pc *pongClient) SignalReady() error {
 	// Signal readiness after stream is initialized
 	_, err := pc.pongClient.SignalReady(ctx, &pong.SignalReadyRequest{})
 	if err != nil {
-		return fmt.Errorf("error signaling readiness: %v", err)
+		return fmt.Errorf("error signaling readiness: %w", err)
 	}
 
 	err = pc.initializeStream(ctx)
 	if err != nil {
-		return fmt.Errorf("error initializing stream: %v", err)
+		return fmt.Errorf("error initializing stream: %w", err)
 	}
 
 	log.Println("Stream initialized successfully")
@@ -296,7 +297,7 @@ func (pc *pongClient) initializeStream(ctx context.Context) error {
 	// Initialize the stream
 	stream, err := pc.pongClient.StreamUpdates(ctx, &pong.GameStreamRequest{})
 	if err != nil {
-		return fmt.Errorf("error creating updates stream: %v", err)
+		return fmt.Errorf("error creating updates stream: %w", err)
 	}
 
 	// Set the stream before starting the goroutine
@@ -306,7 +307,7 @@ func (pc *pongClient) initializeStream(ctx context.Context) error {
 	go func() {
 		for {
 			update, err := stream.Recv()
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			if err != nil {
