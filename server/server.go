@@ -362,7 +362,7 @@ func (s *server) handleRoundResult(playerNumber int32, instance *gameInstance) {
 
 	req := &types.TipUserRequest{
 		User:        winner.ID,
-		DcrAmount:   0.00000001,
+		DcrAmount:   0.0000000,
 		MaxAttempts: 3,
 	}
 	var res types.TipUserResponse
