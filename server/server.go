@@ -1,25 +1,20 @@
-package main
+package server
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"sync"
 	"time"
 
-	"github.com/companyzero/bisonrelay/clientrpc/jsonrpc"
 	"github.com/companyzero/bisonrelay/clientrpc/types"
-	"github.com/decred/slog"
+	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/ndabAP/ping-pong/engine"
 	canvas "github.com/vctt94/pong-bisonrelay/pong"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
-	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
 )
 
 var (
@@ -36,9 +31,9 @@ var (
 	flagDCRAmount = flag.Float64("dcramount", 0.0000000, "Amount of DCR to tip the winner")
 )
 
-type server struct {
+type GameServer struct {
 	pong.UnimplementedPongGameServer
-	ID             string
+	ID             *zkidentity.ShortID
 	mu             sync.Mutex
 	clientReady    chan string
 	games          map[string]*gameInstance
@@ -65,7 +60,7 @@ type gameInstance struct {
 	cancel      context.CancelFunc
 }
 
-func (s *server) SendInput(ctx context.Context, in *pong.PlayerInput) (*pong.GameUpdate, error) {
+func (s *GameServer) SendInput(ctx context.Context, in *pong.PlayerInput) (*pong.GameUpdate, error) {
 	clientID, err := getClientIDFromContext(ctx)
 	if err != nil {
 		return nil, err
@@ -85,7 +80,7 @@ func (s *server) SendInput(ctx context.Context, in *pong.PlayerInput) (*pong.Gam
 	return &pong.GameUpdate{}, nil
 }
 
-func (s *server) StreamUpdates(req *pong.GameStreamRequest, stream pong.PongGame_StreamUpdatesServer) error {
+func (s *GameServer) StreamUpdates(req *pong.GameStreamRequest, stream pong.PongGame_StreamUpdatesServer) error {
 	ctx := stream.Context()
 	clientID, err := getClientIDFromContext(ctx)
 	if err != nil {
@@ -125,7 +120,7 @@ func (s *server) StreamUpdates(req *pong.GameStreamRequest, stream pong.PongGame
 	}
 }
 
-func (s *server) cleanupGameInstance(instance *gameInstance) {
+func (s *GameServer) cleanupGameInstance(instance *gameInstance) {
 	if !instance.cleanedUp {
 		instance.cleanedUp = true
 		instance.cancel()
@@ -143,7 +138,7 @@ func (s *server) cleanupGameInstance(instance *gameInstance) {
 	}
 }
 
-func (s *server) handleDisconnect(clientID string) {
+func (s *GameServer) handleDisconnect(clientID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -183,7 +178,7 @@ func (s *server) handleDisconnect(clientID string) {
 	serverLogger.Printf("Player %s disconnected and cleaned up", clientID)
 }
 
-func (s *server) SignalReady(ctx context.Context, req *pong.SignalReadyRequest) (*pong.SignalReadyResponse, error) {
+func (s *GameServer) SignalReady(ctx context.Context, req *pong.SignalReadyRequest) (*pong.SignalReadyResponse, error) {
 	clientID, err := getClientIDFromContext(ctx)
 	if err != nil {
 		return nil, err
@@ -203,7 +198,7 @@ func (s *server) SignalReady(ctx context.Context, req *pong.SignalReadyRequest) 
 	return &pong.SignalReadyResponse{}, nil
 }
 
-func (s *server) findGameInstanceAndPlayerByClientID(clientID string) (*gameInstance, *Player, bool) {
+func (s *GameServer) findGameInstanceAndPlayerByClientID(clientID string) (*gameInstance, *Player, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, game := range s.games {
@@ -216,8 +211,8 @@ func (s *server) findGameInstanceAndPlayerByClientID(clientID string) (*gameInst
 	return nil, nil, false
 }
 
-func newServer(id string) *server {
-	return &server{
+func NewServer(id *zkidentity.ShortID) *GameServer {
+	return &GameServer{
 		ID:             id,
 		clientReady:    make(chan string, 10),
 		games:          make(map[string]*gameInstance),
@@ -226,7 +221,7 @@ func newServer(id string) *server {
 	}
 }
 
-func (s *server) manageGames(ctx context.Context) {
+func (s *GameServer) ManageGames(ctx context.Context) error {
 	for {
 		select {
 		case clientID := <-s.clientReady:
@@ -238,12 +233,12 @@ func (s *server) manageGames(ctx context.Context) {
 				serverLogger.Printf("Not enough players ready. Current ready players: %v", s.waitingRoom.queue)
 			}
 		case <-ctx.Done():
-			return
+			return nil
 		}
 	}
 }
 
-func (s *server) StartNotifier(req *pong.GameStartedStreamRequest, stream pong.PongGame_StartNotifierServer) error {
+func (s *GameServer) StartNotifier(req *pong.GameStartedStreamRequest, stream pong.PongGame_StartNotifierServer) error {
 	ctx := stream.Context()
 	clientID, err := getClientIDFromContext(ctx)
 	if err != nil {
@@ -269,7 +264,7 @@ func (s *server) StartNotifier(req *pong.GameStartedStreamRequest, stream pong.P
 	return nil
 }
 
-func (s *server) startGame(ctx context.Context, players []*Player) {
+func (s *GameServer) startGame(ctx context.Context, players []*Player) {
 	gameID := generateGameID()
 	serverLogger.Printf("Starting new game with ID: %s", gameID)
 
@@ -295,7 +290,7 @@ func (s *server) startGame(ctx context.Context, players []*Player) {
 	}
 }
 
-func (s *server) startNewGame(ctx context.Context) *gameInstance {
+func (s *GameServer) startNewGame(ctx context.Context) *gameInstance {
 	game := engine.NewGame(
 		80, 40,
 		engine.NewPlayer(1, 5),
@@ -344,7 +339,7 @@ func (s *server) startNewGame(ctx context.Context) *gameInstance {
 	return instance
 }
 
-func (s *server) handleRoundResult(playerNumber int32, instance *gameInstance) {
+func (s *GameServer) handleRoundResult(playerNumber int32, instance *gameInstance) {
 	var winner *Player
 	for _, player := range instance.players {
 		if player.PlayerNumber == playerNumber {
@@ -374,71 +369,4 @@ func (s *server) handleRoundResult(playerNumber int32, instance *gameInstance) {
 	}
 
 	serverLogger.Printf("Successfully sent payment to winner %s", winner.ID)
-}
-
-func realMain() error {
-	flag.Parse()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	g, gctx := errgroup.WithContext(ctx)
-	bknd := slog.NewBackend(os.Stderr)
-	log := bknd.Logger("EXMP")
-	log.SetLevel(slog.LevelInfo)
-
-	c, err := jsonrpc.NewWSClient(
-		jsonrpc.WithWebsocketURL(*flagURL),
-		jsonrpc.WithServerTLSCertPath(*flagServerCertPath),
-		jsonrpc.WithClientTLSCert(*flagClientCertPath, *flagClientKeyPath),
-		jsonrpc.WithClientLog(log),
-	)
-	if err != nil {
-		return err
-	}
-
-	chatClient := types.NewChatServiceClient(c)
-	paymentService := types.NewPaymentsServiceClient(c)
-
-	var clientID string
-	g.Go(func() error { return c.Run(gctx) })
-	g.Go(func() error { return receivePaymentLoop(gctx, paymentService, log) })
-
-	resp := &types.PublicIdentity{}
-	err = chatClient.UserPublicIdentity(ctx, &types.PublicIdentityReq{}, resp)
-	if err != nil {
-		return fmt.Errorf("failed to get public identity: %w", err)
-	}
-
-	clientID = hex.EncodeToString(resp.Identity[:])
-
-	if clientID == "" {
-		return fmt.Errorf("client ID is empty after fetching")
-	}
-	srv := newServer(clientID)
-	srv.paymentService = paymentService
-	srv.dcrAmount = *flagDCRAmount
-
-	go srv.manageGames(ctx)
-
-	lis, err := net.Listen("tcp", ":50051")
-	if err != nil {
-		log.Errorf("failed to listen: %v", err)
-		return err
-	}
-	grpcServer := grpc.NewServer()
-	pong.RegisterPongGameServer(grpcServer, srv)
-	fmt.Println("server listening at", lis.Addr())
-	if err := grpcServer.Serve(lis); err != nil {
-		log.Errorf("failed to serve: %v", err)
-		return err
-	}
-	return g.Wait()
-}
-
-func main() {
-	if err := realMain(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
 }

@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"sync"
@@ -85,6 +85,8 @@ func (wr *WaitingRoom) ReadyPlayers() ([]*Player, bool) {
 }
 
 func (wr *WaitingRoom) GetPlayer(clientID string) (*Player, bool) {
+	wr.mu.Lock()
+	defer wr.mu.Unlock()
 	for _, player := range wr.queue {
 		if player.ID == clientID {
 			return player, true

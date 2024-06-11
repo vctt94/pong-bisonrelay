@@ -36,6 +36,8 @@ const (
 )
 
 var (
+	// serverAddr = flag.String("server_addr", "104.131.180.29:50051", "The server address in the format of host:port")
+
 	serverAddr = flag.String("server_addr", "localhost:50051", "The server address in the format of host:port")
 	rpcurl     = flag.String("rpcurl", "127.0.0.1:7676", "URL of the RPC endpoint without protocol")
 	brdatadir  = flag.String("brdatadir", "", "Directory containing the certificates and keys")
