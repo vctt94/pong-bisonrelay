@@ -166,7 +166,7 @@ func (s *GameServer) handleDisconnect(clientID string) {
 	} else if remainingPlayer != nil {
 		// Notify the remaining player about the disconnection
 		if remainingPlayer.stream != nil {
-			remainingPlayer.startNotifier.Send(&pong.GameStartedStreamResponse{
+			remainingPlayer.notifier.Send(&pong.GameStartedStreamResponse{
 				Message: "Opponent disconnected. Game over.",
 				Started: false,
 			})
@@ -179,21 +179,22 @@ func (s *GameServer) handleDisconnect(clientID string) {
 }
 
 func (s *GameServer) SignalReady(ctx context.Context, req *pong.SignalReadyRequest) (*pong.SignalReadyResponse, error) {
-	clientID, err := getClientIDFromContext(ctx)
-	if err != nil {
-		return nil, err
+	serverLogger.Printf("SignalReady called by client ID: %s", req.ClientId)
+	if s.waitingRoom == nil {
+		return nil, fmt.Errorf("waitingRoom is nil")
 	}
-	serverLogger.Printf("SignalReady called by client ID: %s", clientID)
-
-	player, exists := s.playerSessions.GetPlayer(clientID)
+	if s.playerSessions == nil {
+		return nil, fmt.Errorf("playerSessions is nil")
+	}
+	player, exists := s.playerSessions.GetPlayer(req.ClientId)
 	if !exists {
 		return &pong.SignalReadyResponse{}, fmt.Errorf("player not found for client ID %s", player.ID)
 	}
 
 	s.waitingRoom.AddPlayer(player)
-	s.clientReady <- clientID
+	s.clientReady <- player.ID
 
-	serverLogger.Printf("Player %s added to waiting room. Current ready players: %v", clientID, s.waitingRoom.queue)
+	serverLogger.Printf("Player %s added to waiting room. Current ready players: %v", player.ID, s.waitingRoom.queue)
 
 	return &pong.SignalReadyResponse{}, nil
 }
@@ -245,7 +246,7 @@ func (s *GameServer) StartNotifier(req *pong.GameStartedStreamRequest, stream po
 		return err
 	}
 
-	serverLogger.Printf("StartNotifier called by client ID: %s", clientID)
+	serverLogger.Printf("StartNotifier called by client")
 
 	var player *Player
 	player, exists := s.playerSessions.GetPlayer(clientID)
@@ -254,7 +255,30 @@ func (s *GameServer) StartNotifier(req *pong.GameStartedStreamRequest, stream po
 		s.playerSessions.AddOrUpdatePlayer(player)
 		serverLogger.Printf("Player %s registered in StartNotifier", clientID)
 	}
-	player.startNotifier = stream
+	player.notifier = stream
+
+	for range ctx.Done() {
+		s.handleDisconnect(clientID)
+		return ctx.Err()
+	}
+
+	return nil
+}
+
+func (s *GameServer) Init(req *pong.GameStartedStreamRequest, stream pong.PongGame_StartNotifierServer) error {
+	ctx := stream.Context()
+	clientID := req.ClientId
+
+	serverLogger.Printf("Init called by client ID: %s", clientID)
+
+	var player *Player
+	player, exists := s.playerSessions.GetPlayer(clientID)
+	if !exists {
+		player = NewPlayer(clientID, nil)
+		s.playerSessions.AddOrUpdatePlayer(player)
+		serverLogger.Printf("Player %s registered in Notifier", clientID)
+	}
+	player.notifier = stream
 
 	for range ctx.Done() {
 		s.handleDisconnect(clientID)
@@ -279,11 +303,11 @@ func (s *GameServer) startGame(ctx context.Context, players []*Player) {
 
 	for _, player := range players {
 		serverLogger.Printf("Notifying player %s that game %s started", player.ID, gameID)
-		if player.startNotifier == nil {
-			serverLogger.Panic("startNotifier nil")
+		if player.notifier == nil {
+			serverLogger.Panic("notifier nil")
 		}
-		if player.startNotifier != nil {
-			if err := player.startNotifier.Send(&pong.GameStartedStreamResponse{Message: "Game has started with ID: " + gameID, Started: true, PlayerNumber: player.PlayerNumber}); err != nil {
+		if player.notifier != nil {
+			if err := player.notifier.Send(&pong.GameStartedStreamResponse{Message: "Game has started with ID: " + gameID, Started: true, PlayerNumber: player.PlayerNumber}); err != nil {
 				serverLogger.Printf("Failed to send game start notification to player %s: %v", player.ID, err)
 			}
 		}

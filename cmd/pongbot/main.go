@@ -40,15 +40,16 @@ func realMain() error {
 
 	logBknd := slog.NewBackend(&logWriter{logFd}, slog.WithFlags(slog.LUTC))
 	botLog := logBknd.Logger("BOT")
-	gcLog := logBknd.Logger("BRLY")
-	mtrxLog := logBknd.Logger("MTRX")
-	mtrxLog.SetLevel(slog.LevelDebug)
+	pmLog := logBknd.Logger("PM")
+
+	pmLog.SetLevel(slog.LevelDebug)
+	botLog.SetLevel(slog.LevelDebug)
 
 	bknd := slog.NewBackend(os.Stderr)
 	log := bknd.Logger("BRLY")
 	log.SetLevel(slog.LevelDebug)
 
-	gcChan := make(chan types.GCReceivedMsg)
+	pmChan := make(chan types.ReceivedPM)
 
 	botCfg := bot.Config{
 		DataDir: cfg.DataDir,
@@ -59,8 +60,8 @@ func realMain() error {
 		ClientCertPath: cfg.ClientCertPath,
 		ClientKeyPath:  cfg.ClientKeyPath,
 
-		GCChan: gcChan,
-		GCLog:  gcLog,
+		PMChan: pmChan,
+		PMLog:  pmLog,
 	}
 
 	bot, err := bot.New(botCfg)
@@ -88,10 +89,13 @@ func realMain() error {
 		return err
 	}
 	fmt.Println("server listening at", lis.Addr())
-	if err := grpcServer.Serve(lis); err != nil {
-		log.Errorf("failed to serve: %v", err)
-		return err
-	}
+
+	// Run the gRPC server in a separate goroutine
+	go func() {
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Errorf("failed to serve: %v", err)
+		}
+	}()
 
 	bot.RegisterGameServer(srv)
 
@@ -101,13 +105,12 @@ func realMain() error {
 			select {
 			case <-ctx.Done():
 				return
-			case pm := <-gcChan:
+			case pm := <-pmChan:
 				nick := escapeNick(pm.Nick)
 				if pm.Msg == nil {
-					gcLog.Tracef("empty message from %v", nick)
+					pmLog.Tracef("empty message from %v", nick)
 					continue
 				}
-
 			}
 		}
 	}()

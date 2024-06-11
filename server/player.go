@@ -7,10 +7,10 @@ import (
 )
 
 type Player struct {
-	ID            string
-	PlayerNumber  int32 // 1 for player 1, 2 for player 2
-	stream        pong.PongGame_StreamUpdatesServer
-	startNotifier pong.PongGame_StartNotifierServer
+	ID           string
+	PlayerNumber int32 // 1 for player 1, 2 for player 2
+	stream       pong.PongGame_StreamUpdatesServer
+	notifier     pong.PongGame_StartNotifierServer
 }
 
 func NewPlayer(id string, stream pong.PongGame_StreamUpdatesServer) *Player {

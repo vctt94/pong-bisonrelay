@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -10,15 +9,14 @@ import (
 	"io"
 	"log"
 	"os"
-	"path/filepath"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
-	"golang.org/x/sync/errgroup"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/companyzero/bisonrelay/clientrpc/jsonrpc"
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
 
@@ -39,29 +37,8 @@ var (
 	// serverAddr = flag.String("server_addr", "104.131.180.29:50051", "The server address in the format of host:port")
 
 	serverAddr = flag.String("server_addr", "localhost:50051", "The server address in the format of host:port")
-	rpcurl     = flag.String("rpcurl", "127.0.0.1:7676", "URL of the RPC endpoint without protocol")
 	brdatadir  = flag.String("brdatadir", "", "Directory containing the certificates and keys")
 )
-
-var (
-	flagServerCertPath string
-	flagClientCertPath string
-	flagClientKeyPath  string
-)
-
-func init() {
-	flag.Parse()
-
-	if *brdatadir != "" {
-		flagServerCertPath = filepath.Join(*brdatadir, "rpc.cert")
-		flagClientCertPath = filepath.Join(*brdatadir, "rpc-client.cert")
-		flagClientKeyPath = filepath.Join(*brdatadir, "rpc-client.key")
-	} else {
-		flagServerCertPath = expandPath("~/.brclient/rpc.cert")
-		flagClientCertPath = expandPath("~/.brclient/rpc-client.cert")
-		flagClientKeyPath = expandPath("~/.brclient/rpc-client.key")
-	}
-}
 
 type PongClientCfg struct {
 	ServerAddr string      // Address of the Pong server
@@ -96,6 +73,7 @@ func (pc *pongClient) StartNotifier() error {
 		for {
 			started, err := gameStartedStream.Recv()
 			pc.playerNumber = started.PlayerNumber
+			pc.ID = started.ClientId
 			if errors.Is(err, io.EOF) {
 				break
 			}
@@ -325,36 +303,12 @@ func (pc *pongClient) initializeStream(ctx context.Context) error {
 func realMain() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	g, gctx := errgroup.WithContext(ctx)
+	// g, _ := errgroup.WithContext(ctx)
 
 	bknd := slog.NewBackend(os.Stderr)
 	log := bknd.Logger("EXMP")
 	log.SetLevel(slog.LevelInfo)
 
-	c, err := jsonrpc.NewWSClient(
-		jsonrpc.WithWebsocketURL("wss://"+*rpcurl+"/ws"),
-		jsonrpc.WithServerTLSCertPath(flagServerCertPath),
-		jsonrpc.WithClientTLSCert(flagClientCertPath, flagClientKeyPath),
-		jsonrpc.WithClientLog(log),
-	)
-	if err != nil {
-		return err
-	}
-
-	chatClient := types.NewChatServiceClient(c)
-	var clientID string
-	g.Go(func() error { return c.Run(gctx) })
-
-	resp := &types.PublicIdentity{}
-	err = chatClient.UserPublicIdentity(ctx, &types.PublicIdentityReq{}, resp)
-	if err != nil {
-		return fmt.Errorf("failed to get public identity: %w", err)
-	}
-
-	clientID = hex.EncodeToString(resp.Identity[:])
-	if clientID == "" {
-		return fmt.Errorf("client ID is empty after fetching")
-	}
 	cfg := &PongClientCfg{
 		ServerAddr: *serverAddr,
 	}
@@ -363,10 +317,15 @@ func realMain() error {
 		return err
 	}
 	defer pongConn.Close()
+
+	// Create a channel to listen for signals (e.g., SIGINT, SIGTERM).
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
 	updatesCh := make(chan tea.Msg)
 
 	pc := &pongClient{
-		ID:         clientID,
+		// ID:         clientID,
 		cfg:        cfg,
 		conn:       pongConn,
 		pongClient: pong.NewPongGameClient(pongConn),
@@ -386,6 +345,15 @@ func realMain() error {
 
 	if err := p.Start(); err != nil {
 		return err
+	}
+
+	// Wait for a termination signal or context cancellation.
+	select {
+	case <-sigCh:
+		log.Info("termination signal received")
+		cancel() // Clean up resources.
+	case <-ctx.Done():
+		log.Info("context cancelled")
 	}
 
 	return nil

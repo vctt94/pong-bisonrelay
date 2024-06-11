@@ -2,92 +2,13 @@ package bot
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"time"
 
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 )
-
-func (b *Bot) gcNtfns(ctx context.Context) error {
-	var ackRes types.AckResponse
-	var ackReq types.AckRequest
-	for {
-		// Keep requesting a new stream if the connection breaks.
-		streamReq := types.GCMStreamRequest{UnackedFrom: ackReq.SequenceId}
-		stream, err := b.chatService.GCMStream(ctx, &streamReq)
-		if errors.Is(err, context.Canceled) {
-			// Program is done.
-			return err
-		}
-		if err != nil {
-			b.gcLog.Errorf("failed to get GC stream: %v", err)
-			time.Sleep(time.Second) // Wait to try again.
-			continue
-		}
-
-		b.gcLog.Info("Listening for GC msgs...")
-		for {
-			var pm types.GCReceivedMsg
-			err := stream.Recv(&pm)
-			if errors.Is(err, context.Canceled) {
-				// Program is done.
-				return err
-			}
-			if err != nil {
-				b.gcLog.Errorf("failed to receive from stream: %v", err)
-				break
-			}
-			ackReq.SequenceId = pm.SequenceId
-			err = b.chatService.AckReceivedGCM(ctx, &ackReq, &ackRes)
-			if err != nil {
-				b.gcLog.Errorf("failed to acknowledge received gc: %v", err)
-				break
-			}
-			b.gcChan <- pm
-		}
-	}
-}
-
-func (b *Bot) inviteNtfns(ctx context.Context) error {
-	var ackRes types.AckResponse
-	var ackReq types.AckRequest
-	for {
-		// Keep requesting a new stream if the connection breaks. Also
-		// request any messages received since the last one we acked.
-		streamReq := types.ReceivedGCInvitesRequest{UnackedFrom: ackReq.SequenceId}
-		stream, err := b.gcService.ReceivedGCInvites(ctx, &streamReq)
-		if errors.Is(err, context.Canceled) {
-			// Program is done.
-			return err
-		}
-		if err != nil {
-			b.gcLog.Warnf("Error while obtaining GC invite stream: %v", err)
-			time.Sleep(time.Second) // Wait to try again.
-			continue
-		}
-
-		b.gcLog.Info("Listening for GC invites...")
-		for {
-			var pm types.ReceivedGCInvite
-			err := stream.Recv(&pm)
-			if errors.Is(err, context.Canceled) {
-				// Program is done.
-				return err
-			}
-			if err != nil {
-				b.gcLog.Warnf("Error while receiving invite stream: %v", err)
-				break
-			}
-			ackReq.SequenceId = pm.SequenceId
-			if err = b.gcService.AckReceivedGCInvites(ctx, &ackReq, &ackRes); err != nil {
-				b.gcLog.Errorf("failed to acknowledge kx: %v", err)
-				break
-			}
-			b.inviteChan <- pm
-		}
-	}
-}
 
 func (b *Bot) kxNtfns(ctx context.Context) error {
 	var ksr types.KXStreamRequest
@@ -148,6 +69,8 @@ func (b *Bot) pmNtfns(ctx context.Context) error {
 		for {
 			var pm types.ReceivedPM
 			err := stream.Recv(&pm)
+			clientID := hex.EncodeToString(pm.GetUid())
+
 			if errors.Is(err, context.Canceled) {
 				// Program is done.
 				return err
@@ -162,24 +85,44 @@ func (b *Bot) pmNtfns(ctx context.Context) error {
 				b.pmLog.Errorf("failed to acknowledge received gc: %v", err)
 				break
 			}
+			if pm.Msg.Message == "!init" {
+				// b.handleInit(clientID)
+				return nil
+			}
 			// Check if the message is the !ready command
 			if pm.Msg.Message == "!ready" {
-				b.handleReadySignal(string(pm.GetUid()))
+				b.handleReadySignal(clientID)
+				return nil
 			}
 			b.pmChan <- pm
 		}
 	}
 }
 
-func (b *Bot) handleReadySignal(userID string) {
+// func (b *Bot) handleInit(clientId string) {
+// 	// Call the SignalReady method on the server
+// 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+// 	defer cancel()
+
+// 	_, err := b.gameServer.Init(ctx, &pong.GameStartedStreamRequest{
+// 		ClientId: clientId,
+// 	})
+
+// 	if err != nil {
+// 		b.pmLog.Errorf("failed to signal ready for user %s: %v", clientId, err)
+// 	}
+// }
+
+func (b *Bot) handleReadySignal(clientId string) {
 	// Call the SignalReady method on the server
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	attachClientIDToContext(ctx, userID)
 
-	_, err := b.gameServer.SignalReady(ctx, &pong.SignalReadyRequest{})
+	_, err := b.gameServer.SignalReady(ctx, &pong.SignalReadyRequest{
+		ClientId: clientId,
+	})
 	if err != nil {
-		b.pmLog.Errorf("failed to signal ready for user %s: %v", userID, err)
+		b.pmLog.Errorf("failed to signal ready for user %s: %v", clientId, err)
 	}
 }
 

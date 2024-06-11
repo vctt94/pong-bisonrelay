@@ -3,7 +3,6 @@ package bot
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -46,12 +45,9 @@ type Bot struct {
 	wlFile string
 	wlMtx  sync.Mutex
 
-	gcLog      slog.Logger
-	gcChan     chan<- types.GCReceivedMsg
+	pmLog      slog.Logger
+	pmChan     chan<- types.ReceivedPM
 	inviteChan chan<- types.ReceivedGCInvite
-
-	pmLog  slog.Logger
-	pmChan chan<- types.ReceivedPM
 
 	tipLog  slog.Logger
 	tipChan chan<- types.TipProgressEvent
@@ -90,20 +86,7 @@ func (b *Bot) Close() error {
 }
 
 func (b *Bot) Run() error {
-	fmt.Println("Aqui")
 	g, gctx := errgroup.WithContext(b.ctx)
-
-	if b.gcChan != nil {
-		g.Go(func() error {
-			return b.gcNtfns(gctx)
-		})
-	}
-
-	if b.inviteChan != nil {
-		g.Go(func() error {
-			return b.inviteNtfns(gctx)
-		})
-	}
 
 	if b.pmChan != nil {
 		g.Go(func() error {
@@ -170,8 +153,6 @@ func New(cfg Config) (*Bot, error) {
 		wsc: wsc,
 		ctx: ctx,
 
-		gcChan:     cfg.GCChan,
-		gcLog:      cfg.GCLog,
 		inviteChan: cfg.InviteChan,
 
 		pmChan: cfg.PMChan,
