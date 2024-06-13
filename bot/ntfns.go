@@ -2,12 +2,10 @@ package bot
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"time"
 
 	"github.com/companyzero/bisonrelay/clientrpc/types"
-	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 )
 
 func (b *Bot) kxNtfns(ctx context.Context) error {
@@ -69,7 +67,6 @@ func (b *Bot) pmNtfns(ctx context.Context) error {
 		for {
 			var pm types.ReceivedPM
 			err := stream.Recv(&pm)
-			clientID := hex.EncodeToString(pm.GetUid())
 
 			if errors.Is(err, context.Canceled) {
 				// Program is done.
@@ -85,44 +82,8 @@ func (b *Bot) pmNtfns(ctx context.Context) error {
 				b.pmLog.Errorf("failed to acknowledge received gc: %v", err)
 				break
 			}
-			if pm.Msg.Message == "!init" {
-				// b.handleInit(clientID)
-				return nil
-			}
-			// Check if the message is the !ready command
-			if pm.Msg.Message == "!ready" {
-				b.handleReadySignal(clientID)
-				return nil
-			}
 			b.pmChan <- pm
 		}
-	}
-}
-
-// func (b *Bot) handleInit(clientId string) {
-// 	// Call the SignalReady method on the server
-// 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-// 	defer cancel()
-
-// 	_, err := b.gameServer.Init(ctx, &pong.GameStartedStreamRequest{
-// 		ClientId: clientId,
-// 	})
-
-// 	if err != nil {
-// 		b.pmLog.Errorf("failed to signal ready for user %s: %v", clientId, err)
-// 	}
-// }
-
-func (b *Bot) handleReadySignal(clientId string) {
-	// Call the SignalReady method on the server
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err := b.gameServer.SignalReady(ctx, &pong.SignalReadyRequest{
-		ClientId: clientId,
-	})
-	if err != nil {
-		b.pmLog.Errorf("failed to signal ready for user %s: %v", clientId, err)
 	}
 }
 

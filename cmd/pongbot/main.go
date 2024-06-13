@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -18,9 +19,14 @@ import (
 	"google.golang.org/grpc"
 )
 
+var (
+	debug = flag.Bool("debug", false, "")
+)
+
 const ()
 
 func realMain() error {
+	flag.Parse()
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
@@ -79,7 +85,8 @@ func realMain() error {
 	var zkShortID zkidentity.ShortID
 	copy(zkShortID[:], clientID)
 
-	srv := server.NewServer(&zkShortID)
+	// XXX add cfg to server
+	srv := server.NewServer(&zkShortID, *debug)
 
 	grpcServer := grpc.NewServer()
 	pong.RegisterPongGameServer(grpcServer, srv)
