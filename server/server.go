@@ -242,51 +242,59 @@ func (s *GameServer) startGame(ctx context.Context, players []*Player) error {
 	gameID := generateGameID()
 	serverLogger.Printf("Starting new game with ID: %s", gameID)
 
-	newGameInstance := s.startNewGame(ctx)
-	players[0].PlayerNumber = 1
-	players[1].PlayerNumber = 2
-	newGameInstance.players = players
-
+	newGameInstance := s.startNewGame(ctx, players)
 	s.mu.Lock()
 	s.games[gameID] = newGameInstance
 	s.mu.Unlock()
 
+	var wg sync.WaitGroup
 	for _, player := range players {
-		serverLogger.Printf("Notifying player %s that game %s started", player.ID, gameID)
-		if player.notifier == nil {
-			return fmt.Errorf("notifier nil")
-		}
-		if err := player.notifier.Send(&pong.GameStartedStreamResponse{Message: "Game has started with ID: " + gameID, Started: true, PlayerNumber: player.PlayerNumber}); err != nil {
-			serverLogger.Printf("Failed to send game start notification to player %s: %v", player.ID, err)
-		}
-		for {
-			select {
-			case <-ctx.Done():
-				s.handleDisconnect(player.ID)
-				return ctx.Err()
-			case frame, ok := <-newGameInstance.framesch:
-				if !ok {
-					return fmt.Errorf("error with framesch")
-				}
-				if err := player.stream.Send(&pong.GameUpdateBytes{Data: frame}); err != nil {
-					fmt.Printf("err: %+v\n\n", err)
+		wg.Add(1)
+		go func(player *Player) {
+			defer wg.Done()
+			serverLogger.Printf("Notifying player %s that game %s started", player.ID, gameID)
+			if player.notifier == nil {
+				return
+			}
+			if err := player.notifier.Send(&pong.GameStartedStreamResponse{Message: "Game has started with ID: " + gameID, Started: true, PlayerNumber: player.PlayerNumber}); err != nil {
+				serverLogger.Printf("Failed to send game start notification to player %s: %v", player.ID, err)
+				return
+			}
+			for {
+				select {
+				case <-ctx.Done():
 					s.handleDisconnect(player.ID)
-					return err
+					return
+				case frame, ok := <-newGameInstance.framesch:
+					if !ok {
+						return
+					}
+					if err := player.stream.Send(&pong.GameUpdateBytes{Data: frame}); err != nil {
+						fmt.Printf("err: %+v\n\n", err)
+						s.handleDisconnect(player.ID)
+						return
+					}
 				}
 			}
-		}
+		}(player)
 	}
 
+	wg.Wait()
 	return nil
 }
 
-func (s *GameServer) startNewGame(ctx context.Context) *gameInstance {
+func (s *GameServer) startNewGame(ctx context.Context, players []*Player) *gameInstance {
 	game := engine.NewGame(
 		80, 40,
 		engine.NewPlayer(1, 5),
 		engine.NewPlayer(1, 5),
 		engine.NewBall(3, 3),
 	)
+
+	s.mu.Lock()
+	players[0].PlayerNumber = 1
+	players[1].PlayerNumber = 2
+	s.mu.Unlock()
 
 	canvasEngine := canvas.New(game)
 	canvasEngine.SetDebug(s.debug).SetFPS(*fps)
@@ -303,6 +311,7 @@ func (s *GameServer) startNewGame(ctx context.Context) *gameInstance {
 		running:     true,
 		ctx:         instanceCtx,
 		cancel:      cancel,
+		players:     players,
 	}
 
 	go func() {
