@@ -6,9 +6,8 @@ package pong;
 
 service PongGame {
   rpc SendInput (PlayerInput) returns (GameUpdate) {}
-  rpc StreamUpdates (GameStreamRequest) returns (stream GameUpdateBytes) {}
-  rpc SignalReady(SignalReadyRequest) returns (SignalReadyResponse);
-  rpc StartNotifier(GameStartedStreamRequest) returns (stream GameStartedStreamResponse);
+  rpc SignalReady(SignalReadyRequest) returns (stream GameUpdateBytes);
+  rpc Init(GameStartedStreamRequest) returns (stream GameStartedStreamResponse);
 }
 
 message GameStartedStreamRequest {
@@ -26,8 +25,6 @@ message GameStartedStreamResponse {
 message SignalReadyRequest {
   string client_id = 1;
 }
-
-message SignalReadyResponse {}
 
 message GameUpdateBytes {
   bytes data = 1;
@@ -70,8 +67,4 @@ message GameUpdate {
   // Optional: if you want to send error messages or debug information
   string error = 23;
   bool debug = 24;
-}
-
-message GameStreamRequest {
-  string playerId = 1;
 }

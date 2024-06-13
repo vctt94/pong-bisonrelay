@@ -80,46 +80,6 @@ func (s *GameServer) SendInput(ctx context.Context, in *pong.PlayerInput) (*pong
 	return &pong.GameUpdate{}, nil
 }
 
-func (s *GameServer) StreamUpdates(req *pong.GameStreamRequest, stream pong.PongGame_StreamUpdatesServer) error {
-	ctx := stream.Context()
-	clientID, err := getClientIDFromContext(ctx)
-	if err != nil {
-		return err
-	}
-
-	player, exists := s.playerSessions.GetPlayer(clientID)
-	if !exists {
-		return fmt.Errorf("player not found for client ID %s", clientID)
-	}
-	player.stream = stream
-	s.playerSessions.AddOrUpdatePlayer(player)
-	serverLogger.Printf("Player %s stream initialized in StreamUpdates", clientID)
-
-	s.waitingRoom.AddPlayer(player)
-	s.clientReady <- clientID
-
-	gameInstance, _, exists := s.findGameInstanceAndPlayerByClientID(clientID)
-	if !exists {
-		return fmt.Errorf("no game instance found for client ID %s", clientID)
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			s.handleDisconnect(clientID)
-			return ctx.Err()
-		case frame, ok := <-gameInstance.framesch:
-			if !ok {
-				return nil
-			}
-			if err := stream.Send(&pong.GameUpdateBytes{Data: frame}); err != nil {
-				s.handleDisconnect(clientID)
-				return err
-			}
-		}
-	}
-}
-
 func (s *GameServer) cleanupGameInstance(instance *gameInstance) {
 	if !instance.cleanedUp {
 		instance.cleanedUp = true
@@ -178,25 +138,48 @@ func (s *GameServer) handleDisconnect(clientID string) {
 	serverLogger.Printf("Player %s disconnected and cleaned up", clientID)
 }
 
-func (s *GameServer) SignalReady(ctx context.Context, req *pong.SignalReadyRequest) (*pong.SignalReadyResponse, error) {
-	serverLogger.Printf("SignalReady called by client ID: %s", req.ClientId)
-	if s.waitingRoom == nil {
-		return nil, fmt.Errorf("waitingRoom is nil")
+func (s *GameServer) SignalReady(ctx context.Context, req *pong.SignalReadyRequest, stream pong.PongGame_SignalReadyServer) error {
+	clientID, err := getClientIDFromContext(ctx)
+	if err != nil {
+		return err
 	}
-	if s.playerSessions == nil {
-		return nil, fmt.Errorf("playerSessions is nil")
-	}
-	player, exists := s.playerSessions.GetPlayer(req.ClientId)
+	serverLogger.Printf("SignalReady called by client ID: %s", clientID)
+
+	player, exists := s.playerSessions.GetPlayer(clientID)
 	if !exists {
-		return &pong.SignalReadyResponse{}, fmt.Errorf("player not found for client ID %s", player.ID)
+		return fmt.Errorf("player not found for client ID %s", clientID)
+	}
+	player.stream = stream
+	s.playerSessions.AddOrUpdatePlayer(player)
+	serverLogger.Printf("Player %s stream initialized in StreamUpdates", clientID)
+
+	s.waitingRoom.AddPlayer(player)
+	s.clientReady <- clientID
+
+	gameInstance, _, exists := s.findGameInstanceAndPlayerByClientID(clientID)
+	if !exists {
+		return fmt.Errorf("no game instance found for client ID %s", clientID)
 	}
 
 	s.waitingRoom.AddPlayer(player)
 	s.clientReady <- player.ID
-
 	serverLogger.Printf("Player %s added to waiting room. Current ready players: %v", player.ID, s.waitingRoom.queue)
 
-	return &pong.SignalReadyResponse{}, nil
+	for {
+		select {
+		case <-ctx.Done():
+			s.handleDisconnect(clientID)
+			return ctx.Err()
+		case frame, ok := <-gameInstance.framesch:
+			if !ok {
+				return nil
+			}
+			if err := stream.Send(&pong.GameUpdateBytes{Data: frame}); err != nil {
+				s.handleDisconnect(clientID)
+				return err
+			}
+		}
+	}
 }
 
 func (s *GameServer) findGameInstanceAndPlayerByClientID(clientID string) (*gameInstance, *Player, bool) {
@@ -239,47 +222,24 @@ func (s *GameServer) ManageGames(ctx context.Context) error {
 	}
 }
 
-func (s *GameServer) StartNotifier(req *pong.GameStartedStreamRequest, stream pong.PongGame_StartNotifierServer) error {
-	ctx := stream.Context()
-	clientID, err := getClientIDFromContext(ctx)
-	if err != nil {
-		return err
-	}
-
-	serverLogger.Printf("StartNotifier called by client")
-
-	var player *Player
-	player, exists := s.playerSessions.GetPlayer(clientID)
-	if !exists {
-		player = NewPlayer(clientID, nil)
-		s.playerSessions.AddOrUpdatePlayer(player)
-		serverLogger.Printf("Player %s registered in StartNotifier", clientID)
-	}
-	player.notifier = stream
-
-	for range ctx.Done() {
-		s.handleDisconnect(clientID)
-		return ctx.Err()
-	}
-
-	return nil
-}
-
-func (s *GameServer) Init(req *pong.GameStartedStreamRequest, stream pong.PongGame_StartNotifierServer) error {
+func (s *GameServer) Init(req *pong.GameStartedStreamRequest, stream pong.PongGame_InitServer) error {
 	ctx := stream.Context()
 	clientID := req.ClientId
 
-	serverLogger.Printf("Init called by client ID: %s", clientID)
+	serverLogger.Printf("Init called by client")
 
-	var player *Player
 	player, exists := s.playerSessions.GetPlayer(clientID)
 	if !exists {
-		player = NewPlayer(clientID, nil)
+		player = NewPlayer(clientID)
 		s.playerSessions.AddOrUpdatePlayer(player)
-		serverLogger.Printf("Player %s registered in Notifier", clientID)
+		serverLogger.Printf("Player %s registered in Init", clientID)
+	} else {
+		player.notifier = stream
 	}
-	player.notifier = stream
 
+	player.notifier.Send(&pong.GameStartedStreamResponse{Message: "Notifier stream Initialized"})
+
+	// Listen for context cancellation to handle disconnection
 	for range ctx.Done() {
 		s.handleDisconnect(clientID)
 		return ctx.Err()
