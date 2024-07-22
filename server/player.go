@@ -3,14 +3,14 @@ package server
 import (
 	"sync"
 
-	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
+	"github.com/companyzero/bisonrelay/clientplugin/grpctypes"
 )
 
 type Player struct {
 	ID           string
 	PlayerNumber int32 // 1 for player 1, 2 for player 2
-	stream       pong.PongGame_SignalReadyServer
-	notifier     pong.PongGame_InitServer
+	stream       grpctypes.PluginService_CallActionServer
+	notifier     grpctypes.PluginService_InitServer
 }
 
 func NewPlayer(id string) *Player {

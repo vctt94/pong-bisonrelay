@@ -10,18 +10,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/companyzero/bisonrelay/clientplugin/grpctypes"
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/ndabAP/ping-pong/engine"
 	canvas "github.com/vctt94/pong-bisonrelay/pong"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
-)
-
-var (
-	flagURL            = flag.String("url", "wss://127.0.0.1:7777/ws", "URL of the websocket endpoint")
-	flagServerCertPath = flag.String("servercert", "/home/pongbot/brclient/rpc.cert", "Path to rpc.cert file")
-	flagClientCertPath = flag.String("clientcert", "/home/pongbot/brclient/rpc-client.cert", "Path to rpc-client.cert file")
-	flagClientKeyPath  = flag.String("clientkey", "/home/pongbot/brclient/rpc-client.key", "Path to rpc-client.key file")
 )
 
 var (
@@ -126,7 +120,7 @@ func (s *GameServer) handleDisconnect(clientID string) {
 	} else if remainingPlayer != nil {
 		// Notify the remaining player about the disconnection
 		if remainingPlayer.stream != nil {
-			remainingPlayer.notifier.Send(&pong.GameStartedStreamResponse{
+			remainingPlayer.notifier.Send(&grpctypes.PluginStartStreamResponse{
 				Message: "Opponent disconnected. Game over.",
 				Started: false,
 			})
@@ -138,8 +132,7 @@ func (s *GameServer) handleDisconnect(clientID string) {
 	serverLogger.Printf("Player %s disconnected and cleaned up", clientID)
 }
 
-func (s *GameServer) SignalReady(req *pong.SignalReadyRequest, stream pong.PongGame_SignalReadyServer) error {
-	ctx := stream.Context()
+func (s *GameServer) SignalReady(req *pong.SignalReadyRequest, stream grpctypes.PluginService_CallActionServer) error {
 	clientID := req.ClientId
 
 	serverLogger.Printf("SignalReady called by client ID: %s", clientID)
@@ -152,7 +145,7 @@ func (s *GameServer) SignalReady(req *pong.SignalReadyRequest, stream pong.PongG
 		return fmt.Errorf("player notifier nil %s", clientID)
 	}
 
-	if err := player.notifier.Send(&pong.GameStartedStreamResponse{Message: "Client signaling ready"}); err != nil {
+	if err := player.notifier.Send(&grpctypes.PluginStartStreamResponse{Message: "Client signaling ready"}); err != nil {
 		serverLogger.Printf("Failed to send game start notification to player %s: %v", player.ID, err)
 	}
 	player.stream = stream
@@ -163,10 +156,6 @@ func (s *GameServer) SignalReady(req *pong.SignalReadyRequest, stream pong.PongG
 	s.clientReady <- clientID
 	serverLogger.Printf("Player %s added to waiting room. Current ready players: %v", player.ID, s.waitingRoom.queue)
 
-	for range ctx.Done() {
-		s.handleDisconnect(clientID)
-		return ctx.Err()
-	}
 	return nil
 }
 
@@ -211,7 +200,7 @@ func (s *GameServer) ManageGames(ctx context.Context) error {
 	}
 }
 
-func (s *GameServer) Init(req *pong.GameStartedStreamRequest, stream pong.PongGame_InitServer) error {
+func (s *GameServer) Init(req *pong.GameStartedStreamRequest, stream grpctypes.PluginService_InitServer) error {
 	ctx := stream.Context()
 	clientID := req.ClientId
 
@@ -227,7 +216,7 @@ func (s *GameServer) Init(req *pong.GameStartedStreamRequest, stream pong.PongGa
 		player.notifier = stream
 	}
 
-	player.notifier.Send(&pong.GameStartedStreamResponse{Message: "Notifier stream Initialized"})
+	player.notifier.Send(&grpctypes.PluginStartStreamResponse{Message: "Notifier stream Initialized"})
 
 	// Listen for context cancellation to handle disconnection
 	for range ctx.Done() {
@@ -256,7 +245,7 @@ func (s *GameServer) startGame(ctx context.Context, players []*Player) error {
 			if player.notifier == nil {
 				return
 			}
-			if err := player.notifier.Send(&pong.GameStartedStreamResponse{Message: "Game has started with ID: " + gameID, Started: true, PlayerNumber: player.PlayerNumber}); err != nil {
+			if err := player.notifier.Send(&grpctypes.PluginStartStreamResponse{Message: "Game has started with ID: " + gameID, Started: true, PlayerNumber: player.PlayerNumber}); err != nil {
 				serverLogger.Printf("Failed to send game start notification to player %s: %v", player.ID, err)
 				return
 			}
@@ -265,15 +254,15 @@ func (s *GameServer) startGame(ctx context.Context, players []*Player) error {
 				case <-ctx.Done():
 					s.handleDisconnect(player.ID)
 					return
-				case frame, ok := <-newGameInstance.framesch:
+				case _, ok := <-newGameInstance.framesch:
 					if !ok {
 						return
 					}
-					if err := player.stream.Send(&pong.GameUpdateBytes{Data: frame}); err != nil {
-						fmt.Printf("err: %+v\n\n", err)
-						s.handleDisconnect(player.ID)
-						return
-					}
+					// if err := player.stream.Send(&pong.GameUpdateBytes{Data: frame}); err != nil {
+					// 	fmt.Printf("err: %+v\n\n", err)
+					// 	s.handleDisconnect(player.ID)
+					// 	return
+					// }
 				}
 			}
 		}(player)

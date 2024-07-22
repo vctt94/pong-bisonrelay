@@ -5,124 +5,167 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"log"
 	"net"
 	"os"
-	"path/filepath"
+	"runtime"
 
+	"github.com/companyzero/bisonrelay/clientplugin/grpctypes"
+	"github.com/companyzero/bisonrelay/clientrpc/jsonrpc"
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/decred/slog"
 	"github.com/jrick/logrotate/rotator"
-	"github.com/vctt94/pong-bisonrelay/bot"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 	"github.com/vctt94/pong-bisonrelay/server"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 )
 
 var (
-	debug = flag.Bool("debug", false, "")
+	flagURL = flag.String("url", "wss://127.0.0.1:7777/ws", "URL of the websocket endpoint")
+
+	flagServerCertPath = flag.String("servercert", "/home/pongbot/brclient/rpc.cert", "Path to rpc.cert file")
+	flagClientCertPath = flag.String("clientcert", "/home/pongbot/brclient/rpc-client.cert", "Path to rpc-client.cert file")
+	flagClientKeyPath  = flag.String("clientkey", "/home/pongbot/brclient/rpc-client.key", "Path to rpc-client.key file")
 )
 
-const ()
+type PongPlugin struct {
+	id      string
+	name    string
+	version string
+	config  map[string]interface{}
+	logger  slog.Logger
 
+	UpdatesCh  map[string]chan *pong.GameUpdateBytes
+	PongClient map[string]pong.PongGame_InitClient
+	Stream     map[string]grpctypes.PluginService_InitServer
+}
+
+type pluginServer struct {
+	grpctypes.UnimplementedPluginServiceServer
+	rpcplugin PongPlugin
+	gameSrv   server.GameServer
+}
+
+func (s *pluginServer) Init(req *grpctypes.PluginStartStreamRequest, stream grpctypes.PluginService_InitServer) error {
+	ctx := stream.Context()
+	clientID := req.ClientId
+
+	fmt.Printf("Init called by client: %+v\n", clientID)
+
+	in := &pong.GameStartedStreamRequest{
+		ClientId: clientID,
+	}
+	err := s.gameSrv.Init(in, stream)
+	if err != nil {
+		return err
+	}
+	// Set the stream before starting the goroutine
+	s.rpcplugin.Stream[clientID] = stream
+	// Listen for context cancellation to handle disconnection
+	for range ctx.Done() {
+		// s.handleDisconnect(clientID)
+		fmt.Printf("client ctx disconnected")
+		return ctx.Err()
+	}
+
+	return nil
+}
+
+func (s *pluginServer) CallAction(req *grpctypes.PluginCallActionStreamRequest, stream grpctypes.PluginService_CallActionServer) error {
+	switch req.Action {
+	case "ready":
+		r := &pong.SignalReadyRequest{
+			ClientId: req.User,
+		}
+		// Signal readiness after stream is initialized
+		err := s.gameSrv.SignalReady(r, stream)
+		if err != nil {
+			return fmt.Errorf("error signaling readiness: %w", err)
+		}
+
+		log.Println("Stream initialized successfully")
+		return nil
+
+	default:
+		return fmt.Errorf("unsupported action: %v", req.Action)
+	}
+}
+
+func (s *pluginServer) GetVersion(ctx context.Context, req *grpctypes.PluginVersionRequest) (*grpctypes.PluginVersionResponse, error) {
+	// Implement your GetVersion logic here
+	return &grpctypes.PluginVersionResponse{
+		AppName:    s.rpcplugin.name,
+		AppVersion: s.rpcplugin.version,
+		GoRuntime:  runtime.Version(),
+	}, nil
+}
+
+// NewPongPlugin initializes a new PongPlugin
+func NewPongPlugin() PongPlugin {
+	return PongPlugin{
+		name:    "pong",
+		version: "0.0.0",
+
+		UpdatesCh:  make(map[string]chan *pong.GameUpdateBytes),
+		PongClient: make(map[string]pong.PongGame_InitClient),
+		Stream:     make(map[string]grpctypes.PluginService_InitServer),
+	}
+}
 func realMain() error {
-	flag.Parse()
-	cfg, err := loadConfig()
-	if err != nil {
-		return err
-	}
-
-	// Setup logging
-	logDir := filepath.Join(cfg.DataDir, "logs")
-	if err := os.MkdirAll(logDir, 0o700); err != nil {
-		return err
-	}
-	logPath := filepath.Join(logDir, "bot.log")
-	logFd, err := rotator.New(logPath, 32*1024, true, 0)
-	if err != nil {
-		return err
-	}
-	defer logFd.Close()
-
-	logBknd := slog.NewBackend(&logWriter{logFd}, slog.WithFlags(slog.LUTC))
-	botLog := logBknd.Logger("BOT")
-	pmLog := logBknd.Logger("PM")
-
-	pmLog.SetLevel(slog.LevelDebug)
-	botLog.SetLevel(slog.LevelDebug)
-
-	bknd := slog.NewBackend(os.Stderr)
-	log := bknd.Logger("BRLY")
-	log.SetLevel(slog.LevelDebug)
-
-	pmChan := make(chan types.ReceivedPM)
-
-	botCfg := bot.Config{
-		DataDir: cfg.DataDir,
-		Log:     botLog,
-
-		URL:            cfg.URL,
-		ServerCertPath: cfg.ServerCertPath,
-		ClientCertPath: cfg.ClientCertPath,
-		ClientKeyPath:  cfg.ClientKeyPath,
-
-		PMChan: pmChan,
-		PMLog:  pmLog,
-	}
-
-	bot, err := bot.New(botCfg)
-	if err != nil {
-		return err
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	bknd := slog.NewBackend(os.Stderr)
+	log := bknd.Logger("EXMP")
+	log.SetLevel(slog.LevelDebug)
+
+	g, gctx := errgroup.WithContext(ctx)
+	lis, err := net.Listen("tcp", ":50051")
+	if err != nil {
+		return err
+	}
+
+	c, err := jsonrpc.NewWSClient(
+		jsonrpc.WithWebsocketURL(*flagURL),
+		jsonrpc.WithServerTLSCertPath(*flagServerCertPath),
+		jsonrpc.WithClientTLSCert(*flagClientCertPath, *flagClientKeyPath),
+		jsonrpc.WithClientLog(log),
+	)
+	if err != nil {
+		return err
+	}
+	g.Go(func() error { return c.Run(gctx) })
+
+	chat := types.NewChatServiceClient(c)
 	req := &types.PublicIdentityReq{}
 	var publicIdentity types.PublicIdentity
-	bot.GetPublicIdentity(ctx, req, &publicIdentity)
+	err = chat.UserPublicIdentity(ctx, req, &publicIdentity)
+	if err != nil {
+		return err
+	}
 
 	clientID := hex.EncodeToString(publicIdentity.Identity[:])
 	var zkShortID zkidentity.ShortID
 	copy(zkShortID[:], clientID)
+	plugin := NewPongPlugin()
+	gameSrv := server.NewServer(&zkShortID, true)
 
-	// XXX add cfg to server
-	srv := server.NewServer(&zkShortID, *debug)
+	// gamesrv := &pong.PongGameServer{}
+	srv := &pluginServer{
+		rpcplugin: plugin,
+		gameSrv:   *gameSrv,
+	}
+	s := grpc.NewServer()
+	grpctypes.RegisterPluginServiceServer(s, srv)
 
-	grpcServer := grpc.NewServer()
-	pong.RegisterPongGameServer(grpcServer, srv)
-	lis, err := net.Listen("tcp", ":50051")
-	if err != nil {
-		log.Errorf("failed to listen: %v", err)
+	fmt.Printf("server listening at %v", lis.Addr())
+	if err := s.Serve(lis); err != nil {
 		return err
 	}
-	fmt.Println("server listening at", lis.Addr())
 
-	// Run the gRPC server in a separate goroutine
-	go func() {
-		if err := grpcServer.Serve(lis); err != nil {
-			log.Errorf("failed to serve: %v", err)
-		}
-	}()
-
-	bot.RegisterGameServer(srv)
-
-	// Launch handler
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case pm := <-pmChan:
-				nick := escapeNick(pm.Nick)
-				if pm.Msg == nil {
-					pmLog.Tracef("empty message from %v", nick)
-					continue
-				}
-			}
-		}
-	}()
-
-	return bot.Run()
+	return g.Wait()
 }
 
 func main() {
