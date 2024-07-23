@@ -45,7 +45,7 @@ type PongPlugin struct {
 type pluginServer struct {
 	grpctypes.UnimplementedPluginServiceServer
 	rpcplugin PongPlugin
-	gameSrv   server.GameServer
+	gameSrv   *server.GameServer
 }
 
 func (s *pluginServer) Init(req *grpctypes.PluginStartStreamRequest, stream grpctypes.PluginService_InitServer) error {
@@ -76,6 +76,8 @@ func (s *pluginServer) Init(req *grpctypes.PluginStartStreamRequest, stream grpc
 func (s *pluginServer) CallAction(req *grpctypes.PluginCallActionStreamRequest, stream grpctypes.PluginService_CallActionServer) error {
 	switch req.Action {
 	case "ready":
+		ctx := stream.Context()
+
 		r := &pong.SignalReadyRequest{
 			ClientId: req.User,
 		}
@@ -86,11 +88,18 @@ func (s *pluginServer) CallAction(req *grpctypes.PluginCallActionStreamRequest, 
 		}
 
 		log.Println("Stream initialized successfully")
-		return nil
+		for range ctx.Done() {
+			// XXX Handle disconnections
+			// s.handleDisconnect(clientID)
+			fmt.Printf("client ctx disconnected")
+			return ctx.Err()
+		}
 
 	default:
 		return fmt.Errorf("unsupported action: %v", req.Action)
 	}
+
+	return nil
 }
 
 func (s *pluginServer) GetVersion(ctx context.Context, req *grpctypes.PluginVersionRequest) (*grpctypes.PluginVersionResponse, error) {
@@ -152,10 +161,17 @@ func realMain() error {
 	plugin := NewPongPlugin()
 	gameSrv := server.NewServer(&zkShortID, true)
 
-	// gamesrv := &pong.PongGameServer{}
+	go func() error {
+		if err := gameSrv.ManageGames(ctx); err != nil {
+			return err
+		}
+
+		return nil
+	}()
+
 	srv := &pluginServer{
 		rpcplugin: plugin,
-		gameSrv:   *gameSrv,
+		gameSrv:   gameSrv,
 	}
 	s := grpc.NewServer()
 	grpctypes.RegisterPluginServiceServer(s, srv)

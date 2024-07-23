@@ -254,15 +254,15 @@ func (s *GameServer) startGame(ctx context.Context, players []*Player) error {
 				case <-ctx.Done():
 					s.handleDisconnect(player.ID)
 					return
-				case _, ok := <-newGameInstance.framesch:
+				case frame, ok := <-newGameInstance.framesch:
 					if !ok {
 						return
 					}
-					// if err := player.stream.Send(&pong.GameUpdateBytes{Data: frame}); err != nil {
-					// 	fmt.Printf("err: %+v\n\n", err)
-					// 	s.handleDisconnect(player.ID)
-					// 	return
-					// }
+					if err := player.stream.Send(&grpctypes.PluginCallActionStreamResponse{Response: frame}); err != nil {
+						fmt.Printf("err: %+v\n\n", err)
+						s.handleDisconnect(player.ID)
+						return
+					}
 				}
 			}
 		}(player)
