@@ -27,9 +27,9 @@ import (
 var (
 	flagURL = flag.String("url", "wss://127.0.0.1:7676/ws", "URL of the websocket endpoint")
 
-	flagServerCertPath = flag.String("servercert", "/home/pongbot/brclient/rpc.cert", "Path to rpc.cert file")
-	flagClientCertPath = flag.String("clientcert", "/home/pongbot/brclient/rpc-client.cert", "Path to rpc-client.cert file")
-	flagClientKeyPath  = flag.String("clientkey", "/home/pongbot/brclient/rpc-client.key", "Path to rpc-client.key file")
+	flagServerCertPath = flag.String("servercert", "/home/pongbot/.brclient/rpc.cert", "Path to rpc.cert file")
+	flagClientCertPath = flag.String("clientcert", "/home/pongbot/.brclient/rpc-client.cert", "Path to rpc-client.cert file")
+	flagClientKeyPath  = flag.String("clientkey", "/home/pongbot/.brclient/rpc-client.key", "Path to rpc-client.key file")
 )
 
 type PongPlugin struct {
@@ -127,6 +127,18 @@ func (s *pluginServer) CallAction(req *grpctypes.PluginCallActionStreamRequest, 
 			// s.handleDisconnect(clientID)
 			fmt.Printf("client ctx disconnected")
 			return ctx.Err()
+		}
+
+	case "input":
+		ctx := stream.Context()
+
+		r := &pong.PlayerInput{
+			PlayerId: req.User,
+			Input:    string(req.Data),
+		}
+		_, err := s.gameSrv.SendInput(ctx, r)
+		if err != nil {
+			return fmt.Errorf("error sending input: %w", err)
 		}
 
 	default:

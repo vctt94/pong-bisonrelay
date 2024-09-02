@@ -55,10 +55,7 @@ type gameInstance struct {
 }
 
 func (s *GameServer) SendInput(ctx context.Context, in *pong.PlayerInput) (*pong.GameUpdate, error) {
-	clientID, err := getClientIDFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
+	clientID := in.PlayerId
 	gameInstance, player, exists := s.findGameInstanceAndPlayerByClientID(clientID)
 	if !exists {
 		return nil, fmt.Errorf("game instance not found for client ID %s", clientID)
