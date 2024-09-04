@@ -9,8 +9,10 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/companyzero/bisonrelay/clientplugin/grpctypes"
 	"github.com/companyzero/bisonrelay/clientrpc/jsonrpc"
@@ -22,9 +24,12 @@ import (
 	"github.com/vctt94/pong-bisonrelay/server"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 var (
+	certDir = flag.String("serverdir", "/home/pongbot/.pongserver", "Path to server dir")
+
 	flagURL = flag.String("url", "wss://127.0.0.1:7676/ws", "URL of the websocket endpoint")
 
 	flagServerCertPath = flag.String("servercert", "/home/pongbot/.brclient/rpc.cert", "Path to rpc.cert file")
@@ -168,6 +173,7 @@ func NewPongPlugin() PongPlugin {
 		Stream:     make(map[string]grpctypes.PluginService_InitServer),
 	}
 }
+
 func realMain() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -179,7 +185,33 @@ func realMain() error {
 	g, gctx := errgroup.WithContext(ctx)
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to listen on port 50051: %v", err)
+	}
+
+	// Paths for the generated certificate and key in .pongserver directory
+	certPath := filepath.Join(*certDir, "server.cert")
+	keyPath := filepath.Join(*certDir, "server.key")
+
+	// Initialize the Pong plugin and GameServer
+	plugin := NewPongPlugin()
+	var zkShortID zkidentity.ShortID              // Assuming this is initialized correctly in your full code
+	gameSrv := server.NewServer(&zkShortID, true) // Initialize the GameServer here
+
+	// Check if the TLS certificate and key exist; if not, generate them
+	if _, err := os.Stat(certPath); os.IsNotExist(err) || func() bool {
+		_, err := os.Stat(keyPath)
+		return os.IsNotExist(err)
+	}() {
+		if err := gameSrv.GenerateNewTLSCertPair("Pong Server", time.Now().Add(365*24*time.Hour), []string{"localhost"}, certPath, keyPath); err != nil {
+			return fmt.Errorf("failed to generate self-signed certificate: %v", err)
+		}
+		fmt.Println("Generated new self-signed certificate and key")
+	}
+
+	// Load the server certificate and key
+	creds, err := credentials.NewServerTLSFromFile(certPath, keyPath)
+	if err != nil {
+		return fmt.Errorf("failed to load TLS credentials: %v", err)
 	}
 
 	c, err := jsonrpc.NewWSClient(
@@ -189,7 +221,7 @@ func realMain() error {
 		jsonrpc.WithClientLog(log),
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create WS client: %v", err)
 	}
 	g.Go(func() error { return c.Run(gctx) })
 
@@ -198,33 +230,31 @@ func realMain() error {
 	var publicIdentity types.PublicIdentity
 	err = chat.UserPublicIdentity(ctx, req, &publicIdentity)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get user public identity: %v", err)
 	}
 
 	clientID := hex.EncodeToString(publicIdentity.Identity[:])
-	var zkShortID zkidentity.ShortID
 	copy(zkShortID[:], clientID)
-	plugin := NewPongPlugin()
-	gameSrv := server.NewServer(&zkShortID, true)
 
 	go func() error {
 		if err := gameSrv.ManageGames(ctx); err != nil {
-			return err
+			return fmt.Errorf("failed to manage games: %v", err)
 		}
-
 		return nil
 	}()
 
+	// Setup gRPC server with TLS credentials
 	srv := &pluginServer{
 		rpcplugin: plugin,
 		gameSrv:   gameSrv,
 	}
-	s := grpc.NewServer()
+
+	s := grpc.NewServer(grpc.Creds(creds))
 	grpctypes.RegisterPluginServiceServer(s, srv)
 
-	fmt.Printf("server listening at %v", lis.Addr())
+	fmt.Printf("server listening at %v\n", lis.Addr())
 	if err := s.Serve(lis); err != nil {
-		return err
+		return fmt.Errorf("failed to serve gRPC server: %v", err)
 	}
 
 	return g.Wait()
