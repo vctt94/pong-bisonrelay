@@ -113,44 +113,50 @@ func (s *pluginServer) Init(req *grpctypes.PluginStartStreamRequest, stream grpc
 }
 
 func (s *pluginServer) CallAction(req *grpctypes.PluginCallActionStreamRequest, stream grpctypes.PluginService_CallActionServer) error {
-	switch req.Action {
-	case "ready":
-		ctx := stream.Context()
-
-		r := &pong.SignalReadyRequest{
-			ClientId: req.User,
-		}
-		// Signal readiness after stream is initialized
-		err := s.gameSrv.SignalReady(r, stream)
-		if err != nil {
-			return fmt.Errorf("error signaling readiness: %w", err)
-		}
-
-		log.Println("Stream initialized successfully")
-		for range ctx.Done() {
-			// XXX Handle disconnections
-			// s.handleDisconnect(clientID)
-			fmt.Printf("client ctx disconnected")
-			return ctx.Err()
-		}
-
-	case "input":
-		ctx := stream.Context()
-
-		r := &pong.PlayerInput{
-			PlayerId: req.User,
-			Input:    string(req.Data),
-		}
-		_, err := s.gameSrv.SendInput(ctx, r)
-		if err != nil {
-			return fmt.Errorf("error sending input: %w", err)
-		}
-
-	default:
+	if req.Action != "ready" {
 		return fmt.Errorf("unsupported action: %v", req.Action)
 	}
 
-	return nil
+	ctx := stream.Context()
+
+	r := &pong.SignalReadyRequest{
+		ClientId: req.User,
+	}
+
+	// Signal readiness and start the game update stream
+	err := s.gameSrv.SignalReady(r, stream)
+	if err != nil {
+		return fmt.Errorf("error signaling readiness: %w", err)
+	}
+
+	log.Println("Stream initialized successfully")
+
+	// Keep the stream open until the context is done
+	<-ctx.Done()
+	fmt.Printf("Client %s disconnected\n", req.User)
+	return ctx.Err()
+}
+
+func (s *pluginServer) SendInput(ctx context.Context, req *grpctypes.PluginInputRequest) (*grpctypes.PluginInputResponse, error) {
+	// Process the input
+	r := &pong.PlayerInput{
+		PlayerId: req.User,
+		Input:    string(req.Data),
+	}
+
+	// Send the input to the game server
+	_, err := s.gameSrv.SendInput(ctx, r)
+	if err != nil {
+		return &grpctypes.PluginInputResponse{
+			Success: false,
+			Message: fmt.Sprintf("error sending input: %v", err),
+		}, nil
+	}
+
+	return &grpctypes.PluginInputResponse{
+		Success: true,
+		Message: "Input processed successfully",
+	}, nil
 }
 
 func (s *pluginServer) GetVersion(ctx context.Context, req *grpctypes.PluginVersionRequest) (*grpctypes.PluginVersionResponse, error) {

@@ -243,7 +243,7 @@ func (s *GameServer) startGame(ctx context.Context, players []*Player) error {
 			if player.notifier == nil {
 				return
 			}
-			if err := player.notifier.Send(&grpctypes.PluginStartStreamResponse{Message: "Game has started with ID: " + gameID, Started: true, PlayerNumber: player.PlayerNumber}); err != nil {
+			if err := player.notifier.Send(&grpctypes.PluginStartStreamResponse{Message: "Game has started with ID: " + gameID, Started: true}); err != nil {
 				serverLogger.Printf("Failed to send game start notification to player %s: %v", player.ID, err)
 				return
 			}
