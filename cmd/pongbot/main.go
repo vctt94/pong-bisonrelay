@@ -10,7 +10,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -36,18 +35,6 @@ var (
 	flagClientCertPath = flag.String("clientcert", "/home/pongbot/.brclient/rpc-client.cert", "Path to rpc-client.cert file")
 	flagClientKeyPath  = flag.String("clientkey", "/home/pongbot/.brclient/rpc-client.key", "Path to rpc-client.key file")
 )
-
-type PongPlugin struct {
-	id      string
-	name    string
-	version string
-	config  map[string]interface{}
-	logger  slog.Logger
-
-	UpdatesCh  map[string]chan *pong.GameUpdateBytes
-	PongClient map[string]pong.PongGame_InitClient
-	Stream     map[string]grpctypes.PluginService_InitServer
-}
 
 func (s *pluginServer) Render(ctx context.Context, data *grpctypes.RenderRequest) (*grpctypes.RenderResponse, error) {
 	gameState := pong.GameUpdate{}
@@ -83,8 +70,7 @@ func (s *pluginServer) Render(ctx context.Context, data *grpctypes.RenderRequest
 
 type pluginServer struct {
 	grpctypes.UnimplementedPluginServiceServer
-	rpcplugin PongPlugin
-	gameSrv   *server.GameServer
+	gameSrv *server.GameServer
 }
 
 func (s *pluginServer) Init(req *grpctypes.PluginStartStreamRequest, stream grpctypes.PluginService_InitServer) error {
@@ -100,8 +86,6 @@ func (s *pluginServer) Init(req *grpctypes.PluginStartStreamRequest, stream grpc
 	if err != nil {
 		return err
 	}
-	// Set the stream before starting the goroutine
-	s.rpcplugin.Stream[clientID] = stream
 	// Listen for context cancellation to handle disconnection
 	for range ctx.Done() {
 		// s.handleDisconnect(clientID)
@@ -161,23 +145,7 @@ func (s *pluginServer) SendInput(ctx context.Context, req *grpctypes.PluginInput
 
 func (s *pluginServer) GetVersion(ctx context.Context, req *grpctypes.PluginVersionRequest) (*grpctypes.PluginVersionResponse, error) {
 	// Implement your GetVersion logic here
-	return &grpctypes.PluginVersionResponse{
-		AppName:    s.rpcplugin.name,
-		AppVersion: s.rpcplugin.version,
-		GoRuntime:  runtime.Version(),
-	}, nil
-}
-
-// NewPongPlugin initializes a new PongPlugin
-func NewPongPlugin() PongPlugin {
-	return PongPlugin{
-		name:    "pong",
-		version: "0.0.0",
-
-		UpdatesCh:  make(map[string]chan *pong.GameUpdateBytes),
-		PongClient: make(map[string]pong.PongGame_InitClient),
-		Stream:     make(map[string]grpctypes.PluginService_InitServer),
-	}
+	return s.gameSrv.GetVersion(ctx, req), nil
 }
 
 func realMain() error {
@@ -199,7 +167,6 @@ func realMain() error {
 	keyPath := filepath.Join(*certDir, "server.key")
 
 	// Initialize the Pong plugin and GameServer
-	plugin := NewPongPlugin()
 	var zkShortID zkidentity.ShortID              // Assuming this is initialized correctly in your full code
 	gameSrv := server.NewServer(&zkShortID, true) // Initialize the GameServer here
 
@@ -249,14 +216,10 @@ func realMain() error {
 		return nil
 	}()
 
-	// Setup gRPC server with TLS credentials
-	srv := &pluginServer{
-		rpcplugin: plugin,
-		gameSrv:   gameSrv,
-	}
-
 	s := grpc.NewServer(grpc.Creds(creds))
-	grpctypes.RegisterPluginServiceServer(s, srv)
+	grpctypes.RegisterPluginServiceServer(s, &pluginServer{
+		gameSrv: gameSrv,
+	})
 
 	fmt.Printf("server listening at %v\n", lis.Addr())
 	if err := s.Serve(lis); err != nil {

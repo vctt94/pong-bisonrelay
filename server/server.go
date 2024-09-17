@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -19,6 +20,11 @@ import (
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 )
 
+const (
+	name    = "pong"
+	version = "v0.0.0"
+)
+
 var (
 	serverLogger  = log.New(os.Stdout, "[SERVER] ", 0)
 	fps           = flag.Uint("fps", canvas.DEFAULT_FPS, "")
@@ -26,7 +32,6 @@ var (
 )
 
 type GameServer struct {
-	pong.UnimplementedPongGameServer
 	ID             *zkidentity.ShortID
 	mu             sync.Mutex
 	clientReady    chan string
@@ -36,11 +41,6 @@ type GameServer struct {
 	paymentService types.PaymentsServiceClient
 	dcrAmount      float64
 	debug          bool
-}
-
-type GameStartNotification struct {
-	GameID  string
-	Players []*Player
 }
 
 type gameInstance struct {
@@ -55,6 +55,13 @@ type gameInstance struct {
 	cancel      context.CancelFunc
 }
 
+func (s *GameServer) GetVersion(ctx context.Context, req *grpctypes.PluginVersionRequest) *grpctypes.PluginVersionResponse {
+	return &grpctypes.PluginVersionResponse{
+		AppVersion: version,
+		AppName:    name,
+		GoRuntime:  runtime.Version(),
+	}
+}
 func (s *GameServer) SendInput(ctx context.Context, in *pong.PlayerInput) (*pong.GameUpdate, error) {
 	clientID := in.PlayerId
 	gameInstance, player, exists := s.findGameInstanceAndPlayerByClientID(clientID)
