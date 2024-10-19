@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -71,4 +73,31 @@ func generateSelfSignedCert(organization string, validUntil time.Time, extraHost
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes})
 
 	return certPEM, keyPEM, nil
+}
+
+// GenerateNewTLSCertPair generates a new TLS certificate and key pair and saves them to the specified paths.
+func (s *GameServer) GenerateNewTLSCertPair(organization string, validUntil time.Time, extraHosts []string, certPath, keyPath string) error {
+	// Generate the certificate and key
+	cert, key, err := generateSelfSignedCert(organization, validUntil, extraHosts)
+	if err != nil {
+		return fmt.Errorf("failed to generate new TLS certificate pair: %v", err)
+	}
+
+	// Ensure the directory for the certificate and key exists
+	if err := os.MkdirAll(filepath.Dir(certPath), 0700); err != nil {
+		return fmt.Errorf("failed to create directory for cert files: %v", err)
+	}
+
+	// Write the certificate to file
+	if err := os.WriteFile(certPath, cert, 0600); err != nil {
+		return fmt.Errorf("failed to write certificate to file: %v", err)
+	}
+
+	// Write the key to file
+	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+		return fmt.Errorf("failed to write key to file: %v", err)
+	}
+
+	fmt.Printf("New TLS certificate and key pair generated and saved to %s and %s\n", certPath, keyPath)
+	return nil
 }

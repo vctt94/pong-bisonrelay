@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -9,14 +10,14 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/signal"
 	"strings"
 	"sync"
-	"syscall"
 
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
+	"golang.org/x/sync/errgroup"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/companyzero/bisonrelay/clientrpc/jsonrpc"
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
 
@@ -34,10 +35,14 @@ const (
 )
 
 var (
-	// serverAddr = flag.String("server_addr", "104.131.180.29:50051", "The server address in the format of host:port")
-
 	serverAddr = flag.String("server_addr", "localhost:50051", "The server address in the format of host:port")
-	brdatadir  = flag.String("brdatadir", "", "Directory containing the certificates and keys")
+	// brdatadir          = flag.String("brdatadir", "", "Directory containing the certificates and keys")
+	flagURL            = flag.String("url", "wss://127.0.0.1:7777/ws", "URL of the websocket endpoint")
+	flagServerCertPath = flag.String("servercert", "/home/vctt/brclientdir/rpc.cert", "Path to rpc.cert file")
+	flagClientCertPath = flag.String("clientcert", "/home/vctt/brclientdir/rpc-client.cert", "Path to rpc-client.cert file")
+	flagClientKeyPath  = flag.String("clientkey", "/home/vctt/brclientdir/rpc-client.key", "Path to rpc-client.key file")
+	rpcUser            = flag.String("rpcuser", "rpcuser", "RPC user for basic authentication")
+	rpcPass            = flag.String("rpcpass", "rpcpass", "RPC password for basic authentication")
 )
 
 type PongClientCfg struct {
@@ -51,29 +56,26 @@ type pongClient struct {
 	cfg          *PongClientCfg
 	conn         *grpc.ClientConn
 	pongClient   pong.PongGameClient
-	stream       pong.PongGame_StreamUpdatesClient
+	stream       pong.PongGame_StartGameStreamClient
+	notifier     pong.PongGame_StartNtfnStreamClient
 	updatesCh    chan tea.Msg
-}
-
-type GameStartedMsg struct {
-	Started      bool
-	PlayerNumber int32
 }
 
 func (pc *pongClient) StartNotifier() error {
 	ctx := attachClientIDToContext(context.Background(), pc.ID)
 
 	// Creates game start stream so we can notify when the game starts
-	gameStartedStream, err := pc.pongClient.StartNotifier(ctx, &pong.GameStartedStreamRequest{})
+	gameStartedStream, err := pc.pongClient.StartNtfnStream(ctx, &pong.StartNtfnStreamRequest{
+		ClientId: pc.ID,
+	})
 	if err != nil {
 		return fmt.Errorf("error creating game started stream: %w", err)
 	}
+	pc.notifier = gameStartedStream
 
 	go func() {
 		for {
-			started, err := gameStartedStream.Recv()
-			pc.playerNumber = started.PlayerNumber
-			pc.ID = started.ClientId
+			ntfn, err := pc.notifier.Recv()
 			if errors.Is(err, io.EOF) {
 				break
 			}
@@ -81,7 +83,7 @@ func (pc *pongClient) StartNotifier() error {
 				log.Printf("Error receiving game started notification: %v", err)
 				return
 			}
-			pc.updatesCh <- GameStartedMsg{Started: started.Started}
+			fmt.Printf("ntfn: %+v\n", ntfn)
 		}
 	}()
 
@@ -174,7 +176,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.gameState = &gameUpdate
 		m.gameStateMutex.Unlock()
 		return m, m.listenForUpdates()
-	case GameStartedMsg:
+	case pong.NtfnStreamResponse:
 		m.gameState = &pong.GameUpdate{}
 		return m, m.listenForUpdates()
 	case types.VersionResponse:
@@ -255,29 +257,9 @@ func (pc *pongClient) SignalReady() error {
 	ctx := attachClientIDToContext(context.Background(), pc.ID)
 
 	// Signal readiness after stream is initialized
-	_, err := pc.pongClient.SignalReady(ctx, &pong.SignalReadyRequest{})
+	stream, err := pc.pongClient.StartGameStream(ctx, &pong.StartGameStreamRequest{})
 	if err != nil {
 		return fmt.Errorf("error signaling readiness: %w", err)
-	}
-
-	err = pc.initializeStream(ctx)
-	if err != nil {
-		return fmt.Errorf("error initializing stream: %w", err)
-	}
-
-	log.Println("Stream initialized successfully")
-	return nil
-}
-
-func (pc *pongClient) initializeStream(ctx context.Context) error {
-	if pc.pongClient == nil {
-		return fmt.Errorf("pongClient is nil")
-	}
-
-	// Initialize the stream
-	stream, err := pc.pongClient.StreamUpdates(ctx, &pong.GameStreamRequest{})
-	if err != nil {
-		return fmt.Errorf("error creating updates stream: %w", err)
 	}
 
 	// Set the stream before starting the goroutine
@@ -286,28 +268,60 @@ func (pc *pongClient) initializeStream(ctx context.Context) error {
 	// Use a separate goroutine to handle the stream
 	go func() {
 		for {
-			update, err := stream.Recv()
+			update, err := pc.stream.Recv()
 			if errors.Is(err, io.EOF) {
 				break
 			}
 			if err != nil {
 				return
 			}
+			// fmt.Printf("update :%+v\n", update)
 			pc.updatesCh <- GameUpdateMsg(update)
 		}
 	}()
 
+	log.Println("Stream initialized successfully")
 	return nil
 }
 
 func realMain() error {
+	flag.Parse()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	// g, _ := errgroup.WithContext(ctx)
 
 	bknd := slog.NewBackend(os.Stderr)
 	log := bknd.Logger("EXMP")
+	log.SetLevel(slog.LevelDebug)
+
+	g, gctx := errgroup.WithContext(ctx)
+
 	log.SetLevel(slog.LevelInfo)
+
+	c, err := jsonrpc.NewWSClient(
+		jsonrpc.WithWebsocketURL(*flagURL),
+		jsonrpc.WithServerTLSCertPath(*flagServerCertPath),
+		jsonrpc.WithClientTLSCert(*flagClientCertPath, *flagClientKeyPath),
+		jsonrpc.WithClientLog(log),
+		jsonrpc.WithClientBasicAuth(*rpcUser, *rpcPass),
+	)
+	if err != nil {
+		return err
+	}
+	g.Go(func() error { return c.Run(gctx) })
+
+	var zkShortID zkidentity.ShortID
+	chat := types.NewChatServiceClient(c)
+	version := types.NewVersionServiceClient(c)
+	req := &types.PublicIdentityReq{}
+	var publicIdentity types.PublicIdentity
+	err = chat.UserPublicIdentity(ctx, req, &publicIdentity)
+	if err != nil {
+		return fmt.Errorf("failed to get user public identity: %v", err)
+	}
+
+	clientID := hex.EncodeToString(publicIdentity.Identity[:])
+	copy(zkShortID[:], clientID)
 
 	cfg := &PongClientCfg{
 		ServerAddr: *serverAddr,
@@ -316,47 +330,35 @@ func realMain() error {
 	if err != nil {
 		return err
 	}
-	defer pongConn.Close()
-
-	// Create a channel to listen for signals (e.g., SIGINT, SIGTERM).
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-
-	updatesCh := make(chan tea.Msg)
 
 	pc := &pongClient{
-		// ID:         clientID,
+		ID:         clientID,
 		cfg:        cfg,
 		conn:       pongConn,
 		pongClient: pong.NewPongGameClient(pongConn),
-		updatesCh:  updatesCh,
+		updatesCh:  make(chan tea.Msg),
 	}
-
+	fmt.Printf("clientId: %+v\n", clientID)
 	// Perform authentication during initialization
 	err = pc.StartNotifier()
 	if err != nil {
 		return fmt.Errorf("failed to StartNotifier: %w", err)
 	}
 
-	m := initialModel(pc, nil, nil)
+	ver := types.VersionResponse{}
+	version.Version(ctx, &types.VersionRequest{}, &ver)
+	fmt.Printf("ver: %+v\n", ver)
+	m := initialModel(pc, &chat, &version)
 	defer m.cancel()
 
 	p := tea.NewProgram(m)
 
-	if err := p.Start(); err != nil {
+	_, err = p.Run()
+	if err != nil {
 		return err
 	}
 
-	// Wait for a termination signal or context cancellation.
-	select {
-	case <-sigCh:
-		log.Info("termination signal received")
-		cancel() // Clean up resources.
-	case <-ctx.Done():
-		log.Info("context cancelled")
-	}
-
-	return nil
+	return g.Wait()
 }
 
 func main() {

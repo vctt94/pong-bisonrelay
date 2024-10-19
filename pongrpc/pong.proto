@@ -6,15 +6,15 @@ package pong;
 
 service PongGame {
   rpc SendInput (PlayerInput) returns (GameUpdate) {}
-  rpc SignalReady(SignalReadyRequest) returns (stream GameUpdateBytes);
-  rpc Init(GameStartedStreamRequest) returns (stream GameStartedStreamResponse);
+  rpc StartGameStream(StartGameStreamRequest) returns (stream GameUpdateBytes);
+  rpc StartNtfnStream(StartNtfnStreamRequest) returns (stream NtfnStreamResponse);
 }
 
-message GameStartedStreamRequest {
+message StartNtfnStreamRequest {
   string client_id = 1;
 }
 
-message GameStartedStreamResponse {
+message NtfnStreamResponse {
   bool started = 1;
   int32 player_number = 2;  // Player 1 or Player 2
   string message = 3; // Confirmation message or additional details
@@ -22,7 +22,7 @@ message GameStartedStreamResponse {
 }
 
 // SignalReadyRequest contains information about the client signaling readiness
-message SignalReadyRequest {
+message StartGameStreamRequest {
   string client_id = 1;
 }
 
