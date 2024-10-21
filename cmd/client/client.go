@@ -61,6 +61,20 @@ type pongClient struct {
 	updatesCh    chan tea.Msg
 }
 
+type GameUpdateMsg *pong.GameUpdateBytes
+
+type model struct {
+	mode           appMode
+	gameStateMutex sync.Mutex
+	gameState      *pong.GameUpdate
+	err            error
+	ctx            context.Context
+	cancel         context.CancelFunc
+	pc             *pongClient
+	chatClient     *types.ChatServiceClient
+	versionClient  *types.VersionServiceClient
+}
+
 func (pc *pongClient) StartNotifier() error {
 	ctx := attachClientIDToContext(context.Background(), pc.ID)
 
@@ -90,6 +104,37 @@ func (pc *pongClient) StartNotifier() error {
 	return nil
 }
 
+func (pc *pongClient) SignalReady() error {
+	ctx := attachClientIDToContext(context.Background(), pc.ID)
+
+	// Signal readiness after stream is initialized
+	stream, err := pc.pongClient.StartGameStream(ctx, &pong.StartGameStreamRequest{})
+	if err != nil {
+		return fmt.Errorf("error signaling readiness: %w", err)
+	}
+
+	// Set the stream before starting the goroutine
+	pc.stream = stream
+
+	// Use a separate goroutine to handle the stream
+	go func() {
+		for {
+			update, err := pc.stream.Recv()
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			if err != nil {
+				return
+			}
+			// fmt.Printf("update :%+v\n", update)
+			pc.updatesCh <- GameUpdateMsg(update)
+		}
+	}()
+
+	log.Println("Stream initialized successfully")
+	return nil
+}
+
 func (pc *pongClient) SendInput(input string) error {
 	ctx := attachClientIDToContext(context.Background(), pc.ID)
 
@@ -102,20 +147,6 @@ func (pc *pongClient) SendInput(input string) error {
 		return fmt.Errorf("error sending input: %w", err)
 	}
 	return nil
-}
-
-type GameUpdateMsg *pong.GameUpdateBytes
-
-type model struct {
-	mode           appMode
-	gameStateMutex sync.Mutex
-	gameState      *pong.GameUpdate
-	err            error
-	ctx            context.Context
-	cancel         context.CancelFunc
-	pc             *pongClient
-	chatClient     *types.ChatServiceClient
-	versionClient  *types.VersionServiceClient
 }
 
 func initialModel(pc *pongClient, chatClient *types.ChatServiceClient, versionClient *types.VersionServiceClient) *model {
@@ -251,37 +282,6 @@ func (m *model) View() string {
 	}
 
 	return b.String()
-}
-
-func (pc *pongClient) SignalReady() error {
-	ctx := attachClientIDToContext(context.Background(), pc.ID)
-
-	// Signal readiness after stream is initialized
-	stream, err := pc.pongClient.StartGameStream(ctx, &pong.StartGameStreamRequest{})
-	if err != nil {
-		return fmt.Errorf("error signaling readiness: %w", err)
-	}
-
-	// Set the stream before starting the goroutine
-	pc.stream = stream
-
-	// Use a separate goroutine to handle the stream
-	go func() {
-		for {
-			update, err := pc.stream.Recv()
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			if err != nil {
-				return
-			}
-			// fmt.Printf("update :%+v\n", update)
-			pc.updatesCh <- GameUpdateMsg(update)
-		}
-	}()
-
-	log.Println("Stream initialized successfully")
-	return nil
 }
 
 func realMain() error {

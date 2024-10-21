@@ -77,40 +77,33 @@ func (s *GameServer) handleDisconnect(clientID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	var instanceToCleanup *gameInstance
-	var remainingPlayer *Player
-
 	for _, game := range s.games {
 		for i, player := range game.players {
 			if player.ID == clientID {
 				// Remove the player from the game
 				game.players = append(game.players[:i], game.players[i+1:]...)
-				if len(game.players) == 0 {
-					instanceToCleanup = game
-				} else {
-					game.running = false
-					remainingPlayer = game.players[0]
+				game.running = false
+				remainingPlayer := game.players[0]
+
+				// Notify the remaining player about the disconnection
+				if remainingPlayer.stream != nil {
+					remainingPlayer.notifier.Send(&pong.NtfnStreamResponse{
+						Message: "Opponent disconnected. Game over.",
+						Started: false,
+					})
+					// cleanup disconnected player session
+					s.playerSessions.RemovePlayer(clientID)
+					serverLogger.Printf("Player %s disconnected and cleaned up", clientID)
+					// cleanup remaning player session
+					s.playerSessions.RemovePlayer(remainingPlayer.ID)
 				}
+
+				// cleanup game
+				s.cleanupGameInstance(game)
 				break
 			}
 		}
 	}
-
-	if instanceToCleanup != nil {
-		s.cleanupGameInstance(instanceToCleanup)
-	} else if remainingPlayer != nil {
-		// Notify the remaining player about the disconnection
-		if remainingPlayer.stream != nil {
-			remainingPlayer.notifier.Send(&pong.NtfnStreamResponse{
-				Message: "Opponent disconnected. Game over.",
-				Started: false,
-			})
-		}
-	}
-
-	// Remove player session
-	s.playerSessions.RemovePlayer(clientID)
-	serverLogger.Printf("Player %s disconnected and cleaned up", clientID)
 }
 
 func (s *GameServer) startGameStream(req *pong.StartGameStreamRequest, stream pong.PongGame_StartGameStreamServer) error {

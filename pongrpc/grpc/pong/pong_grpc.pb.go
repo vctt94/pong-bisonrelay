@@ -25,7 +25,6 @@ type PongGameClient interface {
 	SendInput(ctx context.Context, in *PlayerInput, opts ...grpc.CallOption) (*GameUpdate, error)
 	StartGameStream(ctx context.Context, in *StartGameStreamRequest, opts ...grpc.CallOption) (PongGame_StartGameStreamClient, error)
 	StartNtfnStream(ctx context.Context, in *StartNtfnStreamRequest, opts ...grpc.CallOption) (PongGame_StartNtfnStreamClient, error)
-	Render(ctx context.Context, in *RenderRequest, opts ...grpc.CallOption) (*RenderResponse, error)
 }
 
 type pongGameClient struct {
@@ -109,15 +108,6 @@ func (x *pongGameStartNtfnStreamClient) Recv() (*NtfnStreamResponse, error) {
 	return m, nil
 }
 
-func (c *pongGameClient) Render(ctx context.Context, in *RenderRequest, opts ...grpc.CallOption) (*RenderResponse, error) {
-	out := new(RenderResponse)
-	err := c.cc.Invoke(ctx, "/pong.PongGame/Render", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // PongGameServer is the server API for PongGame service.
 // All implementations must embed UnimplementedPongGameServer
 // for forward compatibility
@@ -125,7 +115,6 @@ type PongGameServer interface {
 	SendInput(context.Context, *PlayerInput) (*GameUpdate, error)
 	StartGameStream(*StartGameStreamRequest, PongGame_StartGameStreamServer) error
 	StartNtfnStream(*StartNtfnStreamRequest, PongGame_StartNtfnStreamServer) error
-	Render(context.Context, *RenderRequest) (*RenderResponse, error)
 	mustEmbedUnimplementedPongGameServer()
 }
 
@@ -141,9 +130,6 @@ func (UnimplementedPongGameServer) StartGameStream(*StartGameStreamRequest, Pong
 }
 func (UnimplementedPongGameServer) StartNtfnStream(*StartNtfnStreamRequest, PongGame_StartNtfnStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method StartNtfnStream not implemented")
-}
-func (UnimplementedPongGameServer) Render(context.Context, *RenderRequest) (*RenderResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Render not implemented")
 }
 func (UnimplementedPongGameServer) mustEmbedUnimplementedPongGameServer() {}
 
@@ -218,24 +204,6 @@ func (x *pongGameStartNtfnStreamServer) Send(m *NtfnStreamResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _PongGame_Render_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RenderRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PongGameServer).Render(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/pong.PongGame/Render",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PongGameServer).Render(ctx, req.(*RenderRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // PongGame_ServiceDesc is the grpc.ServiceDesc for PongGame service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -246,10 +214,6 @@ var PongGame_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SendInput",
 			Handler:    _PongGame_SendInput_Handler,
-		},
-		{
-			MethodName: "Render",
-			Handler:    _PongGame_Render_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

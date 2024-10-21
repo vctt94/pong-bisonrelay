@@ -13,7 +13,6 @@ import (
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/decred/slog"
-	"github.com/jrick/logrotate/rotator"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 	"github.com/vctt94/pong-bisonrelay/server"
 	"golang.org/x/sync/errgroup"
@@ -28,12 +27,8 @@ var (
 	flagServerCertPath = flag.String("servercert", "/home/pongbot/brclient/rpc.cert", "Path to rpc.cert file")
 	flagClientCertPath = flag.String("clientcert", "/home/pongbot/brclient/rpc-client.cert", "Path to rpc-client.cert file")
 	flagClientKeyPath  = flag.String("clientkey", "/home/pongbot/brclient/rpc-client.key", "Path to rpc-client.key file")
+	debug              = flag.Bool("debug", false, "Enable debug mode")
 )
-
-// func (s *pluginServer) GetVersion(ctx context.Context, req *grpctypes.PluginVersionRequest) (*grpctypes.PluginVersionResponse, error) {
-// 	// Implement your GetVersion logic here
-// 	return s.gameSrv.GetVersion(ctx, req), nil
-// }
 
 func realMain() error {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -96,7 +91,7 @@ func realMain() error {
 	var zkShortID zkidentity.ShortID
 	copy(zkShortID[:], clientID)
 
-	srv := server.NewServer(&zkShortID, server.ServerConfig{Debug: true})
+	srv := server.NewServer(&zkShortID, server.ServerConfig{Debug: *debug})
 	go func() error {
 		if err := srv.GameManager.Run(ctx); err != nil {
 			return fmt.Errorf("failed to manage games: %v", err)
@@ -122,13 +117,4 @@ func main() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-}
-
-type logWriter struct {
-	r *rotator.Rotator
-}
-
-func (l *logWriter) Write(p []byte) (n int, err error) {
-	os.Stdout.Write(p)
-	return l.r.Write(p)
 }
