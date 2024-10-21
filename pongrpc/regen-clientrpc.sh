@@ -9,6 +9,7 @@ build_protoc_gen_go() {
 
 generate() {
     protoc --go_out=. --go-grpc_out=. pong.proto
+    protoc --dart_out=grpc:../pongui/lib/grpc -I. pong.proto
 }
 
 # Build the bins from the main module, so that clientrpc doesn't need to
