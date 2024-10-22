@@ -21,7 +21,7 @@ InitClient _$InitClientFromJson(Map<String, dynamic> json) => InitClient(
       json['rpc_client_ca_path'] as String,
       json['rpc_user'] as String,
       json['rpc_pass'] as String,
-      json['require_rpc_auth'] as bool,
+      json['rpc_auth_mode'] as String,
     );
 
 Map<String, dynamic> _$InitClientToJson(InitClient instance) =>
@@ -38,7 +38,7 @@ Map<String, dynamic> _$InitClientToJson(InitClient instance) =>
       'rpc_client_ca_path': instance.rpcclientcapath,
       'rpc_user': instance.rpcUser,
       'rpc_pass': instance.rpcPass,
-      'require_rpc_auth': instance.requireRPCAuth,
+      'rpc_auth_mode': instance.rpcAuthMode,
     };
 
 IDInit _$IDInitFromJson(Map<String, dynamic> json) => IDInit(

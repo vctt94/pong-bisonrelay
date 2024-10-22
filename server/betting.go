@@ -11,7 +11,7 @@ import (
 	"github.com/decred/slog"
 )
 
-func receivePaymentLoop(ctx context.Context, payment types.PaymentsServiceClient, log slog.Logger) error {
+func (s *Server) ReceivePaymentLoop(ctx context.Context, payment types.PaymentsServiceClient, log slog.Logger) error {
 	var ackRes types.AckResponse
 	var ackReq types.AckRequest
 	for {
@@ -24,7 +24,7 @@ func receivePaymentLoop(ctx context.Context, payment types.PaymentsServiceClient
 			return err
 		}
 		if err != nil {
-			log.Warn("Error while obtaining PM stream: %v", err)
+			log.Warn("Error while obtaining payment stream: %v", err)
 			time.Sleep(time.Second) // Wait to try again.
 			continue
 		}

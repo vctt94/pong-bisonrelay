@@ -348,8 +348,8 @@ func NextCmdResult() *CmdResult {
 	select {
 	case r := <-cmdResultChan:
 		return r
-	case <-time.After(time.Second): // Timeout.
-		return &CmdResult{Type: NTNOP, Payload: []byte{}}
+		// case <-time.After(time.Second): // Timeout.
+		// 	return &CmdResult{Type: NTNOP, Payload: []byte{}}
 	}
 }
 

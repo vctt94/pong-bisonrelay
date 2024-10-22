@@ -38,6 +38,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   grpc: ^4.0.1
   dio: ^5.7.0
+  ini: ^2.1.0
 
 dev_dependencies:
   flutter_test:

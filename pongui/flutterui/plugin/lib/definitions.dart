@@ -42,8 +42,8 @@ class InitClient {
   final String rpcUser;
   @JsonKey(name: 'rpc_pass')
   final String rpcPass;
-  @JsonKey(name: 'require_rpc_auth')
-  final bool requireRPCAuth;
+  @JsonKey(name: 'rpc_auth_mode')
+  final String rpcAuthMode;
   
 
   InitClient(
@@ -59,7 +59,7 @@ class InitClient {
     this.rpcclientcapath,
     this.rpcUser,
     this.rpcPass,
-    this.requireRPCAuth
+    this.rpcAuthMode
   );
 
   Map<String, dynamic> toJson() => _$InitClientToJson(this);

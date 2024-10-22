@@ -1,34 +1,41 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
 import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:golib_plugin/definitions.dart';
 import 'package:golib_plugin/golib_plugin.dart';
-
-
-final Random random = Random();
+import 'package:path_provider/path_provider.dart';
+import 'package:pongui/config.dart';
+import 'package:pongui/screens/newconfig.dart';
 
 void main(List<String> args) async {
   try {
     // Ensure the platform bindings are initialized.
     WidgetsFlutterBinding.ensureInitialized();
 
+    // Load the configuration from the args.
+    mainConfigFilename = await configFileName(args);
+    Config cfg = await configFromArgs(args);
 
-
-    // Create global models.
-    // initGlobalLogModel();
-    // initGlobalShutdownModel();
-
-    // This debugs both the dart platform adapter and the native bindings.
-    developer.log("Platform: ${Golib.majorPlatform}/${Golib.minorPlatform}");
-    Golib.platformVersion
-        .then((value) => developer.log("Platform Version: $value"));
-
-
-      InitClient initArgs = InitClient(
+    // Example of using config values in initClient
+    // InitClient initArgs = InitClient(
+    //   "127.0.0.1:7878", 
+    //   cfg.rpcCertPath,
+    //   cfg.rpcKeyPath,
+    //   cfg.debugLevel,
+    //   cfg.wantsLogNtfns,
+    //   ["127.0.0.1:7878"],
+    //   "/home/vctt/.bruig/rpc-client.cert",
+    //   cfg.rpcKeyPath,
+    //   cfg.rpcissueclientcert,
+    //   cfg.rpcClientCApath,
+    //   cfg.rpcUser,
+    //   cfg.rpcPass,
+    //   cfg.rpcAuthMode,
+    // );
+          InitClient initArgs = InitClient(
              "127.0.0.1:7878",
    "",
    "",
@@ -39,425 +46,52 @@ void main(List<String> args) async {
    "/home/vctt/.bruig/rpc-client.key",
    true,
    "/home/vctt/.bruig/rpc-ca.cert",
-   "rpcuser",
-   "rpcpass",
-   true,);
-      await Golib.initClient(initArgs);
-    // await Golib.createLockFile(cfg.dbRoot);
+   cfg.rpcUser,
+   cfg.rpcPass,
+   "basic");
 
+developer.log("InitClient args: $initArgs");
+    await Golib.initClient(initArgs);
+    
+    // You can now pass cfg to your runApp method to initialize your app.
+    runMainApp(cfg);
 
-    // await runMainApp(cfg);
-    // await Golib.closeLockFile(cfg.dbRoot);
   } catch (exception) {
-    // if (exception == usageException) {
-    //   exit(0);
-    // }
-    // if (exception == newConfigNeededException) {
-    //   // Go to new config wizard.
-    //   runNewConfigApp(args);
-    //   return;
-    // }
+    developer.log("Error: $exception");
+    if (exception == usageException) {
+      exit(0);
+    }
+    if (exception == newConfigNeededException) {
+      runNewConfigApp(args);
+      print("exception!!");
+      print(newConfigNeededException);
+      return;
+    }
     // runFatalErrorApp(exception);
   }
 }
 
-// Future<void> runMainApp(Config cfg) async {
-//   final ClientModel client = ClientModel();
-//   final theme = await ThemeNotifier.newNotifierWhenLoaded();
-//   runApp(MultiProvider(
-//     providers: [
-//       ChangeNotifierProvider.value(value: client),
-//       ChangeNotifierProvider.value(value: client.activeChat),
-//       ChangeNotifierProvider.value(value: client.ui.showProfile),
-//       ChangeNotifierProvider.value(value: client.ui.chatSideMenuActive),
-//       ChangeNotifierProvider.value(value: client.ui.settingsTitle),
-//       ChangeNotifierProvider.value(value: client.connState),
-//       ChangeNotifierProvider.value(value: client.ui.smallScreenActiveTab),
-//       ChangeNotifierProvider.value(value: client.ui.overviewActivePath),
-//       ChangeNotifierProvider.value(value: client.ui.showAddressBook),
-//       ChangeNotifierProvider(create: (c) => FeedModel()),
-//       ChangeNotifierProvider.value(value: globalLogModel),
-//       ChangeNotifierProvider(create: (c) => DownloadsModel()),
-//       ChangeNotifierProvider(create: (c) => AppNotifications()),
-//       ChangeNotifierProvider.value(value: theme),
-//       ChangeNotifierProvider(create: (c) => MainMenuModel()),
-//       ChangeNotifierProvider(create: (c) => ResourcesModel()),
-//       ChangeNotifierProvider(create: (c) => SnackBarModel()),
-//       ChangeNotifierProvider(create: (c) => PaymentsModel()),
-//       ChangeNotifierProvider(create: (c) => WalletModel()),
-//       ChangeNotifierProvider(create: (c) => TypingEmojiSelModel()),
-//     ],
-//     child: App(cfg, globalLogModel, globalShutdownModel),
-//   ));
-// }
+Future<void> runMainApp(Config cfg) async {
+  runApp(MyApp(cfg));
+}
 
-// class App extends StatefulWidget {
-//   final Config cfg;
-//   final LogModel log;
-//   final ShutdownModel shutdown;
-//   const App(this.cfg, this.log, this.shutdown, {super.key});
+class MyApp extends StatelessWidget {
+  final Config config;
+  
+  MyApp(this.config);
 
-//   @override
-//   State<App> createState() => _AppState();
-// }
-
-// class _AppState extends State<App> with WindowListener {
-//   final navkey = GlobalKey<NavigatorState>(debugLabel: "main-navigator");
-//   final isMobile = Platform.isIOS || Platform.isAndroid;
-//   late final AppLifecycleListener lifecycleListener;
-//   Timer? forceDetachTimer;
-
-//   @override
-//   void initState() {
-//     super.initState();
-//     isMobile
-//         ? lifecycleListener =
-//             AppLifecycleListener(onStateChange: onAppStateChanged)
-//         : null;
-//     handleNotifications();
-//     initClient();
-//     if (!isMobile) {
-//       windowManager.setPreventClose(true);
-//       windowManager.addListener(this);
-//     }
-//     NotificationService().init();
-
-//     widget.shutdown.addListener(shutdownChanged);
-//   }
-
-//   @override
-//   void dispose() {
-//     !isMobile ? windowManager.removeListener(this) : null;
-//     widget.shutdown.removeListener(shutdownChanged);
-//     !isMobile ? windowManager.addListener(this) : null;
-//     super.dispose();
-//   }
-
-//   void forceDetachApp() {
-//     forceDetachTimer = null;
-//     SystemChannels.platform.invokeMethod('SystemNavigator.pop');
-//   }
-
-//   void onAppStateChanged(AppLifecycleState state) async {
-//     if (state == AppLifecycleState.paused) {
-//       // After 120 seconds, force detach the app so the UI doesn't consume
-//       // resources on mobile. The native plugin keeps background services running.
-//       forceDetachTimer = Timer(seconds(120), forceDetachApp);
-//     } else {
-//       forceDetachTimer?.cancel();
-//       forceDetachTimer = null;
-//     }
-//   }
-
-//   bool pushedToShutdown = false;
-
-//   @override
-//   void onWindowClose() async {
-//     var isPreventClose = await windowManager.isPreventClose();
-//     if (!isPreventClose) return;
-//     if (!pushedToShutdown) {
-//       ShutdownScreen.startShutdownFromNavKey(navkey);
-//       pushedToShutdown = true;
-//     }
-//   }
-
-//   bool clientStopped = false;
-//   void shutdownChanged() {
-//     if (!clientStopped && widget.shutdown.clientStopped) {
-//       // Check if we were in shutdown screen.
-//       String? currentPath;
-//       navkey.currentState?.popUntil((route) {
-//         currentPath = route.settings.name;
-//         return true;
-//       });
-//       if (currentPath != ShutdownScreen.routeName) {
-//         // Not a clean shutdown.
-//         navkey.currentState!.pushNamedAndRemoveUntil(
-//             "/fatalError", (route) => false,
-//             arguments:
-//                 "Client stopped outside shutdown flow: ${widget.shutdown.clientStopErr}");
-//       }
-//     }
-
-//     clientStopped = widget.shutdown.clientStopped;
-//   }
-
-//   @override
-//   void onWindowBlur() {
-//     NotificationService().appInBackground = true;
-//   }
-
-//   @override
-//   void onWindowFocus() {
-//     NotificationService().appInBackground = false;
-//   }
-
-//   void initClient() async {
-//     try {
-//       var cfg = widget.cfg;
-//       InitClient initArgs = InitClient(
-//           cfg.dbRoot,
-//           cfg.downloadsDir,
-//           cfg.embedsDir,
-//           cfg.serverAddr,
-//           cfg.lnRPCHost,
-//           cfg.lnTLSCert,
-//           cfg.lnMacaroonPath,
-//           cfg.logFile,
-//           cfg.msgRoot,
-//           cfg.debugLevel,
-//           true,
-//           cfg.resourcesUpstream,
-//           cfg.simpleStorePayType,
-//           cfg.simpleStoreAccount,
-//           cfg.simpleStoreShipCharge,
-//           cfg.proxyaddr,
-//           cfg.torIsolation,
-//           cfg.proxyUsername,
-//           cfg.proxyPassword,
-//           cfg.circuitLimit,
-//           cfg.noLoadChatHistory,
-//           cfg.autoHandshakeInterval,
-//           cfg.autoRemoveIdleUsersInterval,
-//           cfg.autoRemoveIgnoreList,
-//           cfg.sendRecvReceipts,
-//           cfg.autoSubPosts,
-//           cfg.logPings,
-//           Platform.isAndroid || Platform.isIOS // Use longer interval on mobile
-//               ? 210 * 1000 // 210 = 3m30s
-//               : 0, // Use whatever is default
-//           cfg.jsonrpclisten,
-//           cfg.rpccertpath,
-//           cfg.rpckeypath,
-//           cfg.rpcissueclientcert,
-//           cfg.rpcclientcapath,
-//           cfg.rpcUser,
-//           cfg.rpcPass,
-//           cfg.requireRPCAuth);
-//       await Golib.initClient(initArgs);
-//     } catch (exception) {
-//       if ("$exception".contains("client already initialized")) {
-//         // Not a fatal error, just resuming from a prior state. Consider the
-//         // addressbook loaded and start fetching client data.
-//         addressBookLoaded(true);
-//         return;
-//       }
-//       navkey.currentState!.pushNamed('/fatalError', arguments: exception);
-//     }
-//   }
-
-//   Future<void> doWalletChecks(bool wasAlreadyRunning) async {
-//     var ntfns = Provider.of<AppNotifications>(context, listen: false);
-//     try {
-//       var balances = await Golib.lnGetBalances();
-//       var pushed = false;
-//       bool hasOnboard = false;
-//       try {
-//         await Golib.readOnboard();
-//         hasOnboard = true;
-//       } catch (exception) {
-//         // Ignore because hasOnboard will be false.
-//       }
-
-//       var emptyAddressBook = (await Golib.addressBook()).isEmpty;
-
-//       if (emptyAddressBook || hasOnboard) {
-//         navkey.currentState!.pushNamed("/onboarding");
-
-//         // Do not perform other checks because they'll be taken care of during onboarding.
-//         return;
-//       }
-
-//       // The following checks are only done if this is not resuming from a background
-//       // transition (e.g. mobile notification received) to avoid showing them
-//       // multiple times.
-//       if (wasAlreadyRunning) {
-//         // Determine server connection state.
-//         await Golib.notifyServerSessionState();
-//         return;
-//       }
-
-//       if (balances.wallet.totalBalance == 0) {
-//         ntfns.addNtfn(AppNtfn(AppNtfnType.walletNeedsFunds));
-//         navkey.currentState!.pushNamed("/needsFunds");
-//         pushed = true;
-//       }
-//       if (balances.channel.maxOutboundAmount == 0) {
-//         ntfns.addNtfn(AppNtfn(AppNtfnType.walletNeedsChannels));
-//         if (!pushed) {
-//           navkey.currentState!.pushNamed("/needsOutChannel");
-//           pushed = true;
-//         }
-//       }
-//       if (balances.channel.maxInboundAmount == 0) {
-//         ntfns.addNtfn(AppNtfn(AppNtfnType.walletNeedsInChannels));
-//         if (!pushed) {
-//           navkey.currentState!.pushNamed("/needsInChannel");
-//         }
-//       }
-//     } catch (exception) {
-//       ntfns.addNtfn(AppNtfn(AppNtfnType.error,
-//           msg: "Unable to perform initial wallet checks: $exception"));
-//     }
-//   }
-
-//   Future<void> addressBookLoaded(bool wasAlreadyRunning) async {
-//     var client = Provider.of<ClientModel>(context, listen: false);
-//     await client.readAddressBook();
-//     navkey.currentState!.pushReplacementNamed(OverviewScreen.routeName);
-//     await doWalletChecks(wasAlreadyRunning);
-//     await client.fetchNetworkInfo();
-//     await client.fetchMyAvatar();
-//     NotificationService().updateUIConfig();
-//   }
-
-//   void handleNotifications() async {
-//     final confStream = Golib.confirmations();
-//     await for (var ntf in confStream) {
-//       switch (ntf.type) {
-//         case NTLocalIDNeeded:
-//           navkey.currentState!.pushNamed('/initLocalID');
-//           break;
-
-//         case NTFConfServerCert:
-//           var cert = ntf.payload as ServerCert;
-//           navkey.currentState!
-//               .pushNamed('/startup/verifyServer', arguments: cert);
-//           break;
-
-//         case NTLNConfPayReqRecvChan:
-//           var est = ntf.payload as LNReqChannelEstValue;
-//           navkey.currentState!.pushNamed(
-//               LNConfirmRecvChanPaymentScreen.routeName,
-//               arguments: est);
-//           break;
-
-//         case NTConfFileDownload:
-//           var data = ntf.payload as ConfirmFileDownload;
-//           navkey.currentState!
-//               .pushNamed("/confirmFileDownload", arguments: data);
-//           break;
-
-//         case NTInvoiceGenFailed:
-//           var fail = ntf.payload as InvoiceGenFailed;
-//           var ntfns = Provider.of<AppNotifications>(context, listen: false);
-//           var msg =
-//               "Failed to generate invoice to user ${fail.nick} for ${fail.dcrAmount} DCR: ${fail.err}";
-//           ntfns.addNtfn(AppNtfn(AppNtfnType.invoiceGenFailed, msg: msg));
-//           break;
-
-//         case NTServerUnwelcomeError:
-//           Golib.remainOffline();
-//           var ntfns = Provider.of<AppNotifications>(context, listen: false);
-//           var msg = ntf.payload as String;
-//           ntfns.addNtfn(AppNtfn(AppNtfnType.serverUnwelcomeError, msg: msg));
-//           break;
-
-//         case NTAddressBookLoaded:
-//           await addressBookLoaded(false);
-//           break;
-//         default:
-//           developer.log("Unknown conf ntf received ${ntf.type}");
-//       }
-//     }
-//   }
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Consumer<ThemeNotifier>(
-//         builder: (context, theme, _) => MaterialApp(
-//               debugShowCheckedModeBanner: false,
-//               title: 'Bison Relay',
-//               theme: theme.theme,
-//               navigatorKey: navkey,
-//               initialRoute: '/',
-//               routes: {
-//                 '/': (context) => const AppStartingLoadScreen(),
-//                 '/about': (context) => const AboutScreen(),
-//                 '/initLocalID': (context) => const InitLocalIDScreen(),
-//                 '/startup/verifyServer': (context) =>
-//                     const VerifyServerScreen(),
-//                 '/generateInvite': (context) => const GenerateInviteScreen(),
-//                 '/verifyInvite': (context) => const VerifyInviteScreen(),
-//                 '/fetchInvite': (context) => const FetchInviteScreen(),
-//                 LNConfirmRecvChanPaymentScreen.routeName: (context) =>
-//                     const LNConfirmRecvChanPaymentScreen(),
-//                 '/confirmFileDownload': (context) =>
-//                     Consumer2<ClientModel, DownloadsModel>(
-//                         builder: (context, client, downloads, child) =>
-//                             ConfirmFileDownloadScreen(client, downloads)),
-//                 '/needsFunds': (context) => Consumer<AppNotifications>(
-//                     builder: (context, ntfns, child) =>
-//                         NeedsFundsScreen(ntfns)),
-//                 '/needsInChannel': (context) =>
-//                     Consumer2<AppNotifications, ClientModel>(
-//                         builder: (context, ntfns, client, child) =>
-//                             NeedsInChannelScreen(ntfns, client)),
-//                 '/onboarding': (context) => const OnboardingScreen(),
-//                 ContactsLastMsgTimesScreen.routeName: (context) =>
-//                     Consumer<ClientModel>(
-//                         builder: (context, client, child) =>
-//                             ContactsLastMsgTimesScreen(client)),
-//                 '/fatalError': (context) => const FatalErrorScreen(),
-//                 ServerUnwelcomeErrorScreen.routeName: (context) =>
-//                     const ServerUnwelcomeErrorScreen(),
-//                 ConfigNetworkScreen.routeName: (context) =>
-//                     const ConfigNetworkScreen(),
-//                 ThemeTestScreen.routeName: (context) => Consumer<ThemeNotifier>(
-//                     builder: (context, theme, child) => ThemeTestScreen(theme)),
-//                 GCInvitationsScreen.routeName: (context) =>
-//                     const GCInvitationsScreen(),
-//                 ShutdownScreen.routeName: (context) =>
-//                     ShutdownScreen(widget.log, widget.shutdown),
-//               },
-//               onGenerateRoute: (settings) {
-//                 late Widget page;
-//                 if (settings.name!.startsWith(OverviewScreen.routeName)) {
-//                   var initialRoute =
-//                       settings.name!.substring(OverviewScreen.routeName.length);
-//                   page = Consumer6<
-//                           DownloadsModel,
-//                           ClientModel,
-//                           AppNotifications,
-//                           MainMenuModel,
-//                           FeedModel,
-//                           SnackBarModel>(
-//                       builder: (context, down, client, ntfns, mainMenu, feed,
-//                               snackBar, child) =>
-//                           OverviewScreen(down, client, ntfns, initialRoute,
-//                               mainMenu, feed, snackBar));
-//                 } else if (settings.name!
-//                     .startsWith(NeedsOutChannelScreen.routeName)) {
-//                   page = Consumer2<AppNotifications, ClientModel>(
-//                       builder: (context, ntfns, client, child) =>
-//                           NeedsOutChannelScreen(ntfns, client));
-//                 } else if (settings.name! == ExportLogScreen.routeName) {
-//                   page = const ExportLogScreen();
-//                 } else if (settings.name! == LogSettingsScreen.routeName) {
-//                   page = const LogSettingsScreen();
-//                 } else if (settings.name! == ManualCfgModifyScreen.routeName) {
-//                   page = const ManualCfgModifyScreen();
-//                 } else {
-//                   page = RouteErrorPage(
-//                       settings.name ?? "", OverviewScreen.routeName);
-//                 }
-
-//                 return MaterialPageRoute<dynamic>(
-//                   builder: (context) => page,
-//                   settings: settings,
-//                 );
-//               },
-//               builder: (context, child) {
-//                 if (theme.fontScale <= 0) {
-//                   // Use system default font scale.
-//                   return child ?? const Text("no child");
-//                 }
-
-//                 return MediaQuery(
-//                     data: MediaQuery.of(context).copyWith(
-//                         textScaler: TextScaler.linear(theme.fontScale)),
-//                     child: child ?? const Text("no child"));
-//               },
-//             ));
-//   }
-// }
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'My Flutter App',
+      home: Scaffold(
+        appBar: AppBar(
+          title: Text('Configured App'),
+        ),
+        body: Center(
+          child: Text('Server Address: ${config.serverAddr}'),
+        ),
+      ),
+    );
+  }
+}

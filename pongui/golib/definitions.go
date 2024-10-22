@@ -56,7 +56,7 @@ type initClient struct {
 	RPCIssueClientCert bool     `json:"rpc_issue_client_cert"`
 	RPCUser            string   `json:"rpc_user"`
 	RPCPass            string   `json:"rpc_pass"`
-	RequireRPCAuth     bool     `json:"require_rpc_auth"`
+	RPCAuthMode        string   `json:"rpc_auth_mode"`
 	InviteFundsAccount string   `json:"invite_funds_account"`
 }
 
