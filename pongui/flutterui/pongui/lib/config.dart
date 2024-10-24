@@ -10,14 +10,12 @@ String mainConfigFilename = "";
 class Config {
   late final String serverAddr;
   late final String rpcCertPath;
-  late final String rpcKeyPath;
-  late final bool rpcissueclientcert;
+  late final String rpcClientCertPath;
+  late final String rpcClientKeyPath;
+  late final String rpcWebsocketURL;
   late final String debugLevel;
-  late final bool rpcIssueClientCert;
-  late final String rpcClientCApath;
   late final String rpcUser;
   late final String rpcPass;
-  late final String rpcAuthMode;
   late final bool wantsLogNtfns;  // Field for log notifications
 
   Config();
@@ -25,13 +23,12 @@ class Config {
   Config.filled({
     this.serverAddr = "",
     this.rpcCertPath = "",
-    this.rpcKeyPath = "",
+    this.rpcClientCertPath = "",
+    this.rpcClientKeyPath = "",
     this.debugLevel = "info",
-    this.rpcIssueClientCert = false,
-    this.rpcClientCApath = "",
+    this.rpcWebsocketURL = "",
     this.rpcUser = "",
     this.rpcPass = "",
-    this.rpcAuthMode = "basic",
     this.wantsLogNtfns = false,
   });
 
@@ -43,13 +40,13 @@ class Config {
 
     set("default", "server", serverAddr);
     set("clientrpc", "rpccertpath", rpcCertPath);
-    set("clientrpc", "rpckeypath", rpcKeyPath);
     set("log", "debuglevel", debugLevel);
-    set("clientrpc", "rpcissueclientcert", rpcIssueClientCert ? "1" : "0");
-    set("clientrpc", "rpcclientcapath", rpcClientCApath);
+    set("clientrpc", "rpcwebsocketurl", rpcWebsocketURL);
+    set("clientrpc", "rpcclientcertpath", rpcClientCertPath);
+    set("clientrpc", "rpcclientkeypath", rpcClientKeyPath);
+    set("clientrpc", "rpccertpath", rpcCertPath);
     set("clientrpc", "rpcuser", rpcUser);
     set("clientrpc", "rpcpass", rpcPass);
-    set("clientrpc", "rpcauthmode", rpcAuthMode);
     set("clientrpc", "wantsLogNtfns", wantsLogNtfns ? "1" : "0");
 
     // Write the config file
@@ -64,13 +61,12 @@ class Config {
     return Config.filled(
       serverAddr: f.get("default", "server") ?? "localhost:443",
       rpcCertPath: f.get("clientrpc", "rpccertpath") ?? "",
-      rpcKeyPath: f.get("clientrpc", "rpckeypath") ?? "",
+      rpcClientCertPath: f.get("clientrpc", "rpcclientcertpath") ?? "",
+      rpcClientKeyPath: f.get("clientrpc", "rpcclientkeypath") ?? "",
       debugLevel: f.get("log", "debuglevel") ?? "info",
-      rpcIssueClientCert: f.get("clientrpc", "rpcissueclientcert") == "1",
-      rpcClientCApath: f.get("clientrpc", "rpcclientcapath") ?? "",
       rpcUser: f.get("clientrpc", "rpcuser") ?? "",
       rpcPass: f.get("clientrpc", "rpcpass") ?? "",
-      rpcAuthMode: f.get("clientrpc", "rpcauthmode") ?? "basic",
+      rpcWebsocketURL: f.get("clientrpc", "rpcwebsocketurl") ?? "",
       wantsLogNtfns: f.get("clientrpc", "wantsLogNtfns") == "1",
     );
   }
@@ -124,14 +120,13 @@ Future<Config> loadConfig(String filepath) async {
   // Creating and populating the Config instance with relevant fields
   var c = Config.filled(
     serverAddr: f.get("default", "server") ?? "localhost:443",
-    rpcCertPath: getPath("clientrpc", "rpccertpath", ""),
-    rpcKeyPath: getPath("clientrpc", "rpckeypath", ""),
     debugLevel: f.get("log", "debuglevel") ?? "info",
-    rpcIssueClientCert: getBool("clientrpc", "rpcissueclientcert"),
-    rpcClientCApath: getPath("clientrpc", "rpcclientcapath", ""),
+    rpcWebsocketURL: f.get("clientrpc", "rpcwebsocketurl") ?? "",
+    rpcCertPath: getPath("clientrpc", "rpccertpath", ""),
+    rpcClientCertPath: getPath("clientrpc", "rpcclientcertpath", ""),
+    rpcClientKeyPath: getPath("clientrpc", "rpcclientkeypath", ""),
     rpcUser: f.get("clientrpc", "rpcuser") ?? "",
     rpcPass: f.get("clientrpc", "rpcpass") ?? "",
-    rpcAuthMode: f.get("clientrpc", "rpcauthmode") ?? "basic",
     wantsLogNtfns: getBool("clientrpc", "wantsLogNtfns")
   );
 

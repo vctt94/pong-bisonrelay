@@ -12,16 +12,12 @@ InitClient _$InitClientFromJson(Map<String, dynamic> json) => InitClient(
       json['msgs_root'] as String,
       json['debug_level'] as String,
       json['wants_log_ntfns'] as bool,
-      (json['json_rpc_listen'] as List<dynamic>)
-          .map((e) => e as String)
-          .toList(),
+      json['rpc_websocket_url'] as String,
       json['rpc_cert_path'] as String,
-      json['rpc_key_path'] as String,
-      json['rpc_issue_client_cert'] as bool,
-      json['rpc_client_ca_path'] as String,
+      json['rpc_client_cert_path'] as String,
+      json['rpc_client_key_path'] as String,
       json['rpc_user'] as String,
       json['rpc_pass'] as String,
-      json['rpc_auth_mode'] as String,
     );
 
 Map<String, dynamic> _$InitClientToJson(InitClient instance) =>
@@ -31,14 +27,12 @@ Map<String, dynamic> _$InitClientToJson(InitClient instance) =>
       'msgs_root': instance.msgsRoot,
       'debug_level': instance.debugLevel,
       'wants_log_ntfns': instance.wantsLogNtfns,
-      'json_rpc_listen': instance.jsonrpclisten,
-      'rpc_cert_path': instance.rpccertpath,
-      'rpc_key_path': instance.rpckeypath,
-      'rpc_issue_client_cert': instance.rpcissueclientcert,
-      'rpc_client_ca_path': instance.rpcclientcapath,
+      'rpc_websocket_url': instance.rpcWebsockeURL,
+      'rpc_cert_path': instance.rpcCertPath,
+      'rpc_client_cert_path': instance.rpcClientCertpath,
+      'rpc_client_key_path': instance.rpcClientKeypath,
       'rpc_user': instance.rpcUser,
       'rpc_pass': instance.rpcPass,
-      'rpc_auth_mode': instance.rpcAuthMode,
     };
 
 IDInit _$IDInitFromJson(Map<String, dynamic> json) => IDInit(

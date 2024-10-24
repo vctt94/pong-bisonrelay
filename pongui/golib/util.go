@@ -3,9 +3,11 @@ package golib
 import (
 	"archive/zip"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,7 +15,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
+	"github.com/companyzero/bisonrelay/clientrpc/types"
+	"github.com/decred/slog"
 	"github.com/pbnjay/memory"
 	"github.com/prometheus/procfs"
 )
@@ -189,4 +195,88 @@ func reportCmdResultLoop(startTime, lastTime time.Time, id int32, lastCPUTimes [
 	cctx.log.Info(log02)
 	cctx.log.Info(log03)
 	cmtx.Unlock()
+}
+
+func receiveLoop(ctx context.Context, chat types.ChatServiceClient, log slog.Logger) error {
+	var ackRes types.AckResponse
+	var ackReq types.AckRequest
+	for {
+		// Keep requesting a new stream if the connection breaks. Also
+		// request any messages received since the last one we acked.
+		streamReq := types.PMStreamRequest{UnackedFrom: ackReq.SequenceId}
+		stream, err := chat.PMStream(ctx, &streamReq)
+		if errors.Is(err, context.Canceled) {
+			// Program is done.
+			return err
+		}
+		if err != nil {
+			log.Warn("Error while obtaining PM stream: %v", err)
+			time.Sleep(time.Second) // Wait to try again.
+			continue
+		}
+
+		for {
+			var pm types.ReceivedPM
+			err := stream.Recv(&pm)
+			if errors.Is(err, context.Canceled) {
+				// Program is done.
+				return err
+			}
+			if err != nil {
+				log.Warnf("Error while receiving stream: %v", err)
+				break
+			}
+
+			// Escape content before sending it to the terminal.
+			nick := escapeNick(pm.Nick)
+			var msg string
+			if pm.Msg != nil {
+				msg = escapeContent(pm.Msg.Message)
+			}
+
+			log.Debugf("Received PM from '%s' with len %d and sequence %s",
+				nick, len(msg), types.DebugSequenceID(pm.SequenceId))
+
+			fmt.Printf("<- %v %v\n", nick, msg)
+
+			// Ack to client that message is processed.
+			ackReq.SequenceId = pm.SequenceId
+			err = chat.AckReceivedPM(ctx, &ackReq, &ackRes)
+			if err != nil {
+				log.Warnf("Error while ack'ing received pm: %v", err)
+				break
+			}
+		}
+
+		time.Sleep(time.Second)
+	}
+}
+
+// escapeNick returns s escaped from chars that don't don't belong in a nick.
+func escapeNick(s string) string {
+	return strings.Map(func(r rune) rune {
+		if !strconv.IsPrint(r) {
+			return -1
+		}
+		if r == utf8.RuneError {
+			return -1
+		}
+		return r
+	}, s)
+}
+
+// escapeContent returns s escaped from chars that don't belong in content.
+func escapeContent(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return r
+		}
+		if !strconv.IsGraphic(r) {
+			return -1
+		}
+		if r == utf8.RuneError {
+			return -1
+		}
+		return r
+	}, s)
 }

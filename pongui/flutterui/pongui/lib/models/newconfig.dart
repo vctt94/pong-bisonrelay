@@ -18,15 +18,16 @@ class NewConfigModel extends ChangeNotifier {
   Future<Config> generateConfig() async {
     var dataDir = await appDataDir();
 
+    // XXX Needs fixing
     // Create a new config object with relevant fields
     var cfg = Config.filled(
-      serverAddr: 'localhost:443', // Example, adjust if needed
-      rpcCertPath: path.join(dataDir, 'cert.pem'),  // Example
-      rpcKeyPath: path.join(dataDir, 'key.pem'),    // Example
+      serverAddr: 'localhost:50051', // Example, adjust if needed
+      // rpcCertPath: path.join(dataDir, 'cert.pem'),  // Example
+      // rpcClientKeyPath: path.join(dataDir, 'key.pem'),    // Example
       rpcUser: rpcUser,
       rpcPass: rpcPass,
       debugLevel: "info",
-      rpcAuthMode: "basic",
+      // rpcAuthMode: "basic",
     );
 
     // Save the new config to file

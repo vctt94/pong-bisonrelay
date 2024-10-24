@@ -28,23 +28,18 @@ class InitClient {
   final bool wantsLogNtfns;
  
   // rpc fields
-  @JsonKey(name: 'json_rpc_listen')
-  final List<String> jsonrpclisten;
+  @JsonKey(name: 'rpc_websocket_url')
+  final String rpcWebsockeURL;
   @JsonKey(name: 'rpc_cert_path')
-  final String rpccertpath;
-  @JsonKey(name: 'rpc_key_path')
-  final String rpckeypath;
-  @JsonKey(name: 'rpc_issue_client_cert')
-  final bool rpcissueclientcert;
-    @JsonKey(name: 'rpc_client_ca_path')
-  final String rpcclientcapath;
+  final String rpcCertPath;
+  @JsonKey(name: 'rpc_client_cert_path')
+  final String rpcClientCertpath;
+  @JsonKey(name: 'rpc_client_key_path')
+  final String rpcClientKeypath;
   @JsonKey(name: 'rpc_user')
   final String rpcUser;
   @JsonKey(name: 'rpc_pass')
   final String rpcPass;
-  @JsonKey(name: 'rpc_auth_mode')
-  final String rpcAuthMode;
-  
 
   InitClient(
     this.serverAddr,
@@ -52,14 +47,12 @@ class InitClient {
     this.msgsRoot,
     this.debugLevel,
     this.wantsLogNtfns,
-    this.jsonrpclisten,
-    this.rpccertpath,
-    this.rpckeypath,
-    this.rpcissueclientcert,
-    this.rpcclientcapath,
+    this.rpcWebsockeURL,
+    this.rpcCertPath,
+    this.rpcClientCertpath,
+    this.rpcClientKeypath,
     this.rpcUser,
     this.rpcPass,
-    this.rpcAuthMode
   );
 
   Map<String, dynamic> toJson() => _$InitClientToJson(this);
