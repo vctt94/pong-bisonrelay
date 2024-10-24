@@ -77,6 +77,10 @@ func (s *GameServer) handleDisconnect(clientID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	_, hasPlayerSession := s.playerSessions.GetPlayer(clientID)
+	if hasPlayerSession {
+		s.playerSessions.RemovePlayer(clientID)
+	}
 	for _, game := range s.games {
 		for i, player := range game.players {
 			if player.ID == clientID {
@@ -91,8 +95,6 @@ func (s *GameServer) handleDisconnect(clientID string) {
 						Message: "Opponent disconnected. Game over.",
 						Started: false,
 					})
-					// cleanup disconnected player session
-					s.playerSessions.RemovePlayer(clientID)
 					serverLogger.Printf("Player %s disconnected and cleaned up", clientID)
 					// cleanup remaning player session
 					s.playerSessions.RemovePlayer(remainingPlayer.ID)
@@ -181,13 +183,9 @@ func (s *GameServer) startNtfnStream(req *pong.StartNtfnStreamRequest, stream po
 
 	player.notifier.Send(&pong.NtfnStreamResponse{Message: "Notifier stream Initialized"})
 
-	// Listen for context cancellation to handle disconnection
-	for range ctx.Done() {
-		s.handleDisconnect(clientID)
-		return ctx.Err()
-	}
-
-	return nil
+	<-ctx.Done() // The context was canceled (client disconnected)
+	s.handleDisconnect(clientID)
+	return ctx.Err()
 }
 
 func (s *GameServer) startGame(ctx context.Context, players []*Player) error {

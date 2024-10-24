@@ -245,7 +245,7 @@ func call(cmd *cmd) *CmdResult {
 	case CTInitClient:
 		var initClient initClient
 		if decode(&initClient) {
-			err = handleInitClient(uint32(cmd.ClientHandle), initClient)
+			v, err = handleInitClient(uint32(cmd.ClientHandle), initClient)
 		}
 
 	case CTCreateLockFile:

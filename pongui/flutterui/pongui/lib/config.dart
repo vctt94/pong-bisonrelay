@@ -119,7 +119,7 @@ Future<Config> loadConfig(String filepath) async {
 
   // Creating and populating the Config instance with relevant fields
   var c = Config.filled(
-    serverAddr: f.get("default", "server") ?? "localhost:443",
+    serverAddr: f.get("default", "server") ?? "localhost:50051",
     debugLevel: f.get("log", "debuglevel") ?? "info",
     rpcWebsocketURL: f.get("clientrpc", "rpcwebsocketurl") ?? "",
     rpcCertPath: getPath("clientrpc", "rpccertpath", ""),

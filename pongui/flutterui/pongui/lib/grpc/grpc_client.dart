@@ -2,14 +2,13 @@ import 'dart:io';
 import 'package:pongui/grpc/generated/pong.pbgrpc.dart';
 import 'package:grpc/grpc.dart';
 
-class GrpcPluginClient {
+class GrpcPongClient {
   late ClientChannel _channel;
   late PongGameClient _client;
 
-  // Constructor now accepts tlsCertPath
-  GrpcPluginClient(String serverAddress, int port, {String? tlsCertPath}) {
+  GrpcPongClient(String serverAddress, int port, {String? tlsCertPath}) {
     // Set up credentials based on whether TLS is being used
-    final credentials = tlsCertPath != null && tlsCertPath.isNotEmpty
+    final credentials = (tlsCertPath != null && tlsCertPath.isNotEmpty)
         ? _createSecureCredentials(tlsCertPath)
         : const ChannelCredentials.insecure();
 
@@ -24,15 +23,21 @@ class GrpcPluginClient {
     _client = PongGameClient(_channel);
   }
 
-  // Create secure credentials using the TLS certificate
-  ChannelCredentials _createSecureCredentials(String tlsCertPath) {
-    final cert = File(tlsCertPath).readAsBytesSync();
-    return ChannelCredentials.secure(certificates: cert);
+  // Helper method to create secure credentials
+  ChannelCredentials _createSecureCredentials(String certPath) {
+    try {
+      final cert = File(certPath).readAsBytesSync();
+      return ChannelCredentials.secure(
+        certificates: cert,
+        authority: null, // Add authority if required
+      );
+    } catch (e) {
+      throw Exception('Failed to read TLS certificate: $e');
+    }
   }
 
   // Call Init on the PluginService and listen to the stream
-  Stream<NtfnStreamResponse> startNtfnStreamRequest(
-      String clientId, String pluginName) async* {
+  Stream<NtfnStreamResponse> startNtfnStreamRequest(String clientId) async* {
     final request = StartNtfnStreamRequest()..clientId = clientId;
 
     try {
@@ -62,7 +67,7 @@ class GrpcPluginClient {
     }
   }
 
-  // In GrpcPluginClient
+  // In GrpcPongClient
   Future<void> sendInput(String inputData, String clientId) async {
     // Implement the gRPC call to send input without expecting a stream response
     final request = PlayerInput()

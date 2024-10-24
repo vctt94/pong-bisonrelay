@@ -17,7 +17,6 @@ import (
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/lockfile"
 	"github.com/companyzero/bisonrelay/rates"
-	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/decred/slog"
 	"golang.org/x/sync/errgroup"
 )
@@ -39,11 +38,6 @@ type clientCtx struct {
 
 	httpClient *http.Client
 	rates      *rates.Rates
-
-	// downloadConfChans tracks confirmation channels about downloads that
-	// are about to be initiated.
-	downloadConfMtx   sync.Mutex
-	downloadConfChans map[zkidentity.ShortID]chan bool
 
 	// expirationDays are the expirtation days provided by the server when
 	// connected
@@ -79,15 +73,14 @@ func isClientRunning(handle uint32) bool {
 	return res
 }
 
-func handleInitClient(handle uint32, args initClient) error {
-
+func handleInitClient(handle uint32, args initClient) (string, error) {
 	cmtx.Lock()
 	defer cmtx.Unlock()
 	if cs == nil {
 		cs = make(map[uint32]*clientCtx)
 	}
 	if cs[handle] != nil {
-		return errors.New("client already initialized")
+		return "", errors.New("client already initialized")
 	}
 
 	bknd := slog.NewBackend(os.Stderr)
@@ -101,10 +94,9 @@ func handleInitClient(handle uint32, args initClient) error {
 		jsonrpc.WithClientBasicAuth(args.RPCUser, args.RPCPass),
 	)
 	if err != nil {
-		return err
+		return "", err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	fmt.Printf("args: %+v\n\n", args)
 	g, gctx := errgroup.WithContext(ctx)
 	// Run JSON-RPC client
 	g.Go(func() error { return c.Run(gctx) })
@@ -115,7 +107,8 @@ func handleInitClient(handle uint32, args initClient) error {
 	var publicIdentity types.PublicIdentity
 	err = chat.UserPublicIdentity(gctx, req, &publicIdentity)
 	if err != nil {
-		return fmt.Errorf("failed to get user public identity: %v", err)
+		cancel()
+		return "", fmt.Errorf("failed to get user public identity: %v", err)
 	}
 	clientID := hex.EncodeToString(publicIdentity.Identity[:])
 	// ctx := context.Background()
@@ -123,17 +116,17 @@ func handleInitClient(handle uint32, args initClient) error {
 	// Initialize logging.
 	logBknd, err := newLogBackend(args.LogFile, args.DebugLevel)
 	if err != nil {
-		return err
+		cancel()
+		return "", err
 	}
 	logBknd.notify = args.WantsLogNtfns
 
-	var cctx *clientCtx
-
-	cctx = &clientCtx{
-		c:      c,
-		cancel: cancel,
+	cctx := &clientCtx{
+		c:       c,
+		cancel:  cancel,
+		log:     log,
+		logBknd: logBknd,
 	}
-
 	go func() {
 		// Run JSON-RPC client (it will block until the client is done)
 		g.Go(func() error { return receiveLoop(gctx, chat, log) })
@@ -155,15 +148,7 @@ func handleInitClient(handle uint32, args initClient) error {
 		}
 	}()
 
-	go func() {
-		select {
-		case <-ctx.Done():
-			// case <-c.AddressBookLoaded():
-			// 	notify(NTAddressBookLoaded, nil, nil)
-		}
-	}()
-
-	return nil
+	return clientID, nil
 }
 
 func handleClientCmd(cc *clientCtx, cmd *cmd) (interface{}, error) {

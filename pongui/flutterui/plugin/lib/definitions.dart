@@ -26,7 +26,7 @@ class InitClient {
   final String debugLevel;
   @JsonKey(name: 'wants_log_ntfns')
   final bool wantsLogNtfns;
- 
+
   // rpc fields
   @JsonKey(name: 'rpc_websocket_url')
   final String rpcWebsockeURL;
@@ -93,7 +93,6 @@ const connStateOffline = 0;
 const connStateCheckingWallet = 1;
 const connStateOnline = 2;
 
-
 @JsonSerializable()
 class ServerInfo {
   final String innerFingerprint;
@@ -121,7 +120,6 @@ class RemoteUser {
       _$RemoteUserFromJson(json);
 }
 
-
 @JsonSerializable()
 class PublicIdentity {
   final String name;
@@ -132,7 +130,6 @@ class PublicIdentity {
   factory PublicIdentity.fromJson(Map<String, dynamic> json) =>
       _$PublicIdentityFromJson(json);
 }
-
 
 @JsonSerializable()
 class Account {
@@ -305,7 +302,6 @@ mixin NtfStreams {
       StreamController<RemoteUser>();
   Stream<RemoteUser> acceptedInvites() => ntfAcceptedInvites.stream;
 
-
   StreamController<String> ntfLogLines = StreamController<String>();
   Stream<String> logLines() => ntfLogLines.stream;
 
@@ -323,14 +319,11 @@ mixin NtfStreams {
     }
 
     switch (cmd) {
-
-
       // case NTPM:
       //   isError
       //       ? ntfChatEvents.addError(payload)
       //       : ntfChatEvents.add(PM.fromJson(payload));
       //   break;
-
 
       default:
         debugPrint("Received unknown notification ${cmd.toRadixString(16)}");
@@ -364,14 +357,13 @@ abstract class PluginPlatform {
     return r as String;
   }
 
-  Future<void> initClient(InitClient args) async {
-    await asyncCall(CTInitClient, args);
+  Future<String> initClient(InitClient args) async {
+    return await asyncCall(CTInitClient, args);
   }
-    Future<void> createLockFile(String rootDir) async =>
+  Future<void> createLockFile(String rootDir) async =>
       await asyncCall(CTCreateLockFile, rootDir);
   Future<void> closeLockFile(String rootDir) async =>
       await asyncCall(CTCloseLockFile, rootDir);
-
 }
 
 const int CTUnknown = 0x00;
