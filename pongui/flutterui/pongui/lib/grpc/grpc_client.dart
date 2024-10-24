@@ -67,7 +67,7 @@ class GrpcPongClient {
   }
 
   // In GrpcPongClient
-  Future<void> sendInput(String inputData, String clientId) async {
+  Future<void> sendInput(String clientId, String inputData) async {
     // Implement the gRPC call to send input without expecting a stream response
     final request = PlayerInput()
       ..input = inputData

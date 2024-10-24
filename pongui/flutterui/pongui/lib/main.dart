@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:developer' as developer;
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:golib_plugin/definitions.dart';
 import 'package:golib_plugin/golib_plugin.dart';
+import 'package:pongui/components/pong_game.dart';
 import 'package:pongui/config.dart';
 import 'package:pongui/grpc/grpc_client.dart';
 import 'package:pongui/screens/newconfig.dart';
@@ -30,9 +32,12 @@ class _MyAppState extends State<MyApp> {
   String serverAddr = '';
   bool isLoading = true;
   String errorMessage = '';
-  bool isReady = false; // New state to track game readiness
+  bool isReady = false;
+  bool gameStarted = false;
   GrpcPongClient? grpcClient;
   String clientId = '';
+  Map<String, dynamic> gameState = {};
+  late PongGame pongGame;
 
   @override
   void initState() {
@@ -43,6 +48,11 @@ class _MyAppState extends State<MyApp> {
   void _startListeningToStreams(GrpcPongClient grpcClient, String clientId) {
     // Start notification stream
     grpcClient.startNtfnStreamRequest(clientId).listen((response) {
+      if (response.started) {
+        setState(() {
+          gameStarted = true;
+        });
+      }
       developer.log("Notification Stream Response: ${response}");
       // Handle the response (e.g., update UI or handle game state)
     }, onError: (error) {
@@ -79,6 +89,7 @@ class _MyAppState extends State<MyApp> {
         ipAddress,
         port, // Assuming you have the port in the config
       );
+      pongGame = PongGame(clientId, grpcClient!);
 
       setState(() {
         config = cfg;
@@ -107,6 +118,11 @@ class _MyAppState extends State<MyApp> {
         isReady = true;
       });
       grpcClient!.startGameStreamRequest(clientId).listen((response) {
+        var data = utf8.decode(response.data);
+        var parsedData = json.decode(data) as Map<String, dynamic>; // Decode the JSON
+        setState(() {
+          gameState = parsedData;
+        });
         developer.log("Game Stream Started: $response");
       }, onError: (error) {
         developer.log("Error in game stream: $error");
@@ -158,10 +174,13 @@ class _MyAppState extends State<MyApp> {
                         ),
                       ),
 
-                      // Center button to start game stream
+                      // Display Pong Game if ready
                       Center(
                         child: isReady
-                            ? Column(
+                            ? gameStarted ?  pongGame.buildWidget(
+                                gameState,
+                                FocusNode()
+                              ) : Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Icon(
