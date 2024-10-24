@@ -52,8 +52,7 @@ class GrpcPongClient {
   }
 
   // Call Action on the PluginService
-  Stream<GameUpdateBytes> startGameStreamRequest(
-      String user, String clientId) async* {
+  Stream<GameUpdateBytes> startGameStreamRequest(String clientId) async* {
     final request = StartGameStreamRequest()..clientId = clientId;
 
     try {

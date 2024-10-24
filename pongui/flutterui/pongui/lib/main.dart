@@ -30,6 +30,9 @@ class _MyAppState extends State<MyApp> {
   String serverAddr = '';
   bool isLoading = true;
   String errorMessage = '';
+  bool isReady = false; // New state to track game readiness
+  GrpcPongClient? grpcClient;
+  String clientId = '';
 
   @override
   void initState() {
@@ -68,14 +71,13 @@ class _MyAppState extends State<MyApp> {
       );
 
       developer.log("InitClient args: $initArgs");
-      String clientId = await Golib.initClient(initArgs);
+      clientId = await Golib.initClient(initArgs);
       List<String> parts = cfg.serverAddr.split(":");
       String ipAddress = parts[0]; // "127.0.0.1"
       int port = int.parse(parts[1]); // 50051 as an integer
-      final grpcClient = GrpcPongClient(
+      grpcClient = GrpcPongClient(
         ipAddress,
         port, // Assuming you have the port in the config
-        // tlsCertPath: cfg.rpcCertPath, // Pass the certificate path if using TLS
       );
 
       setState(() {
@@ -83,7 +85,7 @@ class _MyAppState extends State<MyApp> {
         serverAddr = cfg.serverAddr;
         isLoading = false;
       });
-      _startListeningToStreams(grpcClient, clientId);
+      _startListeningToStreams(grpcClient!, clientId);
     } catch (exception) {
       developer.log("Error: $exception");
       if (exception == usageException) {
@@ -99,20 +101,101 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
+  void _startGameStream() {
+    if (grpcClient != null && clientId.isNotEmpty) {
+      setState(() {
+        isReady = true;
+      });
+      grpcClient!.startGameStreamRequest(clientId).listen((response) {
+        developer.log("Game Stream Started: $response");
+      }, onError: (error) {
+        developer.log("Error in game stream: $error");
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Configured App',
+      title: 'Pong Game App',
       home: Scaffold(
         appBar: AppBar(
-          title: Text('Configured App'),
+          title: Text(
+            'Pong Game',
+            style: TextStyle(color: const Color.fromARGB(255, 202, 202, 202)), // Set text color to white
+          ),
+          backgroundColor: const Color.fromARGB(255, 25, 23, 44),
         ),
         body: isLoading
             ? Center(child: CircularProgressIndicator())
             : errorMessage.isNotEmpty
                 ? Center(child: Text(errorMessage))
-                : Center(
-                    child: Text('Server Address: $serverAddr'),
+                : Stack(
+                    children: [
+                      // Display server address and client ID at the top left
+                      Positioned(
+                        top: 10,
+                        left: 10,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Connected to Server: $serverAddr',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.black54,
+                              ),
+                            ),
+                            SizedBox(height: 5),
+                            Text(
+                              'Client ID: $clientId',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Center button to start game stream
+                      Center(
+                        child: isReady
+                            ? Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.sports_tennis,
+                                    size: 100,
+                                    color: Colors.blueAccent,
+                                  ),
+                                  SizedBox(height: 20),
+                                  Text(
+                                    'Waiting for another player...',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      color: Colors.blueAccent,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : ElevatedButton(
+                                onPressed: _startGameStream,
+                                style: ElevatedButton.styleFrom(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 40, vertical: 20),
+                                  backgroundColor: Colors.blueAccent,
+                                ),
+                                child: Text(
+                                  'Start Game',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                      ),
+                    ],
                   ),
       ),
     );

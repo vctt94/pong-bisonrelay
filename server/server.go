@@ -49,11 +49,8 @@ func NewServer(id *zkidentity.ShortID, cfg ServerConfig) *Server {
 
 func (s *Server) StartGameStream(req *pong.StartGameStreamRequest, stream pong.PongGame_StartGameStreamServer) error {
 	ctx := stream.Context()
-	id, err := getClientIDFromContext(ctx)
-	if err != nil {
-		return err
-	}
-	err = s.GameManager.startGameStream(&pong.StartGameStreamRequest{
+	id := req.ClientId
+	err := s.GameManager.startGameStream(&pong.StartGameStreamRequest{
 		ClientId: id,
 	}, stream)
 	if err != nil {
