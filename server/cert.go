@@ -76,7 +76,7 @@ func generateSelfSignedCert(organization string, validUntil time.Time, extraHost
 }
 
 // GenerateNewTLSCertPair generates a new TLS certificate and key pair and saves them to the specified paths.
-func (s *GameServer) GenerateNewTLSCertPair(organization string, validUntil time.Time, extraHosts []string, certPath, keyPath string) error {
+func (s *Server) GenerateNewTLSCertPair(organization string, validUntil time.Time, extraHosts []string, certPath, keyPath string) error {
 	// Generate the certificate and key
 	cert, key, err := generateSelfSignedCert(organization, validUntil, extraHosts)
 	if err != nil {

@@ -3,50 +3,53 @@ package server
 import (
 	"sync"
 
+	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 )
 
 type Player struct {
-	ID           string
-	PlayerNumber int32 // 1 for player 1, 2 for player 2
+	ID zkidentity.ShortID
+
+	playerNumber int32 // 1 for player 1, 2 for player 2
+	score        int
+	betAmt       float64
 	stream       pong.PongGame_StartGameStreamServer
 	notifier     pong.PongGame_StartNtfnStreamServer
 }
 
-func NewPlayer(id string) *Player {
-	return &Player{
-		ID: id,
-	}
-}
-
 type PlayerSessions struct {
 	mu       sync.Mutex
-	sessions map[string]*Player // Map client ID to Player
+	sessions map[zkidentity.ShortID]*Player
 }
 
-func NewPlayerSessions() *PlayerSessions {
-	return &PlayerSessions{
-		sessions: make(map[string]*Player),
-	}
-}
-
-func (ps *PlayerSessions) AddOrUpdatePlayer(player *Player) {
-	ps.mu.Lock()
-	defer ps.mu.Unlock()
-	ps.sessions[player.ID] = player
-}
-
-func (ps *PlayerSessions) RemovePlayer(clientID string) {
+func (ps *PlayerSessions) RemovePlayer(clientID zkidentity.ShortID) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	delete(ps.sessions, clientID)
 }
 
-func (ps *PlayerSessions) GetPlayer(clientID string) (*Player, bool) {
+func (ps *PlayerSessions) GetPlayer(clientID zkidentity.ShortID) *Player {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
-	player, exists := ps.sessions[clientID]
-	return player, exists
+	player := ps.sessions[clientID]
+	return player
+}
+
+func (ps *PlayerSessions) GetOrCreateSession(clientID zkidentity.ShortID) *Player {
+	player := ps.GetPlayer(clientID)
+	if player == nil {
+		p := &Player{
+			ID:    clientID,
+			score: 0,
+		}
+		ps.mu.Lock()
+		ps.sessions[clientID] = p
+		ps.mu.Unlock()
+
+		return p
+	}
+
+	return player
 }
 
 type WaitingRoom struct {
@@ -54,17 +57,11 @@ type WaitingRoom struct {
 	queue []*Player
 }
 
-func NewWaitingRoom() *WaitingRoom {
-	return &WaitingRoom{
-		queue: make([]*Player, 0),
-	}
-}
-
 func (wr *WaitingRoom) AddPlayer(player *Player) {
 	wr.mu.Lock()
 	defer wr.mu.Unlock()
-	// don't add repeated players
 	for _, p := range wr.queue {
+		// don't add repeated players
 		if p.ID == player.ID {
 			return
 		}
@@ -83,7 +80,7 @@ func (wr *WaitingRoom) ReadyPlayers() ([]*Player, bool) {
 	return nil, false
 }
 
-func (wr *WaitingRoom) GetPlayer(clientID string) (*Player, bool) {
+func (wr *WaitingRoom) GetPlayer(clientID zkidentity.ShortID) (*Player, bool) {
 	wr.mu.Lock()
 	defer wr.mu.Unlock()
 	for _, player := range wr.queue {
@@ -94,7 +91,7 @@ func (wr *WaitingRoom) GetPlayer(clientID string) (*Player, bool) {
 	return nil, false
 }
 
-func (wr *WaitingRoom) RemovePlayer(clientID string) {
+func (wr *WaitingRoom) RemovePlayer(clientID zkidentity.ShortID) {
 	wr.mu.Lock()
 	defer wr.mu.Unlock()
 
@@ -104,4 +101,16 @@ func (wr *WaitingRoom) RemovePlayer(clientID string) {
 			break
 		}
 	}
+}
+
+func (wr *WaitingRoom) getWaitingRoom() *WaitingRoom {
+	wr.mu.Lock()
+	defer wr.mu.Unlock()
+	return wr
+}
+
+func (wr *WaitingRoom) length() int {
+	wr.mu.Lock()
+	defer wr.mu.Unlock()
+	return len(wr.queue)
 }
