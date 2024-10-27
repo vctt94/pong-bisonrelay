@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -26,10 +27,13 @@ const (
 )
 
 type clientCtx struct {
-	c      *jsonrpc.WSClient
-	cancel func()
-	runMtx sync.Mutex
-	runErr error
+	ctx     context.Context
+	c       *jsonrpc.WSClient
+	chat    types.ChatServiceClient
+	payment types.PaymentsServiceClient
+	cancel  func()
+	runMtx  sync.Mutex
+	runErr  error
 
 	log          slog.Logger
 	logBknd      *logBackend
@@ -103,16 +107,15 @@ func handleInitClient(handle uint32, args initClient) (string, error) {
 
 	// Retrieve public identity via JSON-RPC
 	chat := types.NewChatServiceClient(c)
-	req := &types.PublicIdentityReq{}
+	payment := types.NewPaymentsServiceClient(c)
+	// Initialize clientID
 	var publicIdentity types.PublicIdentity
-	err = chat.UserPublicIdentity(gctx, req, &publicIdentity)
+	err = chat.UserPublicIdentity(gctx, &types.PublicIdentityReq{}, &publicIdentity)
 	if err != nil {
 		cancel()
 		return "", fmt.Errorf("failed to get user public identity: %v", err)
 	}
 	clientID := hex.EncodeToString(publicIdentity.Identity[:])
-	// ctx := context.Background()
-	fmt.Printf("aqui**************\n clientId: %+v\n\n", clientID)
 	// Initialize logging.
 	logBknd, err := newLogBackend(args.LogFile, args.DebugLevel)
 	if err != nil {
@@ -122,15 +125,19 @@ func handleInitClient(handle uint32, args initClient) (string, error) {
 	logBknd.notify = args.WantsLogNtfns
 
 	cctx := &clientCtx{
+		ctx:     gctx,
 		c:       c,
+		chat:    chat,
+		payment: payment,
 		cancel:  cancel,
 		log:     log,
 		logBknd: logBknd,
 	}
+	cs[handle] = cctx
 	go func() {
 		// Run JSON-RPC client (it will block until the client is done)
 		g.Go(func() error { return receiveLoop(gctx, chat, log) })
-
+		g.Go(func() error { return receiveTipLoop(gctx, payment, log, cctx) })
 		// Handle client closure and errors
 		if err := g.Wait(); err != nil {
 			fmt.Printf("err: %+v\n\n", err)
@@ -152,16 +159,20 @@ func handleInitClient(handle uint32, args initClient) (string, error) {
 }
 
 func handleClientCmd(cc *clientCtx, cmd *cmd) (interface{}, error) {
-	// c := cc.c
-	// var lnc lnrpc.LightningClient
-	// var lnWallet walletrpc.WalletKitClient
-	// if cc.lnpc != nil {
-	// 	lnc = cc.lnpc.LNRPC()
-	// 	lnWallet = cc.lnpc.LNWallet()
-	// }
+	chat := cc.chat
 
 	switch cmd.Type {
+	case CTGetUserNick:
+		resp := &types.UserNickResponse{}
+		hexUid := string(cmd.Payload)
+		err := chat.UserNick(cc.ctx, &types.UserNickRequest{
+			HexUid: strings.Trim(hexUid, `"`),
+		}, resp)
+		if err != nil {
+			return nil, err
+		}
 
+		return resp.Nick, nil
 	}
 	return nil, nil
 

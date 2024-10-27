@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/companyzero/bisonrelay/zkidentity"
@@ -10,7 +9,10 @@ import (
 	canvas "github.com/vctt94/pong-bisonrelay/pong"
 )
 
+const maxScore = 3
+
 type gameInstance struct {
+	sync.Mutex
 	id          string
 	engine      *canvas.CanvasEngine
 	framesch    chan []byte
@@ -21,6 +23,9 @@ type gameInstance struct {
 	running     bool
 	ctx         context.Context
 	cancel      context.CancelFunc
+	winner      *zkidentity.ShortID
+	// betAmt sum of total bets
+	betAmt float64
 }
 
 type gameManager struct {
@@ -93,6 +98,8 @@ func (s *gameManager) startNewGame(ctx context.Context, players []*Player, id st
 	inputch := make(chan []byte, 10)
 	roundResult := make(chan int32)
 	instanceCtx, cancel := context.WithCancel(ctx)
+	// sum of all bets
+	betAmt := players[0].betAmt + players[1].betAmt
 	instance := &gameInstance{
 		id:          id,
 		engine:      canvasEngine,
@@ -103,6 +110,7 @@ func (s *gameManager) startNewGame(ctx context.Context, players []*Player, id st
 		ctx:         instanceCtx,
 		cancel:      cancel,
 		players:     players,
+		betAmt:      betAmt,
 	}
 
 	return instance
@@ -124,46 +132,49 @@ func (g *gameInstance) Run() {
 	}()
 
 	go func() {
-		for winnerID := range g.roundResult {
+		for winnerNumber := range g.roundResult {
 			if !g.running {
 				break
 			}
 
 			// Handle the result of each round
-			player := g.handleRoundResult(winnerID)
-			fmt.Printf("player: %+v\n", player)
+			g.handleRoundResult(winnerNumber)
 
 			// Check if the game should continue or end
 			if g.shouldEndGame() {
 				g.Stop() // Stop the game if necessary
 				break
+			} else {
+				g.engine.NewRound(g.ctx, g.framesch, g.inputch, g.roundResult)
 			}
 		}
 	}()
 }
 
-func (g *gameInstance) handleRoundResult(winner int32) *Player {
+func (g *gameInstance) handleRoundResult(winner int32) {
+	// update player score
 	for _, player := range g.players {
 		if player.playerNumber == winner {
 			player.score++
-			return player
 		}
 	}
-
-	return nil
 }
 
 func (g *gameInstance) Stop() {
 	g.running = false
+	g.cleanedUp = true
+	g.cancel()
+	close(g.framesch)
+	close(g.inputch)
+	close(g.roundResult)
 }
-
-const maxScore = 10
 
 func (g *gameInstance) shouldEndGame() bool {
 	for _, player := range g.players {
 		// Check if any player has reached the max score
 		if player.score >= maxScore {
 			serverLogger.Printf("Game ending: Player %s reached the maximum score of %d", player.ID, maxScore)
+			g.winner = &player.ID
 			return true
 		}
 	}

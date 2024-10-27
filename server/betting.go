@@ -4,27 +4,26 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/companyzero/bisonrelay/clientrpc/types"
-	"github.com/decred/slog"
+	"github.com/companyzero/bisonrelay/zkidentity"
 )
 
-func (s *Server) SendTipProgressLoop(ctx context.Context, payment types.PaymentsServiceClient, log slog.Logger) error {
+func (s *Server) SendTipProgressLoop(ctx context.Context) error {
 	var ackRes types.AckResponse
 	var ackReq types.AckRequest
 	for {
 		// Keep requesting a new stream if the connection breaks. Also
 		// request any messages received since the last one we acked.
 		streamReq := types.TipProgressRequest{UnackedFrom: ackReq.SequenceId}
-		stream, err := payment.TipProgress(ctx, &streamReq)
+		stream, err := s.paymentClient.TipProgress(ctx, &streamReq)
 		if errors.Is(err, context.Canceled) {
 			// Program is done.
 			return err
 		}
 		if err != nil {
-			log.Warn("Error while obtaining payment stream: %v", err)
+			s.log.Warn("Error while obtaining payment stream: %v", err)
 			time.Sleep(time.Second) // Wait to try again.
 			continue
 		}
@@ -37,37 +36,34 @@ func (s *Server) SendTipProgressLoop(ctx context.Context, payment types.Payments
 				return err
 			}
 			if err != nil {
-				log.Warnf("Error while receiving stream: %v", err)
+				s.log.Warnf("Error while receiving stream: %v", err)
 				break
 			}
-
-			ruid := hex.EncodeToString(tip.Uid)
-			fmt.Printf("tip progress to id: %+v\n\n", ruid)
-			// Ack to client that message is processed.
 			ackReq.SequenceId = tip.SequenceId
-			err = payment.AckTipProgress(ctx, &ackReq, &ackRes)
+			err = s.paymentClient.AckTipProgress(ctx, &ackReq, &ackRes)
 			if err != nil {
-				log.Warnf("Error while ack'ing received pm: %v", err)
+				s.log.Warnf("Error while ack'ing received pm: %v", err)
 				break
 			}
+			s.log.Infof("tip amount: %.8f send to: %s, completed: %t", float64(tip.AmountMatoms)/1e11, hex.EncodeToString(tip.Uid), tip.Completed)
 		}
 
 		time.Sleep(time.Second)
 	}
 }
 
-func (s *Server) ReceiveTipLoop(ctx context.Context, payment types.PaymentsServiceClient, log slog.Logger) error {
+func (s *Server) ReceiveTipLoop(ctx context.Context) error {
 	var ackReq types.AckRequest
-	var ackRes types.AckResponse
+	// var ackRes types.AckResponse
 	for {
 		streamReq := types.TipStreamRequest{UnackedFrom: ackReq.SequenceId}
-		stream, err := payment.TipStream(ctx, &streamReq)
+		stream, err := s.paymentClient.TipStream(ctx, &streamReq)
 		if errors.Is(err, context.Canceled) {
 			// Program is done.
 			return err
 		}
 		if err != nil {
-			log.Warn("Error while obtaining tip stream: %v", err)
+			s.log.Warn("Error while obtaining tip stream: %v", err)
 			time.Sleep(time.Second) // Wait to try again.
 			continue
 		}
@@ -76,28 +72,29 @@ func (s *Server) ReceiveTipLoop(ctx context.Context, payment types.PaymentsServi
 			var tip types.ReceivedTip
 			err := stream.Recv(&tip)
 			if errors.Is(err, context.Canceled) {
-				// Program is done.
 				return err
 			}
 			if err != nil {
-				log.Warnf("Error while receiving stream: %v", err)
+				s.log.Warnf("Error while receiving stream: %v", err)
 				break
 			}
 
-			log.Debugf("Received tip from '%s' amount %d",
+			s.log.Debugf("Received tip from '%s' amount %d",
 				hex.EncodeToString(tip.Uid), tip.AmountMatoms)
 
-			dcrAmount := float64(tip.AmountMatoms) / 1e11
-
-			fmt.Printf("<- %v %.8f\n", hex.EncodeToString(tip.Uid), dcrAmount)
-			// Ack to client that message is processed.
-			log.Debugf("tip sequenceId: %+v\n", tip.SequenceId)
-			ackReq.SequenceId = tip.SequenceId
-			err = payment.AckTipReceived(ctx, &ackReq, &ackRes)
-			if err != nil {
-				log.Warnf("Error while ack'ing received pm: %v", err)
-				break
+			s.Lock()
+			player := s.gameManager.playerSessions.GetPlayer(zkidentity.ShortID(tip.Uid))
+			if player != nil {
+				player.betAmt += float64(tip.AmountMatoms) / 1e11 // Add the tip amount to existing betAmt
+			} else {
+				// If the player is not connected, append the tip to unprocessed tips
+				if _, exists := s.unprocessedTips[zkidentity.ShortID(tip.Uid)]; !exists {
+					s.unprocessedTips[zkidentity.ShortID(tip.Uid)] = []*types.ReceivedTip{}
+				}
+				s.unprocessedTips[zkidentity.ShortID(tip.Uid)] = append(s.unprocessedTips[zkidentity.ShortID(tip.Uid)], &tip)
 			}
+			s.Unlock()
+
 		}
 
 		time.Sleep(time.Second)

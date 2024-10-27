@@ -9,8 +9,6 @@ require (
 	github.com/companyzero/bisonrelay v0.2.1
 	github.com/davecgh/go-spew v1.1.1
 	github.com/decred/dcrd/dcrutil/v4 v4.0.2
-	github.com/decred/dcrlnd v0.7.4
-	github.com/decred/dcrlnlpd v0.0.0-20240916120255-786dc5d52075
 	github.com/decred/slog v1.2.0
 	github.com/google/uuid v1.6.0
 	github.com/jrick/logrotate v1.0.0
@@ -29,7 +27,6 @@ replace github.com/companyzero/bisonrelay => /home/vctt/projects/bisonrelay-proj
 require (
 	decred.org/cspp/v2 v2.2.0 // indirect
 	decred.org/dcrwallet/v4 v4.1.3 // indirect
-	github.com/NebulousLabs/go-upnp v0.0.0-20181203152547-b32978b8ccbf // indirect
 	github.com/Yawning/aez v0.0.0-20211027044916-e49e68abd344 // indirect
 	github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
@@ -43,7 +40,6 @@ require (
 	github.com/charmbracelet/x/term v0.2.0 // indirect
 	github.com/companyzero/sntrup4591761 v0.0.0-20220309191932-9e0f3af2f07a // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
-	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/dchest/siphash v1.2.3 // indirect
 	github.com/decred/base58 v1.0.5 // indirect
@@ -78,6 +74,8 @@ require (
 	github.com/decred/dcrd/rpcclient/v8 v8.0.1 // indirect
 	github.com/decred/dcrd/txscript/v4 v4.1.1 // indirect
 	github.com/decred/dcrd/wire v1.7.0 // indirect
+	github.com/decred/dcrlnd v0.7.4 // indirect
+	github.com/decred/dcrlnlpd v0.0.0-20240916120255-786dc5d52075 // indirect
 	github.com/decred/dcrtest/dcrdtest v1.0.1-0.20240514160637-ade8c37ad1db // indirect
 	github.com/decred/go-socks v1.1.0 // indirect
 	github.com/decred/lightning-onion/v4 v4.0.1 // indirect
@@ -105,8 +103,6 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/jackc/pgtype v1.14.0 // indirect
 	github.com/jackc/pgx/v4 v4.18.1 // indirect
-	github.com/jackpal/gateway v1.0.10 // indirect
-	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/jessevdk/go-flags v1.6.1 // indirect
 	github.com/jonboulle/clockwork v0.4.0 // indirect
 	github.com/jrick/bitset v1.0.0 // indirect
@@ -141,12 +137,9 @@ require (
 	github.com/stretchr/testify v1.8.4 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20220101234140-673ab2c3ae75 // indirect
-	github.com/tv42/zbase32 v0.0.0-20220222190657-f76a9fc892fa // indirect
 	github.com/vaughan0/go-ini v0.0.0-20130923145212-a98ad7ee00ec // indirect
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
 	github.com/xiang90/probing v0.0.0-20221125231312-a49e3df8f510 // indirect
-	gitlab.com/NebulousLabs/fastrand v0.0.0-20181126182046-603482d69e40 // indirect
-	gitlab.com/NebulousLabs/go-upnp v0.0.0-20211002182029-11da932010b6 // indirect
 	gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec // indirect
 	go.etcd.io/bbolt v1.3.8 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.7 // indirect
@@ -174,7 +167,6 @@ require (
 	golang.org/x/text v0.17.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.22.0 // indirect
-	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/genproto v0.0.0-20240123012728-ef4313101c80 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240123012728-ef4313101c80 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240228224816-df926f6c8641 // indirect

@@ -252,6 +252,42 @@ func receiveLoop(ctx context.Context, chat types.ChatServiceClient, log slog.Log
 	}
 }
 
+func receiveTipLoop(ctx context.Context, payment types.PaymentsServiceClient, log slog.Logger, cctx *clientCtx) error {
+	var ackReq types.AckRequest
+	for {
+		streamReq := types.TipStreamRequest{UnackedFrom: ackReq.SequenceId}
+		stream, err := payment.TipStream(ctx, &streamReq)
+		if errors.Is(err, context.Canceled) {
+			return err
+		}
+		if err != nil {
+			log.Warn("Error while obtaining tip stream: %v", err)
+			time.Sleep(time.Second)
+			continue
+		}
+
+		for {
+			var tip types.ReceivedTip
+			err := stream.Recv(&tip)
+			if errors.Is(err, context.Canceled) {
+				return err
+			}
+			if err != nil {
+				log.Warnf("Error while receiving stream: %v", err)
+				break
+			}
+
+			log.Debugf("Received tip from '%s' amount %d", hex.EncodeToString(tip.Uid), tip.AmountMatoms)
+			dcrAmount := float64(tip.AmountMatoms) / 1e11
+
+			fmt.Printf("<- %v %.8f\n", hex.EncodeToString(tip.Uid), dcrAmount)
+			ackReq.SequenceId = tip.SequenceId
+		}
+
+		time.Sleep(time.Second)
+	}
+}
+
 // escapeNick returns s escaped from chars that don't don't belong in a nick.
 func escapeNick(s string) string {
 	return strings.Map(func(r rune) rune {

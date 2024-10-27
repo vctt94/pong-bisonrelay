@@ -80,6 +80,7 @@ func realMain() error {
 	g.Go(func() error { return c.Run(gctx) })
 
 	chat := types.NewChatServiceClient(c)
+	payment := types.NewPaymentsServiceClient(c)
 	req := &types.PublicIdentityReq{}
 	var publicIdentity types.PublicIdentity
 	err = chat.UserPublicIdentity(ctx, req, &publicIdentity)
@@ -91,14 +92,20 @@ func realMain() error {
 	var zkShortID zkidentity.ShortID
 	copy(zkShortID[:], clientID)
 
-	srv := server.NewServer(&zkShortID, server.ServerConfig{Debug: *debug})
+	srv := server.NewServer(&zkShortID, server.ServerConfig{
+		Debug:         *debug,
+		PaymentClient: payment,
+		ChatClient:    chat,
+		Log:           log,
+	})
 	go func() error {
-		if err := srv.GameManager.Run(ctx); err != nil {
+		if err := srv.Run(ctx); err != nil {
 			return fmt.Errorf("failed to manage games: %v", err)
 		}
 		return nil
 	}()
-
+	g.Go(func() error { return srv.SendTipProgressLoop(gctx) })
+	g.Go(func() error { return srv.ReceiveTipLoop(gctx) })
 	// s := grpc.NewServer(grpc.Creds(creds))
 	s := grpc.NewServer()
 	pong.RegisterPongGameServer(s, srv)

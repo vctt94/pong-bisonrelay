@@ -83,21 +83,26 @@ func (pc *pongClient) StartNotifier() error {
 		ClientId: pc.ID,
 	})
 	if err != nil {
-		return fmt.Errorf("error creating game started stream: %w", err)
+		return fmt.Errorf("error creating notifier stream: %w", err)
 	}
 	pc.notifier = gameStartedStream
 
 	go func() {
 		for {
-			ntfn, err := pc.notifier.Recv()
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			if err != nil {
-				log.Printf("Error receiving game started notification: %v", err)
+			select {
+			case <-ctx.Done():
 				return
+			default:
+				ntfn, err := pc.notifier.Recv()
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				if err != nil {
+					log.Printf("Error receiving notification: %v", err)
+					return
+				}
+				fmt.Printf("ntfn: %+v\n", ntfn)
 			}
-			fmt.Printf("ntfn: %+v\n", ntfn)
 		}
 	}()
 
@@ -105,10 +110,12 @@ func (pc *pongClient) StartNotifier() error {
 }
 
 func (pc *pongClient) SignalReady() error {
-	ctx := attachClientIDToContext(context.Background(), pc.ID)
+	ctx := context.Background()
 
 	// Signal readiness after stream is initialized
-	stream, err := pc.pongClient.StartGameStream(ctx, &pong.StartGameStreamRequest{})
+	stream, err := pc.pongClient.StartGameStream(ctx, &pong.StartGameStreamRequest{
+		ClientId: pc.ID,
+	})
 	if err != nil {
 		return fmt.Errorf("error signaling readiness: %w", err)
 	}
@@ -120,10 +127,12 @@ func (pc *pongClient) SignalReady() error {
 	go func() {
 		for {
 			update, err := pc.stream.Recv()
-			if errors.Is(err, io.EOF) {
-				break
-			}
 			if err != nil {
+				log.Printf("stream receive error: %v", err)
+				if errors.Is(err, io.EOF) {
+					break
+				}
+
 				return
 			}
 			// fmt.Printf("update :%+v\n", update)
@@ -131,7 +140,6 @@ func (pc *pongClient) SignalReady() error {
 		}
 	}()
 
-	log.Println("Stream initialized successfully")
 	return nil
 }
 
@@ -183,6 +191,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.Type {
+		case tea.KeyF2:
+			if m.mode == gameIdle {
+				m.mode = gameMode
+			} else if m.mode == gameMode {
+				m.mode = gameIdle
+			} else {
+				// shouldn't be here
+			}
 		case tea.KeySpace:
 			m.mode = gameMode
 			return m, m.makeClientReady()
@@ -339,15 +355,7 @@ func realMain() error {
 		updatesCh:  make(chan tea.Msg),
 	}
 	fmt.Printf("clientId: %+v\n", clientID)
-	// Perform authentication during initialization
-	err = pc.StartNotifier()
-	if err != nil {
-		return fmt.Errorf("failed to StartNotifier: %w", err)
-	}
-
-	ver := types.VersionResponse{}
-	version.Version(ctx, &types.VersionRequest{}, &ver)
-	fmt.Printf("ver: %+v\n", ver)
+	g.Go(func() error { return pc.StartNotifier() })
 	m := initialModel(pc, &chat, &version)
 	defer m.cancel()
 

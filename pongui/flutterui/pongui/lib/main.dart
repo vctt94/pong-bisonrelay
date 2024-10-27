@@ -36,6 +36,7 @@ class _MyAppState extends State<MyApp> {
   bool gameStarted = false;
   GrpcPongClient? grpcClient;
   String clientId = '';
+  String nick = '';
   Map<String, dynamic> gameState = {};
   late PongGame pongGame;
 
@@ -119,15 +120,30 @@ class _MyAppState extends State<MyApp> {
       });
       grpcClient!.startGameStreamRequest(clientId).listen((response) {
         var data = utf8.decode(response.data);
-        var parsedData = json.decode(data) as Map<String, dynamic>; // Decode the JSON
+        var parsedData =
+            json.decode(data) as Map<String, dynamic>; // Decode the JSON
         setState(() {
           gameState = parsedData;
+          gameStarted = true;
+          errorMessage = '';
         });
         developer.log("Game Stream Started: $response");
       }, onError: (error) {
+        setState(() {
+          errorMessage = "Error: ${error.message}";
+          isReady = false;
+          gameStarted = false;
+        });
         developer.log("Error in game stream: $error");
       });
     }
+  }
+
+  void _retryGameStream() {
+    setState(() {
+      errorMessage = '';
+    });
+    _startGameStream();
   }
 
   @override
@@ -138,66 +154,87 @@ class _MyAppState extends State<MyApp> {
         appBar: AppBar(
           title: Text(
             'Pong Game',
-            style: TextStyle(color: const Color.fromARGB(255, 202, 202, 202)), // Set text color to white
+            style: TextStyle(color: const Color.fromARGB(255, 202, 202, 202)),
           ),
           backgroundColor: const Color.fromARGB(255, 25, 23, 44),
         ),
         body: isLoading
             ? Center(child: CircularProgressIndicator())
-            : errorMessage.isNotEmpty
-                ? Center(child: Text(errorMessage))
-                : Stack(
-                    children: [
-                      // Display server address and client ID at the top left
-                      Positioned(
-                        top: 10,
-                        left: 10,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Connected to Server: $serverAddr',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.black54,
-                              ),
-                            ),
-                            SizedBox(height: 5),
-                            Text(
-                              'Client ID: $clientId',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.black54,
-                              ),
-                            ),
-                          ],
+            : Stack(
+                children: [
+                  Positioned(
+                    top: 10,
+                    left: 10,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Connected to Server: $serverAddr',
+                          style: TextStyle(fontSize: 16, color: Colors.black54),
                         ),
-                      ),
-
-                      // Display Pong Game if ready
-                      Center(
-                        child: isReady
-                            ? gameStarted ?  pongGame.buildWidget(
-                                gameState,
-                                FocusNode()
-                              ) : Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.sports_tennis,
-                                    size: 100,
-                                    color: Colors.blueAccent,
+                        SizedBox(height: 5),
+                        Text(
+                          'Client ID: $clientId',
+                          style: TextStyle(fontSize: 16, color: Colors.black54),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Center(
+                    child: errorMessage.isNotEmpty
+                        ? Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                errorMessage,
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.red,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              SizedBox(height: 20),
+                              ElevatedButton(
+                                onPressed: _retryGameStream,
+                                style: ElevatedButton.styleFrom(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 40, vertical: 20),
+                                  backgroundColor: Colors.blueAccent,
+                                ),
+                                child: Text(
+                                  'Retry',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    color: Colors.white,
                                   ),
-                                  SizedBox(height: 20),
-                                  Text(
-                                    'Waiting for another player...',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      color: Colors.blueAccent,
-                                    ),
-                                  ),
-                                ],
-                              )
+                                ),
+                              ),
+                            ],
+                          )
+                        : isReady
+                            ? gameStarted
+                                ? pongGame.buildWidget(
+                                    gameState,
+                                    FocusNode(),
+                                  )
+                                : Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.sports_tennis,
+                                        size: 100,
+                                        color: Colors.blueAccent,
+                                      ),
+                                      SizedBox(height: 20),
+                                      Text(
+                                        'Waiting for another player...',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          color: Colors.blueAccent,
+                                        ),
+                                      ),
+                                    ],
+                                  )
                             : ElevatedButton(
                                 onPressed: _startGameStream,
                                 style: ElevatedButton.styleFrom(
@@ -213,9 +250,9 @@ class _MyAppState extends State<MyApp> {
                                   ),
                                 ),
                               ),
-                      ),
-                    ],
                   ),
+                ],
+              ),
       ),
     );
   }

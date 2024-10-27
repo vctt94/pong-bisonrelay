@@ -69,6 +69,15 @@ class IDInit {
 }
 
 @JsonSerializable()
+class GetUserNickArgs {
+  @JsonKey(name: 'uid')
+  final String uid;
+
+  GetUserNickArgs(this.uid);
+  Map<String, dynamic> toJson() => _$GetUserNickArgsToJson(this);
+}
+
+@JsonSerializable()
 class LocalInfo {
   final String id;
   final String nick;
@@ -364,14 +373,18 @@ abstract class PluginPlatform {
       await asyncCall(CTCreateLockFile, rootDir);
   Future<void> closeLockFile(String rootDir) async =>
       await asyncCall(CTCloseLockFile, rootDir);
+  Future<String> userNick(String pid) async {
+    return await asyncCall(CTGetUserNick, pid);
+  }
 }
 
 const int CTUnknown = 0x00;
 const int CTHello = 0x01;
 const int CTInitClient = 0x02;
-const int CTInvite = 0x03;
+const int CTGetUserNick = 0x03;
 const int CTCreateLockFile = 0x04;
 const int CTCloseLockFile = 0x05;
 
 const int notificationsStartID = 0x1000;
+const int notificationClientStopped = 0x1001;
 // const int NTPM = 0x1004;

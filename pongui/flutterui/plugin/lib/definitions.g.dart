@@ -45,6 +45,16 @@ Map<String, dynamic> _$IDInitToJson(IDInit instance) => <String, dynamic>{
       'name': instance.name,
     };
 
+GetUserNickArgs _$GetUserNickArgsFromJson(Map<String, dynamic> json) =>
+    GetUserNickArgs(
+      json['uid'] as String,
+    );
+
+Map<String, dynamic> _$GetUserNickArgsToJson(GetUserNickArgs instance) =>
+    <String, dynamic>{
+      'uid': instance.uid,
+    };
+
 LocalInfo _$LocalInfoFromJson(Map<String, dynamic> json) => LocalInfo(
       json['id'] as String,
       json['nick'] as String,

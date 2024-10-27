@@ -132,7 +132,6 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 						return
 					}
 
-					go e.NewRound(ctx, framesch, inputch, roundResult)
 					return
 				} else if errors.Is(e.Err, engine.ErrP2Win) {
 					engineLogger.Println("p2 wins")
@@ -145,7 +144,6 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 						return
 					}
 
-					go e.NewRound(ctx, framesch, inputch, roundResult)
 					return
 				}
 
@@ -193,14 +191,27 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 	go func() {
 		for {
 			select {
-			case key := <-inputch:
-				in := pong.PlayerInput{}
-				err := json.Unmarshal(key, &in)
-				if err != nil {
-					engineLogger.Panicf("err: %v", err)
+			case key, ok := <-inputch:
+				if !ok {
+					// Input channel is closed; exit goroutine
+					engineLogger.Printf("Input channel closed; exiting input reader goroutine")
+					return
+				}
+				if len(key) == 0 {
+					// Empty input received; possibly due to closed channel
+					engineLogger.Printf("Received empty input data; exiting")
 					return
 				}
 
+				in := pong.PlayerInput{}
+				err := json.Unmarshal(key, &in)
+				if err != nil {
+					engineLogger.Printf("Failed to unmarshal input: %v", err)
+					// Decide whether to continue or exit; here we'll continue
+					continue
+				}
+
+				// Process the valid input
 				if in.PlayerNumber == int32(1) {
 					switch k := in.Input; k {
 					case "ArrowUp":
