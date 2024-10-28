@@ -24,19 +24,23 @@ var (
 
 	flagURL = flag.String("url", "wss://127.0.0.1:7676/ws", "URL of the websocket endpoint")
 
-	flagServerCertPath = flag.String("servercert", "/home/pongbot/brclient/rpc.cert", "Path to rpc.cert file")
-	flagClientCertPath = flag.String("clientcert", "/home/pongbot/brclient/rpc-client.cert", "Path to rpc-client.cert file")
-	flagClientKeyPath  = flag.String("clientkey", "/home/pongbot/brclient/rpc-client.key", "Path to rpc-client.key file")
-	debug              = flag.Bool("debug", false, "Enable debug mode")
+	flagServerCertPath  = flag.String("servercert", "/home/pongbot/brclient/rpc.cert", "Path to rpc.cert file")
+	flagClientCertPath  = flag.String("clientcert", "/home/pongbot/brclient/rpc-client.cert", "Path to rpc-client.cert file")
+	flagClientKeyPath   = flag.String("clientkey", "/home/pongbot/brclient/rpc-client.key", "Path to rpc-client.key file")
+	debugStr            = flag.String("debug", "debug", "Enable debug mode")
+	debugGameManagerStr = flag.String("debuggamemanager", "debug", "Enable debug mode for game manager")
 )
 
 func realMain() error {
+	debugLevel := server.GetDebugLevel(*debugStr)
+	debugGameManager := server.GetDebugLevel(*debugGameManagerStr)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	bknd := slog.NewBackend(os.Stderr)
-	log := bknd.Logger("EXMP")
-	log.SetLevel(slog.LevelDebug)
+	log := bknd.Logger("[Bot]")
+	log.SetLevel(debugLevel)
 
 	g, gctx := errgroup.WithContext(ctx)
 	lis, err := net.Listen("tcp", ":50051")
@@ -93,10 +97,10 @@ func realMain() error {
 	copy(zkShortID[:], clientID)
 
 	srv := server.NewServer(&zkShortID, server.ServerConfig{
-		Debug:         *debug,
-		PaymentClient: payment,
-		ChatClient:    chat,
-		Log:           log,
+		DebugGameManagerLevel: debugGameManager,
+		Debug:                 debugLevel,
+		PaymentClient:         payment,
+		ChatClient:            chat,
 	})
 	go func() error {
 		if err := srv.Run(ctx); err != nil {
@@ -110,7 +114,7 @@ func realMain() error {
 	s := grpc.NewServer()
 	pong.RegisterPongGameServer(s, srv)
 
-	fmt.Printf("server listening at %v\n", lis.Addr())
+	log.Infof("server listening at %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {
 		return fmt.Errorf("failed to serve gRPC server: %v", err)
 	}

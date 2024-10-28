@@ -37,32 +37,32 @@ message PlayerInput {
 }
 
 message GameUpdate {
-  int32 gameWidth = 13;
-  int32 gameHeight = 14;
-  int32 p1Width = 15;
-  int32 p1Height = 16;
-  int32 p2Width = 17;
-  int32 p2Height = 18;
-  int32 ballWidth = 19;
-  int32 ballHeight = 20;
+  double gameWidth = 13;
+  double gameHeight = 14;
+  double p1Width = 15;
+  double p1Height = 16;
+  double p2Width = 17;
+  double p2Height = 18;
+  double ballWidth = 19;
+  double ballHeight = 20;
 
   int32 p1Score = 21;
   int32 p2Score = 22;
 
-  int32 ballX = 1;
-  int32 ballY = 2;
-  int32 p1X = 3;
-  int32 p1Y = 4;
-  int32 p2X = 5;
-  int32 p2Y = 6;
+  double ballX = 1;
+  double ballY = 2;
+  double p1X = 3;
+  double p1Y = 4;
+  double p2X = 5;
+  double p2Y = 6;
 
-  int32 p1YVelocity = 7;
-  int32 p2YVelocity = 8;
-  int32 ballXVelocity = 9;
-  int32 ballYVelocity = 10;
+  double p1YVelocity = 7;
+  double p2YVelocity = 8;
+  double ballXVelocity = 9;
+  double ballYVelocity = 10;
 
-  float fps = 11;
-  float tps = 12;
+  double fps = 11;
+  double tps = 12;
 
   // Optional: if you want to send error messages or debug information
   string error = 23;

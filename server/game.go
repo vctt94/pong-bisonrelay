@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/companyzero/bisonrelay/zkidentity"
+	"github.com/decred/slog"
 	"github.com/ndabAP/ping-pong/engine"
 	canvas "github.com/vctt94/pong-bisonrelay/pong"
 )
@@ -26,6 +27,8 @@ type gameInstance struct {
 	winner      *zkidentity.ShortID
 	// betAmt sum of total bets
 	betAmt float64
+
+	log slog.Logger
 }
 
 type gameManager struct {
@@ -34,7 +37,9 @@ type gameManager struct {
 	games          map[string]*gameInstance
 	waitingRoom    *WaitingRoom
 	playerSessions *PlayerSessions
-	debug          bool
+
+	debug slog.Level
+	log   slog.Logger
 }
 
 func (s *gameManager) cleanupGameInstance(instance *gameInstance) {
@@ -49,7 +54,7 @@ func (s *gameManager) cleanupGameInstance(instance *gameInstance) {
 	for gameID, game := range s.games {
 		if game == instance {
 			delete(s.games, gameID)
-			serverLogger.Printf("[SERVER] Game %s cleaned up", gameID)
+			s.log.Infof("Game %s cleaned up", gameID)
 			break
 		}
 	}
@@ -85,7 +90,7 @@ func (s *gameManager) startNewGame(ctx context.Context, players []*Player, id st
 		80, 40,
 		engine.NewPlayer(1, 5),
 		engine.NewPlayer(1, 5),
-		engine.NewBall(3, 3),
+		engine.NewBall(1, 1),
 	)
 
 	players[0].playerNumber = 1
@@ -111,6 +116,7 @@ func (s *gameManager) startNewGame(ctx context.Context, players []*Player, id st
 		cancel:      cancel,
 		players:     players,
 		betAmt:      betAmt,
+		log:         s.log,
 	}
 
 	return instance
@@ -121,7 +127,7 @@ func (g *gameInstance) Run() {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				serverLogger.Printf("Recovered from panic in NewRound: %v", r)
+				g.log.Warnf("Recovered from panic in NewRound: %v", r)
 			}
 		}()
 
@@ -173,7 +179,7 @@ func (g *gameInstance) shouldEndGame() bool {
 	for _, player := range g.players {
 		// Check if any player has reached the max score
 		if player.score >= maxScore {
-			serverLogger.Printf("Game ending: Player %s reached the maximum score of %d", player.ID, maxScore)
+			g.log.Debugf("Game ending: Player %s reached the maximum score of %d", player.ID, maxScore)
 			g.winner = &player.ID
 			return true
 		}
@@ -181,7 +187,7 @@ func (g *gameInstance) shouldEndGame() bool {
 
 	// Add other conditions as needed, e.g., time limit or disconnection
 	if g.isTimeout() {
-		serverLogger.Printf("Game ending: Timeout reached")
+		g.log.Debug("Game ending: Timeout reached")
 		return true
 	}
 

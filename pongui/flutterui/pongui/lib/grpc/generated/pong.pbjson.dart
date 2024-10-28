@@ -85,28 +85,28 @@ final $typed_data.Uint8List playerInputDescriptor = $convert.base64Decode(
 const GameUpdate$json = {
   '1': 'GameUpdate',
   '2': [
-    {'1': 'gameWidth', '3': 13, '4': 1, '5': 5, '10': 'gameWidth'},
-    {'1': 'gameHeight', '3': 14, '4': 1, '5': 5, '10': 'gameHeight'},
-    {'1': 'p1Width', '3': 15, '4': 1, '5': 5, '10': 'p1Width'},
-    {'1': 'p1Height', '3': 16, '4': 1, '5': 5, '10': 'p1Height'},
-    {'1': 'p2Width', '3': 17, '4': 1, '5': 5, '10': 'p2Width'},
-    {'1': 'p2Height', '3': 18, '4': 1, '5': 5, '10': 'p2Height'},
-    {'1': 'ballWidth', '3': 19, '4': 1, '5': 5, '10': 'ballWidth'},
-    {'1': 'ballHeight', '3': 20, '4': 1, '5': 5, '10': 'ballHeight'},
+    {'1': 'gameWidth', '3': 13, '4': 1, '5': 1, '10': 'gameWidth'},
+    {'1': 'gameHeight', '3': 14, '4': 1, '5': 1, '10': 'gameHeight'},
+    {'1': 'p1Width', '3': 15, '4': 1, '5': 1, '10': 'p1Width'},
+    {'1': 'p1Height', '3': 16, '4': 1, '5': 1, '10': 'p1Height'},
+    {'1': 'p2Width', '3': 17, '4': 1, '5': 1, '10': 'p2Width'},
+    {'1': 'p2Height', '3': 18, '4': 1, '5': 1, '10': 'p2Height'},
+    {'1': 'ballWidth', '3': 19, '4': 1, '5': 1, '10': 'ballWidth'},
+    {'1': 'ballHeight', '3': 20, '4': 1, '5': 1, '10': 'ballHeight'},
     {'1': 'p1Score', '3': 21, '4': 1, '5': 5, '10': 'p1Score'},
     {'1': 'p2Score', '3': 22, '4': 1, '5': 5, '10': 'p2Score'},
-    {'1': 'ballX', '3': 1, '4': 1, '5': 5, '10': 'ballX'},
-    {'1': 'ballY', '3': 2, '4': 1, '5': 5, '10': 'ballY'},
-    {'1': 'p1X', '3': 3, '4': 1, '5': 5, '10': 'p1X'},
-    {'1': 'p1Y', '3': 4, '4': 1, '5': 5, '10': 'p1Y'},
-    {'1': 'p2X', '3': 5, '4': 1, '5': 5, '10': 'p2X'},
-    {'1': 'p2Y', '3': 6, '4': 1, '5': 5, '10': 'p2Y'},
-    {'1': 'p1YVelocity', '3': 7, '4': 1, '5': 5, '10': 'p1YVelocity'},
-    {'1': 'p2YVelocity', '3': 8, '4': 1, '5': 5, '10': 'p2YVelocity'},
-    {'1': 'ballXVelocity', '3': 9, '4': 1, '5': 5, '10': 'ballXVelocity'},
-    {'1': 'ballYVelocity', '3': 10, '4': 1, '5': 5, '10': 'ballYVelocity'},
-    {'1': 'fps', '3': 11, '4': 1, '5': 2, '10': 'fps'},
-    {'1': 'tps', '3': 12, '4': 1, '5': 2, '10': 'tps'},
+    {'1': 'ballX', '3': 1, '4': 1, '5': 1, '10': 'ballX'},
+    {'1': 'ballY', '3': 2, '4': 1, '5': 1, '10': 'ballY'},
+    {'1': 'p1X', '3': 3, '4': 1, '5': 1, '10': 'p1X'},
+    {'1': 'p1Y', '3': 4, '4': 1, '5': 1, '10': 'p1Y'},
+    {'1': 'p2X', '3': 5, '4': 1, '5': 1, '10': 'p2X'},
+    {'1': 'p2Y', '3': 6, '4': 1, '5': 1, '10': 'p2Y'},
+    {'1': 'p1YVelocity', '3': 7, '4': 1, '5': 1, '10': 'p1YVelocity'},
+    {'1': 'p2YVelocity', '3': 8, '4': 1, '5': 1, '10': 'p2YVelocity'},
+    {'1': 'ballXVelocity', '3': 9, '4': 1, '5': 1, '10': 'ballXVelocity'},
+    {'1': 'ballYVelocity', '3': 10, '4': 1, '5': 1, '10': 'ballYVelocity'},
+    {'1': 'fps', '3': 11, '4': 1, '5': 1, '10': 'fps'},
+    {'1': 'tps', '3': 12, '4': 1, '5': 1, '10': 'tps'},
     {'1': 'error', '3': 23, '4': 1, '5': 9, '10': 'error'},
     {'1': 'debug', '3': 24, '4': 1, '5': 8, '10': 'debug'},
   ],
@@ -114,16 +114,16 @@ const GameUpdate$json = {
 
 /// Descriptor for `GameUpdate`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List gameUpdateDescriptor = $convert.base64Decode(
-    'CgpHYW1lVXBkYXRlEhwKCWdhbWVXaWR0aBgNIAEoBVIJZ2FtZVdpZHRoEh4KCmdhbWVIZWlnaH'
-    'QYDiABKAVSCmdhbWVIZWlnaHQSGAoHcDFXaWR0aBgPIAEoBVIHcDFXaWR0aBIaCghwMUhlaWdo'
-    'dBgQIAEoBVIIcDFIZWlnaHQSGAoHcDJXaWR0aBgRIAEoBVIHcDJXaWR0aBIaCghwMkhlaWdodB'
-    'gSIAEoBVIIcDJIZWlnaHQSHAoJYmFsbFdpZHRoGBMgASgFUgliYWxsV2lkdGgSHgoKYmFsbEhl'
-    'aWdodBgUIAEoBVIKYmFsbEhlaWdodBIYCgdwMVNjb3JlGBUgASgFUgdwMVNjb3JlEhgKB3AyU2'
-    'NvcmUYFiABKAVSB3AyU2NvcmUSFAoFYmFsbFgYASABKAVSBWJhbGxYEhQKBWJhbGxZGAIgASgF'
-    'UgViYWxsWRIQCgNwMVgYAyABKAVSA3AxWBIQCgNwMVkYBCABKAVSA3AxWRIQCgNwMlgYBSABKA'
-    'VSA3AyWBIQCgNwMlkYBiABKAVSA3AyWRIgCgtwMVlWZWxvY2l0eRgHIAEoBVILcDFZVmVsb2Np'
-    'dHkSIAoLcDJZVmVsb2NpdHkYCCABKAVSC3AyWVZlbG9jaXR5EiQKDWJhbGxYVmVsb2NpdHkYCS'
-    'ABKAVSDWJhbGxYVmVsb2NpdHkSJAoNYmFsbFlWZWxvY2l0eRgKIAEoBVINYmFsbFlWZWxvY2l0'
-    'eRIQCgNmcHMYCyABKAJSA2ZwcxIQCgN0cHMYDCABKAJSA3RwcxIUCgVlcnJvchgXIAEoCVIFZX'
+    'CgpHYW1lVXBkYXRlEhwKCWdhbWVXaWR0aBgNIAEoAVIJZ2FtZVdpZHRoEh4KCmdhbWVIZWlnaH'
+    'QYDiABKAFSCmdhbWVIZWlnaHQSGAoHcDFXaWR0aBgPIAEoAVIHcDFXaWR0aBIaCghwMUhlaWdo'
+    'dBgQIAEoAVIIcDFIZWlnaHQSGAoHcDJXaWR0aBgRIAEoAVIHcDJXaWR0aBIaCghwMkhlaWdodB'
+    'gSIAEoAVIIcDJIZWlnaHQSHAoJYmFsbFdpZHRoGBMgASgBUgliYWxsV2lkdGgSHgoKYmFsbEhl'
+    'aWdodBgUIAEoAVIKYmFsbEhlaWdodBIYCgdwMVNjb3JlGBUgASgFUgdwMVNjb3JlEhgKB3AyU2'
+    'NvcmUYFiABKAVSB3AyU2NvcmUSFAoFYmFsbFgYASABKAFSBWJhbGxYEhQKBWJhbGxZGAIgASgB'
+    'UgViYWxsWRIQCgNwMVgYAyABKAFSA3AxWBIQCgNwMVkYBCABKAFSA3AxWRIQCgNwMlgYBSABKA'
+    'FSA3AyWBIQCgNwMlkYBiABKAFSA3AyWRIgCgtwMVlWZWxvY2l0eRgHIAEoAVILcDFZVmVsb2Np'
+    'dHkSIAoLcDJZVmVsb2NpdHkYCCABKAFSC3AyWVZlbG9jaXR5EiQKDWJhbGxYVmVsb2NpdHkYCS'
+    'ABKAFSDWJhbGxYVmVsb2NpdHkSJAoNYmFsbFlWZWxvY2l0eRgKIAEoAVINYmFsbFlWZWxvY2l0'
+    'eRIQCgNmcHMYCyABKAFSA2ZwcxIQCgN0cHMYDCABKAFSA3RwcxIUCgVlcnJvchgXIAEoCVIFZX'
     'Jyb3ISFAoFZGVidWcYGCABKAhSBWRlYnVn');
 

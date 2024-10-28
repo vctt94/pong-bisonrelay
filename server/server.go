@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"sync"
 
@@ -22,23 +21,23 @@ const (
 )
 
 var (
-	serverLogger  = log.New(os.Stdout, "[SERVER] ", 0)
 	fps           = flag.Uint("fps", canvas.DEFAULT_FPS, "")
-	flagDCRAmount = flag.Float64("dcramount", 0.001, "Amount of DCR to tip the winner")
+	flagDCRAmount = flag.Float64("dcramount", 0.00000001, "Amount of DCR to tip the winner")
+	flagIsF2p     = flag.Bool("isf2p", false, "allow f2p games")
 )
 
 type ServerConfig struct {
-	Log           slog.Logger
-	Debug         bool
-	PaymentClient types.PaymentsServiceClient
-	ChatClient    types.ChatServiceClient
+	Debug                 slog.Level
+	DebugGameManagerLevel slog.Level
+	PaymentClient         types.PaymentsServiceClient
+	ChatClient            types.ChatServiceClient
 }
 
 type Server struct {
 	pong.UnimplementedPongGameServer
 	sync.Mutex
 
-	debug       bool
+	debug       slog.Level
 	log         slog.Logger
 	clientReady chan zkidentity.ShortID
 
@@ -50,9 +49,16 @@ type Server struct {
 }
 
 func NewServer(id *zkidentity.ShortID, cfg ServerConfig) *Server {
+	bknd := slog.NewBackend(os.Stderr)
+	log := bknd.Logger("[Server]")
+	log.SetLevel(cfg.Debug)
+
+	logGM := bknd.Logger("[GM]")
+	logGM.SetLevel(cfg.DebugGameManagerLevel)
+
 	return &Server{
+		log:   log,
 		debug: cfg.Debug,
-		log:   cfg.Log,
 		gameManager: &gameManager{
 			ID:    id,
 			games: make(map[string]*gameInstance),
@@ -62,7 +68,8 @@ func NewServer(id *zkidentity.ShortID, cfg ServerConfig) *Server {
 			playerSessions: &PlayerSessions{
 				sessions: make(map[zkidentity.ShortID]*Player),
 			},
-			debug: cfg.Debug,
+			debug: cfg.DebugGameManagerLevel,
+			log:   logGM,
 		},
 		paymentClient:   cfg.PaymentClient,
 		chatClient:      cfg.ChatClient,
@@ -85,18 +92,21 @@ func (s *Server) StartGameStream(req *pong.StartGameStreamRequest, stream pong.P
 		return fmt.Errorf("player notifier nil %s", clientID)
 	}
 
-	minAmt := *flagDCRAmount
-	if player.betAmt == 0 || player.betAmt < minAmt {
-		player.notifier.Send(&pong.NtfnStreamResponse{
-			Message: fmt.Sprintf("player needs to place bet higher or equal to: %f", minAmt),
-		})
-		return fmt.Errorf("player needs to place bet higher or equal to: %f DCR", minAmt)
+	if !*flagIsF2p {
+		minAmt := *flagDCRAmount
+		if player.betAmt < minAmt {
+			player.notifier.Send(&pong.NtfnStreamResponse{
+				Message: fmt.Sprintf("player needs to place bet higher or equal to: %.8f", minAmt),
+			})
+			return fmt.Errorf("player needs to place bet higher or equal to: %.8f DCR", minAmt)
+		}
 	}
+
 	player.stream = stream
 
 	s.gameManager.waitingRoom.AddPlayer(player)
 	s.clientReady <- clientID
-	serverLogger.Printf("Player %s added to waiting room. Current ready players: %v", player.ID, s.gameManager.waitingRoom.getWaitingRoom())
+	s.log.Debugf("Player %s added to waiting room. Current ready players: %v", player.ID, s.gameManager.waitingRoom.getWaitingRoom())
 
 	for range ctx.Done() {
 		s.handleDisconnect(clientID)
@@ -129,7 +139,7 @@ func (s *Server) handleDisconnect(clientID zkidentity.ShortID) {
 				Message: "Opponent disconnected. Game over.",
 				Started: false,
 			})
-			serverLogger.Printf("Player %s disconnected and cleaned up", clientID)
+			s.log.Debugf("Player %s disconnected and cleaned up", clientID)
 		}
 		s.gameManager.cleanupGameInstance(game)
 	}
@@ -140,7 +150,7 @@ func (s *Server) StartNtfnStream(req *pong.StartNtfnStreamRequest, stream pong.P
 
 	var clientID zkidentity.ShortID
 	clientID.FromString(req.ClientId)
-	serverLogger.Printf("StartNtfnStream called by client %s", clientID)
+	s.log.Debugf("StartNtfnStream called by client %s", clientID)
 
 	player := s.gameManager.playerSessions.GetOrCreateSession(clientID)
 	player.notifier = stream
@@ -154,7 +164,7 @@ func (s *Server) StartNtfnStream(req *pong.StartNtfnStreamRequest, stream pong.P
 			totalDcrAmount += float64(tip.AmountMatoms) / 1e11 // Convert matoms to DCR
 		}
 		player.betAmt = totalDcrAmount
-		serverLogger.Printf("Pending payments applied to client %s, total amount: %.8f", clientID, totalDcrAmount)
+		s.log.Debugf("Pending payments applied to client %s, total amount: %.8f", clientID, totalDcrAmount)
 	}
 	s.Unlock()
 
@@ -209,9 +219,9 @@ func (s *Server) ackUnprocessedTipFromPlayer(ctx context.Context, clientID zkide
 			ackRes := &types.AckResponse{}
 			err := s.paymentClient.AckTipReceived(ctx, &types.AckRequest{SequenceId: tip.SequenceId}, ackRes)
 			if err != nil {
-				serverLogger.Printf("Failed to acknowledge tip for player %s: %v", clientID, err)
+				s.log.Debugf("Failed to acknowledge tip for player %s: %v", clientID, err)
 			} else {
-				serverLogger.Printf("Acknowledged tip with SequenceId %d for player %s", tip.SequenceId, clientID)
+				s.log.Debugf("Acknowledged tip with SequenceId %d for player %s", tip.SequenceId, clientID)
 			}
 		}
 		// Remove acknowledged tips for this player
@@ -223,9 +233,9 @@ func (s *Server) Run(ctx context.Context) error {
 	for {
 		select {
 		case clientID := <-s.clientReady:
-			serverLogger.Printf("Received client ready signal for client ID: %s", clientID)
+			s.log.Debugf("Received client ready signal for client ID: %s", clientID)
 			if players, ready := s.gameManager.waitingRoom.ReadyPlayers(); ready {
-				serverLogger.Printf("Starting game with players: %v and %v", players[0].ID, players[1].ID)
+				s.log.Debugf("Starting game with players: %v and %v", players[0].ID, players[1].ID)
 				go func(players []*Player) {
 					// Start the game with the ready players
 					game := s.gameManager.startGame(ctx, players)
@@ -236,14 +246,14 @@ func (s *Server) Run(ctx context.Context) error {
 						wg.Add(1)
 						go func(player *Player) {
 							defer wg.Done()
-							serverLogger.Printf("Notifying player %s that game %s started", player.ID, game.id)
+							s.log.Debugf("Notifying player %s that game %s started", player.ID, game.id)
 							if player.notifier == nil {
 								return
 							}
 
 							// Send game start notification
 							if err := player.notifier.Send(&pong.NtfnStreamResponse{Message: "Game has started with ID: " + game.id, Started: true}); err != nil {
-								serverLogger.Printf("Failed to send game start notification to player %s: %v", player.ID, err)
+								s.log.Debugf("Failed to send game start notification to player %s: %v", player.ID, err)
 								return
 							}
 
@@ -280,9 +290,9 @@ func (s *Server) Run(ctx context.Context) error {
 						}
 						resp := &types.TipUserResponse{}
 						if err := s.paymentClient.TipUser(ctx, paymentReq, resp); err != nil {
-							serverLogger.Printf("Failed to send bet to winner %s: %v", winner.String(), err)
+							s.log.Errorf("Failed to send bet to winner %s: %v", winner.String(), err)
 						} else {
-							serverLogger.Printf("Try sending total bet amount %.8f to winner %s", game.betAmt, winner.String())
+							s.log.Debugf("Try sending total bet amount %.8f to winner %s", game.betAmt, winner.String())
 						}
 						// Acknowledge tips from both players
 						for _, player := range players {
@@ -291,7 +301,7 @@ func (s *Server) Run(ctx context.Context) error {
 					}
 				}(players)
 			} else {
-				serverLogger.Printf("Not enough players ready. Current ready players: %v", s.gameManager.waitingRoom.length())
+				s.log.Debugf("Not enough players ready. Current ready players: %v", s.gameManager.waitingRoom.length())
 			}
 		case <-ctx.Done():
 			return nil

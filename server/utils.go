@@ -3,7 +3,9 @@ package server
 import (
 	"context"
 	"fmt"
+	"log"
 
+	"github.com/decred/slog"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/metadata"
 )
@@ -24,4 +26,23 @@ func getClientIDFromContext(ctx context.Context) (string, error) {
 
 func generateGameID() string {
 	return uuid.New().String()
+}
+
+func GetDebugLevel(debugStr string) slog.Level {
+	// Convert debugStr to slog.Level
+	var debugLevel slog.Level
+	switch debugStr {
+	case "info":
+		debugLevel = slog.LevelInfo
+	case "warn":
+		debugLevel = slog.LevelWarn
+	case "error":
+		debugLevel = slog.LevelError
+	case "debug":
+		debugLevel = slog.LevelDebug
+	default:
+		log.Fatalf("Unknown debug level: %s", debugStr)
+	}
+
+	return debugLevel
 }

@@ -336,26 +336,26 @@ class PlayerInput extends $pb.GeneratedMessage {
 
 class GameUpdate extends $pb.GeneratedMessage {
   factory GameUpdate({
-    $core.int? ballX,
-    $core.int? ballY,
-    $core.int? p1X,
-    $core.int? p1Y,
-    $core.int? p2X,
-    $core.int? p2Y,
-    $core.int? p1YVelocity,
-    $core.int? p2YVelocity,
-    $core.int? ballXVelocity,
-    $core.int? ballYVelocity,
+    $core.double? ballX,
+    $core.double? ballY,
+    $core.double? p1X,
+    $core.double? p1Y,
+    $core.double? p2X,
+    $core.double? p2Y,
+    $core.double? p1YVelocity,
+    $core.double? p2YVelocity,
+    $core.double? ballXVelocity,
+    $core.double? ballYVelocity,
     $core.double? fps,
     $core.double? tps,
-    $core.int? gameWidth,
-    $core.int? gameHeight,
-    $core.int? p1Width,
-    $core.int? p1Height,
-    $core.int? p2Width,
-    $core.int? p2Height,
-    $core.int? ballWidth,
-    $core.int? ballHeight,
+    $core.double? gameWidth,
+    $core.double? gameHeight,
+    $core.double? p1Width,
+    $core.double? p1Height,
+    $core.double? p2Width,
+    $core.double? p2Height,
+    $core.double? ballWidth,
+    $core.double? ballHeight,
     $core.int? p1Score,
     $core.int? p2Score,
     $core.String? error,
@@ -441,26 +441,26 @@ class GameUpdate extends $pb.GeneratedMessage {
   factory GameUpdate.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
 
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'GameUpdate', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
-    ..a<$core.int>(1, _omitFieldNames ? '' : 'ballX', $pb.PbFieldType.O3, protoName: 'ballX')
-    ..a<$core.int>(2, _omitFieldNames ? '' : 'ballY', $pb.PbFieldType.O3, protoName: 'ballY')
-    ..a<$core.int>(3, _omitFieldNames ? '' : 'p1X', $pb.PbFieldType.O3, protoName: 'p1X')
-    ..a<$core.int>(4, _omitFieldNames ? '' : 'p1Y', $pb.PbFieldType.O3, protoName: 'p1Y')
-    ..a<$core.int>(5, _omitFieldNames ? '' : 'p2X', $pb.PbFieldType.O3, protoName: 'p2X')
-    ..a<$core.int>(6, _omitFieldNames ? '' : 'p2Y', $pb.PbFieldType.O3, protoName: 'p2Y')
-    ..a<$core.int>(7, _omitFieldNames ? '' : 'p1YVelocity', $pb.PbFieldType.O3, protoName: 'p1YVelocity')
-    ..a<$core.int>(8, _omitFieldNames ? '' : 'p2YVelocity', $pb.PbFieldType.O3, protoName: 'p2YVelocity')
-    ..a<$core.int>(9, _omitFieldNames ? '' : 'ballXVelocity', $pb.PbFieldType.O3, protoName: 'ballXVelocity')
-    ..a<$core.int>(10, _omitFieldNames ? '' : 'ballYVelocity', $pb.PbFieldType.O3, protoName: 'ballYVelocity')
-    ..a<$core.double>(11, _omitFieldNames ? '' : 'fps', $pb.PbFieldType.OF)
-    ..a<$core.double>(12, _omitFieldNames ? '' : 'tps', $pb.PbFieldType.OF)
-    ..a<$core.int>(13, _omitFieldNames ? '' : 'gameWidth', $pb.PbFieldType.O3, protoName: 'gameWidth')
-    ..a<$core.int>(14, _omitFieldNames ? '' : 'gameHeight', $pb.PbFieldType.O3, protoName: 'gameHeight')
-    ..a<$core.int>(15, _omitFieldNames ? '' : 'p1Width', $pb.PbFieldType.O3, protoName: 'p1Width')
-    ..a<$core.int>(16, _omitFieldNames ? '' : 'p1Height', $pb.PbFieldType.O3, protoName: 'p1Height')
-    ..a<$core.int>(17, _omitFieldNames ? '' : 'p2Width', $pb.PbFieldType.O3, protoName: 'p2Width')
-    ..a<$core.int>(18, _omitFieldNames ? '' : 'p2Height', $pb.PbFieldType.O3, protoName: 'p2Height')
-    ..a<$core.int>(19, _omitFieldNames ? '' : 'ballWidth', $pb.PbFieldType.O3, protoName: 'ballWidth')
-    ..a<$core.int>(20, _omitFieldNames ? '' : 'ballHeight', $pb.PbFieldType.O3, protoName: 'ballHeight')
+    ..a<$core.double>(1, _omitFieldNames ? '' : 'ballX', $pb.PbFieldType.OD, protoName: 'ballX')
+    ..a<$core.double>(2, _omitFieldNames ? '' : 'ballY', $pb.PbFieldType.OD, protoName: 'ballY')
+    ..a<$core.double>(3, _omitFieldNames ? '' : 'p1X', $pb.PbFieldType.OD, protoName: 'p1X')
+    ..a<$core.double>(4, _omitFieldNames ? '' : 'p1Y', $pb.PbFieldType.OD, protoName: 'p1Y')
+    ..a<$core.double>(5, _omitFieldNames ? '' : 'p2X', $pb.PbFieldType.OD, protoName: 'p2X')
+    ..a<$core.double>(6, _omitFieldNames ? '' : 'p2Y', $pb.PbFieldType.OD, protoName: 'p2Y')
+    ..a<$core.double>(7, _omitFieldNames ? '' : 'p1YVelocity', $pb.PbFieldType.OD, protoName: 'p1YVelocity')
+    ..a<$core.double>(8, _omitFieldNames ? '' : 'p2YVelocity', $pb.PbFieldType.OD, protoName: 'p2YVelocity')
+    ..a<$core.double>(9, _omitFieldNames ? '' : 'ballXVelocity', $pb.PbFieldType.OD, protoName: 'ballXVelocity')
+    ..a<$core.double>(10, _omitFieldNames ? '' : 'ballYVelocity', $pb.PbFieldType.OD, protoName: 'ballYVelocity')
+    ..a<$core.double>(11, _omitFieldNames ? '' : 'fps', $pb.PbFieldType.OD)
+    ..a<$core.double>(12, _omitFieldNames ? '' : 'tps', $pb.PbFieldType.OD)
+    ..a<$core.double>(13, _omitFieldNames ? '' : 'gameWidth', $pb.PbFieldType.OD, protoName: 'gameWidth')
+    ..a<$core.double>(14, _omitFieldNames ? '' : 'gameHeight', $pb.PbFieldType.OD, protoName: 'gameHeight')
+    ..a<$core.double>(15, _omitFieldNames ? '' : 'p1Width', $pb.PbFieldType.OD, protoName: 'p1Width')
+    ..a<$core.double>(16, _omitFieldNames ? '' : 'p1Height', $pb.PbFieldType.OD, protoName: 'p1Height')
+    ..a<$core.double>(17, _omitFieldNames ? '' : 'p2Width', $pb.PbFieldType.OD, protoName: 'p2Width')
+    ..a<$core.double>(18, _omitFieldNames ? '' : 'p2Height', $pb.PbFieldType.OD, protoName: 'p2Height')
+    ..a<$core.double>(19, _omitFieldNames ? '' : 'ballWidth', $pb.PbFieldType.OD, protoName: 'ballWidth')
+    ..a<$core.double>(20, _omitFieldNames ? '' : 'ballHeight', $pb.PbFieldType.OD, protoName: 'ballHeight')
     ..a<$core.int>(21, _omitFieldNames ? '' : 'p1Score', $pb.PbFieldType.O3, protoName: 'p1Score')
     ..a<$core.int>(22, _omitFieldNames ? '' : 'p2Score', $pb.PbFieldType.O3, protoName: 'p2Score')
     ..aOS(23, _omitFieldNames ? '' : 'error')
@@ -490,90 +490,90 @@ class GameUpdate extends $pb.GeneratedMessage {
   static GameUpdate? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $core.int get ballX => $_getIZ(0);
+  $core.double get ballX => $_getN(0);
   @$pb.TagNumber(1)
-  set ballX($core.int v) { $_setSignedInt32(0, v); }
+  set ballX($core.double v) { $_setDouble(0, v); }
   @$pb.TagNumber(1)
   $core.bool hasBallX() => $_has(0);
   @$pb.TagNumber(1)
   void clearBallX() => clearField(1);
 
   @$pb.TagNumber(2)
-  $core.int get ballY => $_getIZ(1);
+  $core.double get ballY => $_getN(1);
   @$pb.TagNumber(2)
-  set ballY($core.int v) { $_setSignedInt32(1, v); }
+  set ballY($core.double v) { $_setDouble(1, v); }
   @$pb.TagNumber(2)
   $core.bool hasBallY() => $_has(1);
   @$pb.TagNumber(2)
   void clearBallY() => clearField(2);
 
   @$pb.TagNumber(3)
-  $core.int get p1X => $_getIZ(2);
+  $core.double get p1X => $_getN(2);
   @$pb.TagNumber(3)
-  set p1X($core.int v) { $_setSignedInt32(2, v); }
+  set p1X($core.double v) { $_setDouble(2, v); }
   @$pb.TagNumber(3)
   $core.bool hasP1X() => $_has(2);
   @$pb.TagNumber(3)
   void clearP1X() => clearField(3);
 
   @$pb.TagNumber(4)
-  $core.int get p1Y => $_getIZ(3);
+  $core.double get p1Y => $_getN(3);
   @$pb.TagNumber(4)
-  set p1Y($core.int v) { $_setSignedInt32(3, v); }
+  set p1Y($core.double v) { $_setDouble(3, v); }
   @$pb.TagNumber(4)
   $core.bool hasP1Y() => $_has(3);
   @$pb.TagNumber(4)
   void clearP1Y() => clearField(4);
 
   @$pb.TagNumber(5)
-  $core.int get p2X => $_getIZ(4);
+  $core.double get p2X => $_getN(4);
   @$pb.TagNumber(5)
-  set p2X($core.int v) { $_setSignedInt32(4, v); }
+  set p2X($core.double v) { $_setDouble(4, v); }
   @$pb.TagNumber(5)
   $core.bool hasP2X() => $_has(4);
   @$pb.TagNumber(5)
   void clearP2X() => clearField(5);
 
   @$pb.TagNumber(6)
-  $core.int get p2Y => $_getIZ(5);
+  $core.double get p2Y => $_getN(5);
   @$pb.TagNumber(6)
-  set p2Y($core.int v) { $_setSignedInt32(5, v); }
+  set p2Y($core.double v) { $_setDouble(5, v); }
   @$pb.TagNumber(6)
   $core.bool hasP2Y() => $_has(5);
   @$pb.TagNumber(6)
   void clearP2Y() => clearField(6);
 
   @$pb.TagNumber(7)
-  $core.int get p1YVelocity => $_getIZ(6);
+  $core.double get p1YVelocity => $_getN(6);
   @$pb.TagNumber(7)
-  set p1YVelocity($core.int v) { $_setSignedInt32(6, v); }
+  set p1YVelocity($core.double v) { $_setDouble(6, v); }
   @$pb.TagNumber(7)
   $core.bool hasP1YVelocity() => $_has(6);
   @$pb.TagNumber(7)
   void clearP1YVelocity() => clearField(7);
 
   @$pb.TagNumber(8)
-  $core.int get p2YVelocity => $_getIZ(7);
+  $core.double get p2YVelocity => $_getN(7);
   @$pb.TagNumber(8)
-  set p2YVelocity($core.int v) { $_setSignedInt32(7, v); }
+  set p2YVelocity($core.double v) { $_setDouble(7, v); }
   @$pb.TagNumber(8)
   $core.bool hasP2YVelocity() => $_has(7);
   @$pb.TagNumber(8)
   void clearP2YVelocity() => clearField(8);
 
   @$pb.TagNumber(9)
-  $core.int get ballXVelocity => $_getIZ(8);
+  $core.double get ballXVelocity => $_getN(8);
   @$pb.TagNumber(9)
-  set ballXVelocity($core.int v) { $_setSignedInt32(8, v); }
+  set ballXVelocity($core.double v) { $_setDouble(8, v); }
   @$pb.TagNumber(9)
   $core.bool hasBallXVelocity() => $_has(8);
   @$pb.TagNumber(9)
   void clearBallXVelocity() => clearField(9);
 
   @$pb.TagNumber(10)
-  $core.int get ballYVelocity => $_getIZ(9);
+  $core.double get ballYVelocity => $_getN(9);
   @$pb.TagNumber(10)
-  set ballYVelocity($core.int v) { $_setSignedInt32(9, v); }
+  set ballYVelocity($core.double v) { $_setDouble(9, v); }
   @$pb.TagNumber(10)
   $core.bool hasBallYVelocity() => $_has(9);
   @$pb.TagNumber(10)
@@ -582,7 +582,7 @@ class GameUpdate extends $pb.GeneratedMessage {
   @$pb.TagNumber(11)
   $core.double get fps => $_getN(10);
   @$pb.TagNumber(11)
-  set fps($core.double v) { $_setFloat(10, v); }
+  set fps($core.double v) { $_setDouble(10, v); }
   @$pb.TagNumber(11)
   $core.bool hasFps() => $_has(10);
   @$pb.TagNumber(11)
@@ -591,79 +591,79 @@ class GameUpdate extends $pb.GeneratedMessage {
   @$pb.TagNumber(12)
   $core.double get tps => $_getN(11);
   @$pb.TagNumber(12)
-  set tps($core.double v) { $_setFloat(11, v); }
+  set tps($core.double v) { $_setDouble(11, v); }
   @$pb.TagNumber(12)
   $core.bool hasTps() => $_has(11);
   @$pb.TagNumber(12)
   void clearTps() => clearField(12);
 
   @$pb.TagNumber(13)
-  $core.int get gameWidth => $_getIZ(12);
+  $core.double get gameWidth => $_getN(12);
   @$pb.TagNumber(13)
-  set gameWidth($core.int v) { $_setSignedInt32(12, v); }
+  set gameWidth($core.double v) { $_setDouble(12, v); }
   @$pb.TagNumber(13)
   $core.bool hasGameWidth() => $_has(12);
   @$pb.TagNumber(13)
   void clearGameWidth() => clearField(13);
 
   @$pb.TagNumber(14)
-  $core.int get gameHeight => $_getIZ(13);
+  $core.double get gameHeight => $_getN(13);
   @$pb.TagNumber(14)
-  set gameHeight($core.int v) { $_setSignedInt32(13, v); }
+  set gameHeight($core.double v) { $_setDouble(13, v); }
   @$pb.TagNumber(14)
   $core.bool hasGameHeight() => $_has(13);
   @$pb.TagNumber(14)
   void clearGameHeight() => clearField(14);
 
   @$pb.TagNumber(15)
-  $core.int get p1Width => $_getIZ(14);
+  $core.double get p1Width => $_getN(14);
   @$pb.TagNumber(15)
-  set p1Width($core.int v) { $_setSignedInt32(14, v); }
+  set p1Width($core.double v) { $_setDouble(14, v); }
   @$pb.TagNumber(15)
   $core.bool hasP1Width() => $_has(14);
   @$pb.TagNumber(15)
   void clearP1Width() => clearField(15);
 
   @$pb.TagNumber(16)
-  $core.int get p1Height => $_getIZ(15);
+  $core.double get p1Height => $_getN(15);
   @$pb.TagNumber(16)
-  set p1Height($core.int v) { $_setSignedInt32(15, v); }
+  set p1Height($core.double v) { $_setDouble(15, v); }
   @$pb.TagNumber(16)
   $core.bool hasP1Height() => $_has(15);
   @$pb.TagNumber(16)
   void clearP1Height() => clearField(16);
 
   @$pb.TagNumber(17)
-  $core.int get p2Width => $_getIZ(16);
+  $core.double get p2Width => $_getN(16);
   @$pb.TagNumber(17)
-  set p2Width($core.int v) { $_setSignedInt32(16, v); }
+  set p2Width($core.double v) { $_setDouble(16, v); }
   @$pb.TagNumber(17)
   $core.bool hasP2Width() => $_has(16);
   @$pb.TagNumber(17)
   void clearP2Width() => clearField(17);
 
   @$pb.TagNumber(18)
-  $core.int get p2Height => $_getIZ(17);
+  $core.double get p2Height => $_getN(17);
   @$pb.TagNumber(18)
-  set p2Height($core.int v) { $_setSignedInt32(17, v); }
+  set p2Height($core.double v) { $_setDouble(17, v); }
   @$pb.TagNumber(18)
   $core.bool hasP2Height() => $_has(17);
   @$pb.TagNumber(18)
   void clearP2Height() => clearField(18);
 
   @$pb.TagNumber(19)
-  $core.int get ballWidth => $_getIZ(18);
+  $core.double get ballWidth => $_getN(18);
   @$pb.TagNumber(19)
-  set ballWidth($core.int v) { $_setSignedInt32(18, v); }
+  set ballWidth($core.double v) { $_setDouble(18, v); }
   @$pb.TagNumber(19)
   $core.bool hasBallWidth() => $_has(18);
   @$pb.TagNumber(19)
   void clearBallWidth() => clearField(19);
 
   @$pb.TagNumber(20)
-  $core.int get ballHeight => $_getIZ(19);
+  $core.double get ballHeight => $_getN(19);
   @$pb.TagNumber(20)
-  set ballHeight($core.int v) { $_setSignedInt32(19, v); }
+  set ballHeight($core.double v) { $_setDouble(19, v); }
   @$pb.TagNumber(20)
   $core.bool hasBallHeight() => $_has(19);
   @$pb.TagNumber(20)

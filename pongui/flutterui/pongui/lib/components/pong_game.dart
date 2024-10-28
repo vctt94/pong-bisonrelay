@@ -130,8 +130,8 @@ class PongPainter extends CustomPainter {
     // Extract and scale ball properties
     double ballX = (gameState['ballX'] as num?)?.toDouble() ?? gameWidth / 2;
     double ballY = (gameState['ballY'] as num?)?.toDouble() ?? gameHeight / 2;
-    double ballWidth = (gameState['ballWidth'] as num?)?.toDouble() ?? 3.0;
-    double ballHeight = (gameState['ballHeight'] as num?)?.toDouble() ?? 3.0;
+    double ballWidth = (gameState['ballWidth'] as num?)?.toDouble() ?? 1.0;
+    double ballHeight = (gameState['ballHeight'] as num?)?.toDouble() ?? 1.0;
 
     // Scale ball properties
     ballX *= scaleX;

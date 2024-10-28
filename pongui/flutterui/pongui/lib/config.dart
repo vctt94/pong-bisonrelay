@@ -16,7 +16,7 @@ class Config {
   late final String debugLevel;
   late final String rpcUser;
   late final String rpcPass;
-  late final bool wantsLogNtfns;  // Field for log notifications
+  late final bool wantsLogNtfns;
 
   Config();
   
