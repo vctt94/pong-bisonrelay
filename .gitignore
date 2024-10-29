@@ -1,3 +1,2 @@
-server/server
-client/client
+cmd/client/client
 cmd/pongbot/pongbot
