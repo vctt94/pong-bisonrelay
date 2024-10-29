@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:pongui/util.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:golib_plugin/golib_plugin.dart';
 import 'package:golib_plugin/definitions.dart';
+import 'package:window_manager/window_manager.dart';
 
 late final ShutdownModel globalShutdownModel;
 
@@ -13,7 +15,7 @@ void forceQuitApp() {
   if (Platform.isAndroid || Platform.isIOS) {
     SystemNavigator.pop();
   } else {
-    // windowManager.destroy();
+    windowManager.destroy();
   }
 }
 
@@ -54,7 +56,6 @@ class ShutdownModel extends ChangeNotifier {
     _shutdownStarted = true;
 
     try {
-
       // await Golib.stopClient();
     } catch (exception) {
       if (!exception.toString().contains("unknown client handle")) {
@@ -73,20 +74,36 @@ class ShutdownModel extends ChangeNotifier {
       return;
     }
 
-    // // Give a chance for any final updates to the screen before closing app window.
-    // await sleep(const Duration(seconds: 1));
+    // Give a chance for any final updates to the screen before closing app window.
+    await sleep(const Duration(seconds: 1));
 
-    // // Actually close or restart app.
-    // if (Platform.isAndroid || Platform.isIOS) {
-    //   if (_restart) {
-    //     Restart.restartApp();
-    //   } else {
-    //     SystemNavigator.pop();
-    //   }
-    // } else {
-    //   // TODO: support restart.
-    //   windowManager.destroy();
-    // }
+    // Actually close or restart app.
+    if (Platform.isAndroid || Platform.isIOS) {
+      if (_restart) {
+        // Restart.restartApp();
+      } else {
+        SystemNavigator.pop();
+      }
+    } else {
+      // TODO: support restart.
+      windowManager.destroy();
+    }
   }
 
+  // void _handleNotifications() async {
+  //   var stream = Golib.shutdownEvents();
+  //   await for (var event in stream) {
+  //     switch (event.type) {
+
+  //       case NTClientStopped:
+  //         _clientStopped = true;
+  //         if (event.payload != null) {
+  //           _clientStopErr = "${event.payload}";
+  //         }
+  //         notifyListeners();
+
+  //         break;
+  //     }
+  //   }
+  // }
 }

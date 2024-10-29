@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:developer' as developer;
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:golib_plugin/definitions.dart';
@@ -10,24 +11,51 @@ import 'package:pongui/components/pong_game.dart';
 import 'package:pongui/config.dart';
 import 'package:pongui/grpc/grpc_client.dart';
 import 'package:pongui/screens/newconfig.dart';
+import 'package:window_manager/window_manager.dart';
+
+final Random random = Random();
 
 void main(List<String> args) async {
-  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
+        if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      windowManager.ensureInitialized();
+    }
 
-  // Pass args and initialize config
-  runApp(MyApp(args));
+    developer.log("Platform: ${Golib.majorPlatform}/${Golib.minorPlatform}");
+    Golib.platformVersion
+        .then((value) => developer.log("Platform Version: $value"));
+    // Pass args and initialize config
+    Config cfg = await configFromArgs(args);
+    runMainApp(cfg);
+  } catch (exception) {
+    print(exception);
+    developer.log("Error: $exception");
+    if (exception == usageException) {
+      exit(0);
+    } else if (exception == newConfigNeededException) {
+      runNewConfigApp(args);
+      return;
+    } else {
+      // runFatalErrorApp(exception);
+    }
+  }
+}
+
+void runMainApp(Config cfg) {
+  runApp(MyApp(cfg));
 }
 
 class MyApp extends StatefulWidget {
-  final List<String> args;
+  final Config cfg;
 
-  MyApp(this.args);
+  const MyApp(this.cfg);
 
   @override
   _MyAppState createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WindowListener {
   Config? config;
   String serverAddr = '';
   bool isLoading = true;
@@ -43,7 +71,10 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    _initializeApp(widget.args);
+    initClient();
+      windowManager.setPreventClose(true);
+      windowManager.addListener(this);
+      
   }
 
   void _startListeningToStreams(GrpcPongClient grpcClient, String clientId) {
@@ -61,11 +92,10 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
-  Future<void> _initializeApp(List<String> args) async {
+  Future<void> initClient() async {
     try {
       // Load the configuration from the args.
-      final filename = await configFileName(args);
-      final cfg = await configFromArgs(args);
+      var cfg = widget.cfg;
 
       InitClient initArgs = InitClient(
         cfg.serverAddr,
@@ -99,17 +129,7 @@ class _MyAppState extends State<MyApp> {
       });
       _startListeningToStreams(grpcClient!, clientId);
     } catch (exception) {
-      developer.log("Error: $exception");
-      if (exception == usageException) {
-        exit(0);
-      } else if (exception == newConfigNeededException) {
-        runNewConfigApp(widget.args);
-      } else {
-        setState(() {
-          errorMessage = 'Error: $exception';
-          isLoading = false;
-        });
-      }
+      print(exception);
     }
   }
 
@@ -142,21 +162,73 @@ class _MyAppState extends State<MyApp> {
   void _retryGameStream() {
     setState(() {
       errorMessage = '';
+      // Retry logic here
     });
-    _startGameStream();
+        _startGameStream();
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Pong Game App',
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color.fromARGB(255, 25, 23, 44),
+        primaryColor: Colors.blueAccent,
+        textTheme: TextTheme(
+            // bodyText1: TextStyle(fontSize: 18, color: Colors.white),
+            // bodyText2: TextStyle(fontSize: 16, color: Colors.grey[300]),
+            ),
+      ),
       home: Scaffold(
         appBar: AppBar(
-          title: Text(
-            'Pong Game',
-            style: TextStyle(color: const Color.fromARGB(255, 202, 202, 202)),
+          title: Text('Pong Game'),
+          actions: [
+            IconButton(
+              icon: Icon(Icons.settings),
+              onPressed: () {
+                // Open settings screen
+              },
+            ),
+          ],
+        ),
+        drawer: Drawer(
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: <Widget>[
+              DrawerHeader(
+                decoration: BoxDecoration(
+                  color: Colors.blueAccent,
+                ),
+                child: Text(
+                  'Game Menu',
+                  style: TextStyle(color: Colors.white, fontSize: 24),
+                ),
+              ),
+              ListTile(
+                leading: Icon(Icons.home),
+                title: Text('Home'),
+                onTap: () {
+                  Navigator.pop(context);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.leaderboard),
+                title: Text('Leaderboard'),
+                onTap: () {
+                  Navigator.pop(context);
+                  // Navigate to leaderboard
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.settings),
+                title: Text('Settings'),
+                onTap: () {
+                  Navigator.pop(context);
+                  // Navigate to settings
+                },
+              ),
+            ],
           ),
-          backgroundColor: const Color.fromARGB(255, 25, 23, 44),
         ),
         body: isLoading
             ? Center(child: CircularProgressIndicator())
@@ -170,44 +242,27 @@ class _MyAppState extends State<MyApp> {
                       children: [
                         Text(
                           'Connected to Server: $serverAddr',
-                          style: TextStyle(fontSize: 16, color: Colors.black54),
+                          style: TextStyle(fontSize: 16, color: Colors.white70),
                         ),
                         SizedBox(height: 5),
                         Text(
                           'Client ID: $clientId',
-                          style: TextStyle(fontSize: 16, color: Colors.black54),
+                          style: TextStyle(fontSize: 16, color: Colors.white70),
                         ),
                       ],
                     ),
                   ),
                   Center(
                     child: errorMessage.isNotEmpty
-                        ? Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                errorMessage,
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  color: Colors.red,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              SizedBox(height: 20),
-                              ElevatedButton(
-                                onPressed: _retryGameStream,
-                                style: ElevatedButton.styleFrom(
-                                  padding: EdgeInsets.symmetric(
-                                      horizontal: 40, vertical: 20),
-                                  backgroundColor: Colors.blueAccent,
-                                ),
-                                child: Text(
-                                  'Retry',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    color: Colors.white,
-                                  ),
-                                ),
+                        ? AlertDialog(
+                            title: Text('Connection Error'),
+                            content: Text(errorMessage),
+                            actions: [
+                              TextButton(
+                                onPressed: () {
+                                  _retryGameStream();
+                                },
+                                child: Text('Retry'),
                               ),
                             ],
                           )
@@ -218,36 +273,27 @@ class _MyAppState extends State<MyApp> {
                                     FocusNode(),
                                   )
                                 : Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.sports_tennis,
-                                        size: 100,
-                                        color: Colors.blueAccent,
-                                      ),
-                                      SizedBox(height: 20),
-                                      Text(
-                                        'Waiting for another player...',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          color: Colors.blueAccent,
-                                        ),
-                                      ),
-                                    ],
-                                  )
-                            : ElevatedButton(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.sports_tennis,
+                                    size: 100,
+                                    color: Colors.blueAccent,
+                                  ),
+                                  SizedBox(height: 20),
+                                  Text(
+                                    'Waiting for another player...',
+                                    style: TextStyle(fontSize: 18),
+                                  ),
+                                ],
+                              )
+                            : ElevatedButton.icon(
                                 onPressed: _startGameStream,
+                                icon: Icon(Icons.play_arrow),
+                                label: Text('Start Game'),
                                 style: ElevatedButton.styleFrom(
                                   padding: EdgeInsets.symmetric(
                                       horizontal: 40, vertical: 20),
-                                  backgroundColor: Colors.blueAccent,
-                                ),
-                                child: Text(
-                                  'Start Game',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    color: Colors.white,
-                                  ),
                                 ),
                               ),
                   ),

@@ -39,6 +39,7 @@ dependencies:
   grpc: ^4.0.1
   dio: ^5.7.0
   ini: ^2.1.0
+  window_manager: ^0.4.3
 
 dev_dependencies:
   flutter_test:

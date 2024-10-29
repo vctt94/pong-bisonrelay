@@ -21,6 +21,7 @@ const (
 	CTHello                         = 0x01
 	CTInitClient                    = 0x02
 	CTGetUserNick                   = 0x03
+	CTStopClient                    = 0x04
 	CTCreateLockFile                = 0x60
 	CTCloseLockFile                 = 0x61
 	CTGetRunState                   = 0x83
@@ -32,6 +33,8 @@ const (
 
 	NTUINotification = 0x1001
 	NTClientStopped  = 0x1002
+	NTLogLine        = 0x1003
+	NTNOP            = 0x1004
 )
 
 type cmd struct {
@@ -183,8 +186,8 @@ func NextCmdResult() *CmdResult {
 	select {
 	case r := <-cmdResultChan:
 		return r
-		// case <-time.After(time.Second): // Timeout.
-		// 	return &CmdResult{Type: NTNOP, Payload: []byte{}}
+	case <-time.After(time.Second): // Timeout.
+		return &CmdResult{Type: NTNOP, Payload: []byte{}}
 	}
 }
 

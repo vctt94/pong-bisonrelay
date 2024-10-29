@@ -328,6 +328,9 @@ mixin NtfStreams {
     }
 
     switch (cmd) {
+      case NTNOP:
+        // NOP.
+        break;
       // case NTPM:
       //   isError
       //       ? ntfChatEvents.addError(payload)
@@ -387,4 +390,5 @@ const int CTCloseLockFile = 0x05;
 
 const int notificationsStartID = 0x1000;
 const int notificationClientStopped = 0x1001;
+const int NTNOP = 0X1004;
 // const int NTPM = 0x1004;

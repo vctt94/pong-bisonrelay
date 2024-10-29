@@ -3,7 +3,6 @@ package golib
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -23,10 +22,11 @@ import (
 )
 
 const (
-	appName = "bruig"
+	appName = "pongui"
 )
 
 type clientCtx struct {
+	ID      string
 	ctx     context.Context
 	c       *jsonrpc.WSClient
 	chat    types.ChatServiceClient
@@ -84,7 +84,7 @@ func handleInitClient(handle uint32, args initClient) (string, error) {
 		cs = make(map[uint32]*clientCtx)
 	}
 	if cs[handle] != nil {
-		return "", errors.New("client already initialized")
+		return cs[handle].ID, nil
 	}
 
 	bknd := slog.NewBackend(os.Stderr)
@@ -125,6 +125,7 @@ func handleInitClient(handle uint32, args initClient) (string, error) {
 	logBknd.notify = args.WantsLogNtfns
 
 	cctx := &clientCtx{
+		ID:      clientID,
 		ctx:     gctx,
 		c:       c,
 		chat:    chat,
@@ -171,8 +172,10 @@ func handleClientCmd(cc *clientCtx, cmd *cmd) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-
 		return resp.Nick, nil
+	case CTStopClient:
+		cc.cancel()
+		return nil, nil
 	}
 	return nil, nil
 
