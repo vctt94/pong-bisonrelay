@@ -22,6 +22,7 @@ const (
 	CTInitClient                    = 0x02
 	CTGetUserNick                   = 0x03
 	CTStopClient                    = 0x04
+	CTGetWRPlayers                  = 0x05
 	CTCreateLockFile                = 0x60
 	CTCloseLockFile                 = 0x61
 	CTGetRunState                   = 0x83

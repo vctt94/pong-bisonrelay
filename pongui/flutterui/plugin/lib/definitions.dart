@@ -60,9 +60,11 @@ class InitClient {
 
 @JsonSerializable()
 class IDInit {
+  @JsonKey(name: 'id')
+  final String uid;
+  @JsonKey(name: 'nick')
   final String nick;
-  final String name;
-  IDInit(this.nick, this.name);
+  IDInit(this.uid, this.nick);
   factory IDInit.fromJson(Map<String, dynamic> json) => _$IDInitFromJson(json);
 
   Map<String, dynamic> toJson() => _$IDInitToJson(this);
@@ -75,6 +77,21 @@ class GetUserNickArgs {
 
   GetUserNickArgs(this.uid);
   Map<String, dynamic> toJson() => _$GetUserNickArgsToJson(this);
+}
+
+@JsonSerializable()
+class Player {
+  @JsonKey(name: 'uid')
+  final String uid;
+  @JsonKey(name: 'nick')
+  final String? nick;
+  @JsonKey(name: 'bet_amt')
+  final double betAmount;
+
+  const Player(this.uid, this.nick, this.betAmount);
+
+  factory Player.fromJson(Map<String, dynamic> json) => _$PlayerFromJson(json);
+  Map<String, dynamic> toJson() => _$PlayerToJson(this);
 }
 
 @JsonSerializable()
@@ -369,8 +386,9 @@ abstract class PluginPlatform {
     return r as String;
   }
 
-  Future<String> initClient(InitClient args) async {
-    return await asyncCall(CTInitClient, args);
+  Future<LocalInfo> initClient(InitClient args) async {
+    var res = await asyncCall(CTInitClient, args);
+    return LocalInfo.fromJson(res as Map<String, dynamic>);
   }
   Future<void> createLockFile(String rootDir) async =>
       await asyncCall(CTCreateLockFile, rootDir);
@@ -379,12 +397,21 @@ abstract class PluginPlatform {
   Future<String> userNick(String pid) async {
     return await asyncCall(CTGetUserNick, pid);
   }
+
+  Future<List<Player>> getWRPlayers() async {
+    var res = await asyncCall(CTGetWRPlayers, "");
+    if (res == null) {
+      return [];
+    }
+    return (res as List).map<Player>((v) => Player.fromJson(v)).toList();
+  }
 }
 
 const int CTUnknown = 0x00;
 const int CTHello = 0x01;
 const int CTInitClient = 0x02;
 const int CTGetUserNick = 0x03;
+const int CTGetWRPlayers = 0x05;
 const int CTCreateLockFile = 0x04;
 const int CTCloseLockFile = 0x05;
 

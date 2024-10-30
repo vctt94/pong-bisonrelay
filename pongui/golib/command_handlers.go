@@ -2,7 +2,6 @@ package golib
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
@@ -17,7 +16,9 @@ import (
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/lockfile"
 	"github.com/companyzero/bisonrelay/rates"
+	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/decred/slog"
+	"github.com/vctt94/pong-bisonrelay/client"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -26,9 +27,9 @@ const (
 )
 
 type clientCtx struct {
-	ID      string
+	ID      *localInfo
+	c       *client.PongClient
 	ctx     context.Context
-	c       *jsonrpc.WSClient
 	chat    types.ChatServiceClient
 	payment types.PaymentsServiceClient
 	cancel  func()
@@ -37,7 +38,6 @@ type clientCtx struct {
 
 	log          slog.Logger
 	logBknd      *logBackend
-	initIDChan   chan iDInit
 	certConfChan chan bool
 
 	httpClient *http.Client
@@ -77,7 +77,7 @@ func isClientRunning(handle uint32) bool {
 	return res
 }
 
-func handleInitClient(handle uint32, args initClient) (string, error) {
+func handleInitClient(handle uint32, args initClient) (*localInfo, error) {
 	cmtx.Lock()
 	defer cmtx.Unlock()
 	if cs == nil {
@@ -98,7 +98,7 @@ func handleInitClient(handle uint32, args initClient) (string, error) {
 		jsonrpc.WithClientBasicAuth(args.RPCUser, args.RPCPass),
 	)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	g, gctx := errgroup.WithContext(ctx)
@@ -113,23 +113,34 @@ func handleInitClient(handle uint32, args initClient) (string, error) {
 	err = chat.UserPublicIdentity(gctx, &types.PublicIdentityReq{}, &publicIdentity)
 	if err != nil {
 		cancel()
-		return "", fmt.Errorf("failed to get user public identity: %v", err)
+		return nil, fmt.Errorf("failed to get user public identity: %v", err)
 	}
-	clientID := hex.EncodeToString(publicIdentity.Identity[:])
+	var id zkidentity.ShortID
+	id.FromBytes(publicIdentity.Identity[:])
+	localInfo := &localInfo{
+		ID:   id,
+		Nick: publicIdentity.Nick,
+	}
 	// Initialize logging.
 	logBknd, err := newLogBackend(args.LogFile, args.DebugLevel)
 	if err != nil {
 		cancel()
-		return "", err
+		return nil, err
 	}
 	logBknd.notify = args.WantsLogNtfns
+	pc, err := client.NewPongClient(localInfo.ID.String(), &client.PongClientCfg{
+		ServerAddr: args.ServerAddr,
+		ChatClient: chat,
+	})
+	if err != nil {
+		cancel()
+		return nil, err
+	}
 
 	cctx := &clientCtx{
-		ID:      clientID,
+		ID:      localInfo,
 		ctx:     gctx,
-		c:       c,
-		chat:    chat,
-		payment: payment,
+		c:       pc,
 		cancel:  cancel,
 		log:     log,
 		logBknd: logBknd,
@@ -156,7 +167,7 @@ func handleInitClient(handle uint32, args initClient) (string, error) {
 		}
 	}()
 
-	return clientID, nil
+	return localInfo, nil
 }
 
 func handleClientCmd(cc *clientCtx, cmd *cmd) (interface{}, error) {
@@ -173,6 +184,20 @@ func handleClientCmd(cc *clientCtx, cmd *cmd) (interface{}, error) {
 			return nil, err
 		}
 		return resp.Nick, nil
+	case CTGetWRPlayers:
+		wrp, err := cc.c.GetWRPlayers()
+		if err != nil {
+			return nil, err
+		}
+		res := make([]*player, len(wrp))
+		for i, p := range wrp {
+			res[i], err = playerFromServer(p)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return res, nil
+
 	case CTStopClient:
 		cc.cancel()
 		return nil, nil

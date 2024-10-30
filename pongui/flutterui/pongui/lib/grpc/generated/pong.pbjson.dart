@@ -13,6 +13,43 @@ import 'dart:convert' as $convert;
 import 'dart:core' as $core;
 import 'dart:typed_data' as $typed_data;
 
+@$core.Deprecated('Use waitingRoomRequestDescriptor instead')
+const WaitingRoomRequest$json = {
+  '1': 'WaitingRoomRequest',
+};
+
+/// Descriptor for `WaitingRoomRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List waitingRoomRequestDescriptor = $convert.base64Decode(
+    'ChJXYWl0aW5nUm9vbVJlcXVlc3Q=');
+
+@$core.Deprecated('Use playerDescriptor instead')
+const Player$json = {
+  '1': 'Player',
+  '2': [
+    {'1': 'player_id', '3': 1, '4': 1, '5': 9, '10': 'playerId'},
+    {'1': 'nick', '3': 2, '4': 1, '5': 9, '10': 'nick'},
+    {'1': 'betAmount', '3': 3, '4': 1, '5': 1, '10': 'betAmount'},
+  ],
+};
+
+/// Descriptor for `Player`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List playerDescriptor = $convert.base64Decode(
+    'CgZQbGF5ZXISGwoJcGxheWVyX2lkGAEgASgJUghwbGF5ZXJJZBISCgRuaWNrGAIgASgJUgRuaW'
+    'NrEhwKCWJldEFtb3VudBgDIAEoAVIJYmV0QW1vdW50');
+
+@$core.Deprecated('Use waitingRoomResponseDescriptor instead')
+const WaitingRoomResponse$json = {
+  '1': 'WaitingRoomResponse',
+  '2': [
+    {'1': 'players', '3': 1, '4': 3, '5': 11, '6': '.pong.Player', '10': 'players'},
+  ],
+};
+
+/// Descriptor for `WaitingRoomResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List waitingRoomResponseDescriptor = $convert.base64Decode(
+    'ChNXYWl0aW5nUm9vbVJlc3BvbnNlEiYKB3BsYXllcnMYASADKAsyDC5wb25nLlBsYXllclIHcG'
+    'xheWVycw==');
+
 @$core.Deprecated('Use startNtfnStreamRequestDescriptor instead')
 const StartNtfnStreamRequest$json = {
   '1': 'StartNtfnStreamRequest',

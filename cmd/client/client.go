@@ -4,15 +4,14 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"strings"
 	"sync"
 
+	"github.com/vctt94/pong-bisonrelay/client"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 	"golang.org/x/sync/errgroup"
 
@@ -22,7 +21,6 @@ import (
 	"github.com/companyzero/bisonrelay/zkidentity"
 
 	"github.com/decred/slog"
-	"google.golang.org/grpc"
 )
 
 type ID = zkidentity.ShortID
@@ -45,24 +43,6 @@ var (
 	rpcPass            = flag.String("rpcpass", "rpcpass", "RPC password for basic authentication")
 )
 
-type PongClientCfg struct {
-	ServerAddr string      // Address of the Pong server
-	Log        slog.Logger // Application's logger
-}
-
-type pongClient struct {
-	ID           string
-	playerNumber int32
-	cfg          *PongClientCfg
-	conn         *grpc.ClientConn
-	pongClient   pong.PongGameClient
-	stream       pong.PongGame_StartGameStreamClient
-	notifier     pong.PongGame_StartNtfnStreamClient
-	updatesCh    chan tea.Msg
-}
-
-type GameUpdateMsg *pong.GameUpdateBytes
-
 type model struct {
 	mode           appMode
 	gameStateMutex sync.Mutex
@@ -70,108 +50,12 @@ type model struct {
 	err            error
 	ctx            context.Context
 	cancel         context.CancelFunc
-	pc             *pongClient
-	chatClient     *types.ChatServiceClient
-	versionClient  *types.VersionServiceClient
-}
-
-func (pc *pongClient) StartNotifier() error {
-	ctx := attachClientIDToContext(context.Background(), pc.ID)
-
-	// Creates game start stream so we can notify when the game starts
-	gameStartedStream, err := pc.pongClient.StartNtfnStream(ctx, &pong.StartNtfnStreamRequest{
-		ClientId: pc.ID,
-	})
-	if err != nil {
-		return fmt.Errorf("error creating notifier stream: %w", err)
-	}
-	pc.notifier = gameStartedStream
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				ntfn, err := pc.notifier.Recv()
-				if errors.Is(err, io.EOF) {
-					break
-				}
-				if err != nil {
-					log.Printf("Error receiving notification: %v", err)
-					return
-				}
-				fmt.Printf("ntfn: %+v\n", ntfn)
-			}
-		}
-	}()
-
-	return nil
-}
-
-func (pc *pongClient) SignalReady() error {
-	ctx := context.Background()
-
-	// Signal readiness after stream is initialized
-	stream, err := pc.pongClient.StartGameStream(ctx, &pong.StartGameStreamRequest{
-		ClientId: pc.ID,
-	})
-	if err != nil {
-		return fmt.Errorf("error signaling readiness: %w", err)
-	}
-
-	// Set the stream before starting the goroutine
-	pc.stream = stream
-
-	// Use a separate goroutine to handle the stream
-	go func() {
-		for {
-			update, err := pc.stream.Recv()
-			if err != nil {
-				log.Printf("stream receive error: %v", err)
-				if errors.Is(err, io.EOF) {
-					break
-				}
-
-				return
-			}
-			// fmt.Printf("update :%+v\n", update)
-			pc.updatesCh <- GameUpdateMsg(update)
-		}
-	}()
-
-	return nil
-}
-
-func (pc *pongClient) SendInput(input string) error {
-	ctx := attachClientIDToContext(context.Background(), pc.ID)
-
-	_, err := pc.pongClient.SendInput(ctx, &pong.PlayerInput{
-		Input:        input,
-		PlayerId:     pc.ID,
-		PlayerNumber: pc.playerNumber,
-	})
-	if err != nil {
-		return fmt.Errorf("error sending input: %w", err)
-	}
-	return nil
-}
-
-func initialModel(pc *pongClient, chatClient *types.ChatServiceClient, versionClient *types.VersionServiceClient) *model {
-	ctx, cancel := context.WithCancel(context.Background())
-	return &model{
-		mode:          gameIdle,
-		ctx:           ctx,
-		cancel:        cancel,
-		pc:            pc,
-		chatClient:    chatClient,
-		versionClient: versionClient,
-	}
+	pc             *client.PongClient
 }
 
 func (m *model) listenForUpdates() tea.Cmd {
 	return func() tea.Msg {
-		for msg := range m.pc.updatesCh {
+		for msg := range m.pc.UpdatesCh {
 			return msg
 		}
 		return nil
@@ -180,7 +64,7 @@ func (m *model) listenForUpdates() tea.Cmd {
 
 func (m *model) Init() tea.Cmd {
 	return tea.Batch(m.listenForUpdates(), func() tea.Msg {
-		for msg := range m.pc.updatesCh {
+		for msg := range m.pc.UpdatesCh {
 			return msg
 		}
 		return nil
@@ -212,7 +96,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
-	case GameUpdateMsg:
+	case *pong.GameUpdateBytes:
 		m.gameStateMutex.Lock()
 		var gameUpdate pong.GameUpdate
 		if err := json.Unmarshal(msg.Data, &gameUpdate); err != nil {
@@ -328,7 +212,6 @@ func realMain() error {
 
 	var zkShortID zkidentity.ShortID
 	chat := types.NewChatServiceClient(c)
-	version := types.NewVersionServiceClient(c)
 	req := &types.PublicIdentityReq{}
 	var publicIdentity types.PublicIdentity
 	err = chat.UserPublicIdentity(ctx, req, &publicIdentity)
@@ -339,24 +222,19 @@ func realMain() error {
 	clientID := hex.EncodeToString(publicIdentity.Identity[:])
 	copy(zkShortID[:], clientID)
 
-	cfg := &PongClientCfg{
+	pc, err := client.NewPongClient(clientID, &client.PongClientCfg{
 		ServerAddr: *serverAddr,
-	}
-	pongConn, err := grpc.Dial(cfg.ServerAddr, grpc.WithInsecure())
+		ChatClient: chat,
+	})
 	if err != nil {
 		return err
 	}
-
-	pc := &pongClient{
-		ID:         clientID,
-		cfg:        cfg,
-		conn:       pongConn,
-		pongClient: pong.NewPongGameClient(pongConn),
-		updatesCh:  make(chan tea.Msg),
-	}
-	fmt.Printf("clientId: %+v\n", clientID)
 	g.Go(func() error { return pc.StartNotifier() })
-	m := initialModel(pc, &chat, &version)
+	m := &model{
+		ctx:    ctx,
+		cancel: cancel,
+		pc:     pc,
+	}
 	defer m.cancel()
 
 	p := tea.NewProgram(m)

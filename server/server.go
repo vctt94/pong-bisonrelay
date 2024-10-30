@@ -23,7 +23,7 @@ const (
 var (
 	fps           = flag.Uint("fps", canvas.DEFAULT_FPS, "")
 	flagDCRAmount = flag.Float64("dcramount", 0.00000001, "Amount of DCR to tip the winner")
-	flagIsF2p     = flag.Bool("isf2p", false, "allow f2p games")
+	flagIsF2p     = flag.Bool("isf2p", true, "allow f2p games")
 )
 
 type ServerConfig struct {
@@ -94,7 +94,7 @@ func (s *Server) StartGameStream(req *pong.StartGameStreamRequest, stream pong.P
 
 	if !*flagIsF2p {
 		minAmt := *flagDCRAmount
-		if player.betAmt < minAmt {
+		if player.BetAmt < minAmt {
 			player.notifier.Send(&pong.NtfnStreamResponse{
 				Message: fmt.Sprintf("player needs to place bet higher or equal to: %.8f", minAmt),
 			})
@@ -120,6 +120,11 @@ func (s *Server) handleDisconnect(clientID zkidentity.ShortID) {
 	playerSession := s.gameManager.playerSessions.GetPlayer(clientID)
 	if playerSession != nil {
 		s.gameManager.playerSessions.RemovePlayer(clientID)
+	}
+	playerwr := s.gameManager.waitingRoom.GetPlayer(clientID)
+	if playerwr != nil {
+		// XXX return tip
+		s.gameManager.waitingRoom.RemovePlayer(clientID)
 	}
 
 	game := s.gameManager.getPlayerGame(clientID)
@@ -163,7 +168,7 @@ func (s *Server) StartNtfnStream(req *pong.StartNtfnStreamRequest, stream pong.P
 		for _, tip := range tips {
 			totalDcrAmount += float64(tip.AmountMatoms) / 1e11 // Convert matoms to DCR
 		}
-		player.betAmt = totalDcrAmount
+		player.BetAmt = totalDcrAmount
 		s.log.Debugf("Pending payments applied to client %s, total amount: %.8f", clientID, totalDcrAmount)
 	}
 	s.Unlock()
@@ -293,10 +298,10 @@ func (s *Server) Run(ctx context.Context) error {
 							s.log.Errorf("Failed to send bet to winner %s: %v", winner.String(), err)
 						} else {
 							s.log.Debugf("Try sending total bet amount %.8f to winner %s", game.betAmt, winner.String())
-						}
-						// Acknowledge tips from both players
-						for _, player := range players {
-							s.ackUnprocessedTipFromPlayer(ctx, player.ID)
+							// Acknowledge tips from both players
+							for _, player := range players {
+								s.ackUnprocessedTipFromPlayer(ctx, player.ID)
+							}
 						}
 					}
 				}(players)
@@ -307,4 +312,20 @@ func (s *Server) Run(ctx context.Context) error {
 			return nil
 		}
 	}
+}
+
+func (s *Server) GetWaitingRoom(ctx context.Context, req *pong.WaitingRoomRequest) (*pong.WaitingRoomResponse, error) {
+	wrp := s.gameManager.waitingRoom.GetPlayers()
+
+	var players []*pong.Player
+	for _, p := range wrp {
+		players = append(players, &pong.Player{
+			PlayerId:  p.ID.String(),
+			Nick:      p.Nick,
+			BetAmount: p.BetAmt,
+		})
+	}
+	return &pong.WaitingRoomResponse{
+		Players: players,
+	}, nil
 }

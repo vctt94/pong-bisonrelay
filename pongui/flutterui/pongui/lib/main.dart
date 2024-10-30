@@ -18,7 +18,7 @@ final Random random = Random();
 void main(List<String> args) async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
-        if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
       windowManager.ensureInitialized();
     }
 
@@ -57,14 +57,15 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> with WindowListener {
   Config? config;
+  List<Player> waitingPlayers = [];
   String serverAddr = '';
   bool isLoading = true;
   String errorMessage = '';
   bool isReady = false;
   bool gameStarted = false;
   GrpcPongClient? grpcClient;
-  String clientId = '';
   String nick = '';
+  String clientId = '';
   Map<String, dynamic> gameState = {};
   late PongGame pongGame;
 
@@ -72,9 +73,8 @@ class _MyAppState extends State<MyApp> with WindowListener {
   void initState() {
     super.initState();
     initClient();
-      windowManager.setPreventClose(true);
-      windowManager.addListener(this);
-      
+    windowManager.setPreventClose(true);
+    windowManager.addListener(this);
   }
 
   void _startListeningToStreams(GrpcPongClient grpcClient, String clientId) {
@@ -112,7 +112,17 @@ class _MyAppState extends State<MyApp> with WindowListener {
       );
 
       developer.log("InitClient args: $initArgs");
-      clientId = await Golib.initClient(initArgs);
+      var localInfo = await Golib.initClient(initArgs);
+
+      setState(() {
+        clientId = localInfo.id;
+        nick = localInfo.nick;
+      });
+      var players = await Golib.getWRPlayers();
+      setState(() {
+        waitingPlayers = players;
+      });
+      print(waitingPlayers.length);
       List<String> parts = cfg.serverAddr.split(":");
       String ipAddress = parts[0]; // "127.0.0.1"
       int port = int.parse(parts[1]); // 50051 as an integer
@@ -129,6 +139,7 @@ class _MyAppState extends State<MyApp> with WindowListener {
       });
       _startListeningToStreams(grpcClient!, clientId);
     } catch (exception) {
+      print("**********************exception***********");
       print(exception);
     }
   }
@@ -164,7 +175,7 @@ class _MyAppState extends State<MyApp> with WindowListener {
       errorMessage = '';
       // Retry logic here
     });
-        _startGameStream();
+    _startGameStream();
   }
 
   @override
@@ -174,10 +185,6 @@ class _MyAppState extends State<MyApp> with WindowListener {
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color.fromARGB(255, 25, 23, 44),
         primaryColor: Colors.blueAccent,
-        textTheme: TextTheme(
-            // bodyText1: TextStyle(fontSize: 18, color: Colors.white),
-            // bodyText2: TextStyle(fontSize: 16, color: Colors.grey[300]),
-            ),
       ),
       home: Scaffold(
         appBar: AppBar(
@@ -196,9 +203,7 @@ class _MyAppState extends State<MyApp> with WindowListener {
             padding: EdgeInsets.zero,
             children: <Widget>[
               DrawerHeader(
-                decoration: BoxDecoration(
-                  color: Colors.blueAccent,
-                ),
+                decoration: BoxDecoration(color: Colors.blueAccent),
                 child: Text(
                   'Game Menu',
                   style: TextStyle(color: Colors.white, fontSize: 24),
@@ -207,25 +212,17 @@ class _MyAppState extends State<MyApp> with WindowListener {
               ListTile(
                 leading: Icon(Icons.home),
                 title: Text('Home'),
-                onTap: () {
-                  Navigator.pop(context);
-                },
+                onTap: () => Navigator.pop(context),
               ),
               ListTile(
                 leading: Icon(Icons.leaderboard),
                 title: Text('Leaderboard'),
-                onTap: () {
-                  Navigator.pop(context);
-                  // Navigate to leaderboard
-                },
+                onTap: () => Navigator.pop(context),
               ),
               ListTile(
                 leading: Icon(Icons.settings),
                 title: Text('Settings'),
-                onTap: () {
-                  Navigator.pop(context);
-                  // Navigate to settings
-                },
+                onTap: () => Navigator.pop(context),
               ),
             ],
           ),
@@ -259,9 +256,7 @@ class _MyAppState extends State<MyApp> with WindowListener {
                             content: Text(errorMessage),
                             actions: [
                               TextButton(
-                                onPressed: () {
-                                  _retryGameStream();
-                                },
+                                onPressed: _retryGameStream,
                                 child: Text('Retry'),
                               ),
                             ],
@@ -273,28 +268,55 @@ class _MyAppState extends State<MyApp> with WindowListener {
                                     FocusNode(),
                                   )
                                 : Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.sports_tennis,
+                                        size: 100,
+                                        color: Colors.blueAccent,
+                                      ),
+                                      SizedBox(height: 20),
+                                      Text(
+                                        'Waiting for another player...',
+                                        style: TextStyle(fontSize: 18),
+                                      ),
+                                    ],
+                                  )
+                            : Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(
-                                    Icons.sports_tennis,
-                                    size: 100,
-                                    color: Colors.blueAccent,
-                                  ),
-                                  SizedBox(height: 20),
-                                  Text(
-                                    'Waiting for another player...',
-                                    style: TextStyle(fontSize: 18),
+                                  // Display waiting room players if there are any
+                                  if (waitingPlayers.isNotEmpty)
+                                    SizedBox(
+                                      height:
+                                          200, // Set a fixed height for the waiting list area
+                                      child: ListView.builder(
+                                        shrinkWrap: true,
+                                        itemCount: waitingPlayers.length,
+                                        itemBuilder: (context, index) {
+                                          final player = waitingPlayers[index];
+                                          print(player);
+                                          return ListTile(
+                                            title: Text(player.uid),
+                                            subtitle: Text(
+                                                'Bet: ${player.betAmount} DCR'),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  if (waitingPlayers.isNotEmpty)
+                                    SizedBox(height: 20),
+                                  // Start Game Button
+                                  ElevatedButton.icon(
+                                    onPressed: _startGameStream,
+                                    icon: Icon(Icons.play_arrow),
+                                    label: Text('Start Game'),
+                                    style: ElevatedButton.styleFrom(
+                                      padding: EdgeInsets.symmetric(
+                                          horizontal: 40, vertical: 20),
+                                    ),
                                   ),
                                 ],
-                              )
-                            : ElevatedButton.icon(
-                                onPressed: _startGameStream,
-                                icon: Icon(Icons.play_arrow),
-                                label: Text('Start Game'),
-                                style: ElevatedButton.styleFrom(
-                                  padding: EdgeInsets.symmetric(
-                                      horizontal: 40, vertical: 20),
-                                ),
                               ),
                   ),
                 ],

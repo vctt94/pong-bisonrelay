@@ -10,27 +10,28 @@ import (
 type Player struct {
 	ID zkidentity.ShortID
 
+	Nick         string
+	BetAmt       float64
 	playerNumber int32 // 1 for player 1, 2 for player 2
 	score        int
-	betAmt       float64
 	stream       pong.PongGame_StartGameStreamServer
 	notifier     pong.PongGame_StartNtfnStreamServer
 }
 
 type PlayerSessions struct {
-	mu       sync.Mutex
+	sync.RWMutex
 	sessions map[zkidentity.ShortID]*Player
 }
 
 func (ps *PlayerSessions) RemovePlayer(clientID zkidentity.ShortID) {
-	ps.mu.Lock()
-	defer ps.mu.Unlock()
+	ps.Lock()
+	defer ps.Unlock()
 	delete(ps.sessions, clientID)
 }
 
 func (ps *PlayerSessions) GetPlayer(clientID zkidentity.ShortID) *Player {
-	ps.mu.Lock()
-	defer ps.mu.Unlock()
+	ps.RLock()
+	defer ps.RUnlock()
 	player := ps.sessions[clientID]
 	return player
 }
@@ -42,9 +43,9 @@ func (ps *PlayerSessions) GetOrCreateSession(clientID zkidentity.ShortID) *Playe
 			ID:    clientID,
 			score: 0,
 		}
-		ps.mu.Lock()
+		ps.Lock()
 		ps.sessions[clientID] = p
-		ps.mu.Unlock()
+		ps.Unlock()
 
 		return p
 	}
@@ -53,13 +54,13 @@ func (ps *PlayerSessions) GetOrCreateSession(clientID zkidentity.ShortID) *Playe
 }
 
 type WaitingRoom struct {
-	mu    sync.Mutex
+	sync.RWMutex
 	queue []*Player
 }
 
 func (wr *WaitingRoom) AddPlayer(player *Player) {
-	wr.mu.Lock()
-	defer wr.mu.Unlock()
+	wr.Lock()
+	defer wr.Unlock()
 	for _, p := range wr.queue {
 		// don't add repeated players
 		if p.ID == player.ID {
@@ -70,8 +71,8 @@ func (wr *WaitingRoom) AddPlayer(player *Player) {
 }
 
 func (wr *WaitingRoom) ReadyPlayers() ([]*Player, bool) {
-	wr.mu.Lock()
-	defer wr.mu.Unlock()
+	wr.Lock()
+	defer wr.Unlock()
 	if len(wr.queue) >= 2 {
 		players := wr.queue[:2]
 		wr.queue = wr.queue[2:]
@@ -80,20 +81,26 @@ func (wr *WaitingRoom) ReadyPlayers() ([]*Player, bool) {
 	return nil, false
 }
 
-func (wr *WaitingRoom) GetPlayer(clientID zkidentity.ShortID) (*Player, bool) {
-	wr.mu.Lock()
-	defer wr.mu.Unlock()
+func (wr *WaitingRoom) GetPlayer(clientID zkidentity.ShortID) *Player {
+	wr.RLock()
+	defer wr.RUnlock()
 	for _, player := range wr.queue {
 		if player.ID == clientID {
-			return player, true
+			return player
 		}
 	}
-	return nil, false
+	return nil
+}
+
+func (wr *WaitingRoom) GetPlayers() []*Player {
+	wr.RLock()
+	defer wr.RUnlock()
+	return wr.queue
 }
 
 func (wr *WaitingRoom) RemovePlayer(clientID zkidentity.ShortID) {
-	wr.mu.Lock()
-	defer wr.mu.Unlock()
+	wr.Lock()
+	defer wr.Unlock()
 
 	for i, player := range wr.queue {
 		if player.ID == clientID {
@@ -104,13 +111,13 @@ func (wr *WaitingRoom) RemovePlayer(clientID zkidentity.ShortID) {
 }
 
 func (wr *WaitingRoom) getWaitingRoom() *WaitingRoom {
-	wr.mu.Lock()
-	defer wr.mu.Unlock()
+	wr.RLock()
+	defer wr.RUnlock()
 	return wr
 }
 
 func (wr *WaitingRoom) length() int {
-	wr.mu.Lock()
-	defer wr.mu.Unlock()
+	wr.RLock()
+	defer wr.RUnlock()
 	return len(wr.queue)
 }

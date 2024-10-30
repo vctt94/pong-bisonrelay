@@ -36,13 +36,13 @@ Map<String, dynamic> _$InitClientToJson(InitClient instance) =>
     };
 
 IDInit _$IDInitFromJson(Map<String, dynamic> json) => IDInit(
+      json['id'] as String,
       json['nick'] as String,
-      json['name'] as String,
     );
 
 Map<String, dynamic> _$IDInitToJson(IDInit instance) => <String, dynamic>{
+      'id': instance.uid,
       'nick': instance.nick,
-      'name': instance.name,
     };
 
 GetUserNickArgs _$GetUserNickArgsFromJson(Map<String, dynamic> json) =>
@@ -53,6 +53,18 @@ GetUserNickArgs _$GetUserNickArgsFromJson(Map<String, dynamic> json) =>
 Map<String, dynamic> _$GetUserNickArgsToJson(GetUserNickArgs instance) =>
     <String, dynamic>{
       'uid': instance.uid,
+    };
+
+Player _$PlayerFromJson(Map<String, dynamic> json) => Player(
+      json['uid'] as String,
+      json['nick'] as String?,
+      (json['bet_amt'] as num).toDouble(),
+    );
+
+Map<String, dynamic> _$PlayerToJson(Player instance) => <String, dynamic>{
+      'uid': instance.uid,
+      'nick': instance.nick,
+      'bet_amt': instance.betAmount,
     };
 
 LocalInfo _$LocalInfoFromJson(Map<String, dynamic> json) => LocalInfo(

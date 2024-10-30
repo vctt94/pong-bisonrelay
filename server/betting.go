@@ -85,9 +85,9 @@ func (s *Server) ReceiveTipLoop(ctx context.Context) error {
 			s.Lock()
 			player := s.gameManager.playerSessions.GetPlayer(zkidentity.ShortID(tip.Uid))
 			if player != nil {
-				player.betAmt += float64(tip.AmountMatoms) / 1e11 // Add the tip amount to existing betAmt
+				player.BetAmt += float64(tip.AmountMatoms) / 1e11 // Add the tip amount to existing betAmt
+				s.unprocessedTips[player.ID] = append(s.unprocessedTips[player.ID], &tip)
 			} else {
-				// If the player is not connected, append the tip to unprocessed tips
 				if _, exists := s.unprocessedTips[zkidentity.ShortID(tip.Uid)]; !exists {
 					s.unprocessedTips[zkidentity.ShortID(tip.Uid)] = []*types.ReceivedTip{}
 				}

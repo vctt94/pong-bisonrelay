@@ -22,9 +22,12 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PongGameClient interface {
+	// pong game
 	SendInput(ctx context.Context, in *PlayerInput, opts ...grpc.CallOption) (*GameUpdate, error)
 	StartGameStream(ctx context.Context, in *StartGameStreamRequest, opts ...grpc.CallOption) (PongGame_StartGameStreamClient, error)
 	StartNtfnStream(ctx context.Context, in *StartNtfnStreamRequest, opts ...grpc.CallOption) (PongGame_StartNtfnStreamClient, error)
+	// waiting room
+	GetWaitingRoom(ctx context.Context, in *WaitingRoomRequest, opts ...grpc.CallOption) (*WaitingRoomResponse, error)
 }
 
 type pongGameClient struct {
@@ -108,13 +111,25 @@ func (x *pongGameStartNtfnStreamClient) Recv() (*NtfnStreamResponse, error) {
 	return m, nil
 }
 
+func (c *pongGameClient) GetWaitingRoom(ctx context.Context, in *WaitingRoomRequest, opts ...grpc.CallOption) (*WaitingRoomResponse, error) {
+	out := new(WaitingRoomResponse)
+	err := c.cc.Invoke(ctx, "/pong.PongGame/GetWaitingRoom", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PongGameServer is the server API for PongGame service.
 // All implementations must embed UnimplementedPongGameServer
 // for forward compatibility
 type PongGameServer interface {
+	// pong game
 	SendInput(context.Context, *PlayerInput) (*GameUpdate, error)
 	StartGameStream(*StartGameStreamRequest, PongGame_StartGameStreamServer) error
 	StartNtfnStream(*StartNtfnStreamRequest, PongGame_StartNtfnStreamServer) error
+	// waiting room
+	GetWaitingRoom(context.Context, *WaitingRoomRequest) (*WaitingRoomResponse, error)
 	mustEmbedUnimplementedPongGameServer()
 }
 
@@ -130,6 +145,9 @@ func (UnimplementedPongGameServer) StartGameStream(*StartGameStreamRequest, Pong
 }
 func (UnimplementedPongGameServer) StartNtfnStream(*StartNtfnStreamRequest, PongGame_StartNtfnStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method StartNtfnStream not implemented")
+}
+func (UnimplementedPongGameServer) GetWaitingRoom(context.Context, *WaitingRoomRequest) (*WaitingRoomResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetWaitingRoom not implemented")
 }
 func (UnimplementedPongGameServer) mustEmbedUnimplementedPongGameServer() {}
 
@@ -204,6 +222,24 @@ func (x *pongGameStartNtfnStreamServer) Send(m *NtfnStreamResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _PongGame_GetWaitingRoom_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WaitingRoomRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PongGameServer).GetWaitingRoom(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pong.PongGame/GetWaitingRoom",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PongGameServer).GetWaitingRoom(ctx, req.(*WaitingRoomRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PongGame_ServiceDesc is the grpc.ServiceDesc for PongGame service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -214,6 +250,10 @@ var PongGame_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SendInput",
 			Handler:    _PongGame_SendInput_Handler,
+		},
+		{
+			MethodName: "GetWaitingRoom",
+			Handler:    _PongGame_GetWaitingRoom_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

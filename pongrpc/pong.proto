@@ -5,9 +5,25 @@ option go_package = "grpc/pong";
 package pong;
 
 service PongGame {
+  // pong game
   rpc SendInput (PlayerInput) returns (GameUpdate) {}
   rpc StartGameStream(StartGameStreamRequest) returns (stream GameUpdateBytes);
   rpc StartNtfnStream(StartNtfnStreamRequest) returns (stream NtfnStreamResponse);
+  
+  // waiting room
+  rpc GetWaitingRoom(WaitingRoomRequest) returns (WaitingRoomResponse);
+}
+
+message WaitingRoomRequest {}
+
+message Player {
+  string player_id = 1;
+  string nick = 2;
+  double betAmount = 3;
+}
+
+message WaitingRoomResponse {
+  repeated Player players = 1;
 }
 
 message StartNtfnStreamRequest {

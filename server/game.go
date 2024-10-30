@@ -104,7 +104,7 @@ func (s *gameManager) startNewGame(ctx context.Context, players []*Player, id st
 	roundResult := make(chan int32)
 	instanceCtx, cancel := context.WithCancel(ctx)
 	// sum of all bets
-	betAmt := players[0].betAmt + players[1].betAmt
+	betAmt := players[0].BetAmt + players[1].BetAmt
 	instance := &gameInstance{
 		id:          id,
 		engine:      canvasEngine,
