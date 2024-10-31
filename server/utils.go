@@ -2,11 +2,12 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log"
 
 	"github.com/decred/slog"
-	"github.com/google/uuid"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -24,8 +25,13 @@ func getClientIDFromContext(ctx context.Context) (string, error) {
 	return clientIDs[0], nil
 }
 
-func generateGameID() string {
-	return uuid.New().String()
+func generateRandomID() (string, error) {
+	bytes := make([]byte, 16)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
 }
 
 func GetDebugLevel(debugStr string) slog.Level {

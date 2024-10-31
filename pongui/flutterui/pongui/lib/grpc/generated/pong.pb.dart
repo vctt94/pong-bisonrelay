@@ -13,6 +13,380 @@ import 'dart:core' as $core;
 
 import 'package:protobuf/protobuf.dart' as $pb;
 
+class WaitingRoomsRequest extends $pb.GeneratedMessage {
+  factory WaitingRoomsRequest() => create();
+  WaitingRoomsRequest._() : super();
+  factory WaitingRoomsRequest.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
+  factory WaitingRoomsRequest.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'WaitingRoomsRequest', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
+    ..hasRequiredFields = false
+  ;
+
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
+  'Will be removed in next major version')
+  WaitingRoomsRequest clone() => WaitingRoomsRequest()..mergeFromMessage(this);
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
+  'Will be removed in next major version')
+  WaitingRoomsRequest copyWith(void Function(WaitingRoomsRequest) updates) => super.copyWith((message) => updates(message as WaitingRoomsRequest)) as WaitingRoomsRequest;
+
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static WaitingRoomsRequest create() => WaitingRoomsRequest._();
+  WaitingRoomsRequest createEmptyInstance() => create();
+  static $pb.PbList<WaitingRoomsRequest> createRepeated() => $pb.PbList<WaitingRoomsRequest>();
+  @$core.pragma('dart2js:noInline')
+  static WaitingRoomsRequest getDefault() => _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<WaitingRoomsRequest>(create);
+  static WaitingRoomsRequest? _defaultInstance;
+}
+
+class WaitingRoomsResponse extends $pb.GeneratedMessage {
+  factory WaitingRoomsResponse({
+    $core.Iterable<WaitingRoom>? wr,
+  }) {
+    final $result = create();
+    if (wr != null) {
+      $result.wr.addAll(wr);
+    }
+    return $result;
+  }
+  WaitingRoomsResponse._() : super();
+  factory WaitingRoomsResponse.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
+  factory WaitingRoomsResponse.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'WaitingRoomsResponse', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
+    ..pc<WaitingRoom>(1, _omitFieldNames ? '' : 'wr', $pb.PbFieldType.PM, subBuilder: WaitingRoom.create)
+    ..hasRequiredFields = false
+  ;
+
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
+  'Will be removed in next major version')
+  WaitingRoomsResponse clone() => WaitingRoomsResponse()..mergeFromMessage(this);
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
+  'Will be removed in next major version')
+  WaitingRoomsResponse copyWith(void Function(WaitingRoomsResponse) updates) => super.copyWith((message) => updates(message as WaitingRoomsResponse)) as WaitingRoomsResponse;
+
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static WaitingRoomsResponse create() => WaitingRoomsResponse._();
+  WaitingRoomsResponse createEmptyInstance() => create();
+  static $pb.PbList<WaitingRoomsResponse> createRepeated() => $pb.PbList<WaitingRoomsResponse>();
+  @$core.pragma('dart2js:noInline')
+  static WaitingRoomsResponse getDefault() => _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<WaitingRoomsResponse>(create);
+  static WaitingRoomsResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.List<WaitingRoom> get wr => $_getList(0);
+}
+
+class JoinWaitingRoomRequest extends $pb.GeneratedMessage {
+  factory JoinWaitingRoomRequest({
+    $core.String? roomId,
+    $core.String? clientId,
+  }) {
+    final $result = create();
+    if (roomId != null) {
+      $result.roomId = roomId;
+    }
+    if (clientId != null) {
+      $result.clientId = clientId;
+    }
+    return $result;
+  }
+  JoinWaitingRoomRequest._() : super();
+  factory JoinWaitingRoomRequest.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
+  factory JoinWaitingRoomRequest.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'JoinWaitingRoomRequest', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'roomId')
+    ..aOS(2, _omitFieldNames ? '' : 'clientId')
+    ..hasRequiredFields = false
+  ;
+
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
+  'Will be removed in next major version')
+  JoinWaitingRoomRequest clone() => JoinWaitingRoomRequest()..mergeFromMessage(this);
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
+  'Will be removed in next major version')
+  JoinWaitingRoomRequest copyWith(void Function(JoinWaitingRoomRequest) updates) => super.copyWith((message) => updates(message as JoinWaitingRoomRequest)) as JoinWaitingRoomRequest;
+
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static JoinWaitingRoomRequest create() => JoinWaitingRoomRequest._();
+  JoinWaitingRoomRequest createEmptyInstance() => create();
+  static $pb.PbList<JoinWaitingRoomRequest> createRepeated() => $pb.PbList<JoinWaitingRoomRequest>();
+  @$core.pragma('dart2js:noInline')
+  static JoinWaitingRoomRequest getDefault() => _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<JoinWaitingRoomRequest>(create);
+  static JoinWaitingRoomRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get roomId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set roomId($core.String v) { $_setString(0, v); }
+  @$pb.TagNumber(1)
+  $core.bool hasRoomId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearRoomId() => clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get clientId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set clientId($core.String v) { $_setString(1, v); }
+  @$pb.TagNumber(2)
+  $core.bool hasClientId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearClientId() => clearField(2);
+}
+
+class JoinWaitingRoomResponse extends $pb.GeneratedMessage {
+  factory JoinWaitingRoomResponse() => create();
+  JoinWaitingRoomResponse._() : super();
+  factory JoinWaitingRoomResponse.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
+  factory JoinWaitingRoomResponse.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'JoinWaitingRoomResponse', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
+    ..hasRequiredFields = false
+  ;
+
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
+  'Will be removed in next major version')
+  JoinWaitingRoomResponse clone() => JoinWaitingRoomResponse()..mergeFromMessage(this);
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
+  'Will be removed in next major version')
+  JoinWaitingRoomResponse copyWith(void Function(JoinWaitingRoomResponse) updates) => super.copyWith((message) => updates(message as JoinWaitingRoomResponse)) as JoinWaitingRoomResponse;
+
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static JoinWaitingRoomResponse create() => JoinWaitingRoomResponse._();
+  JoinWaitingRoomResponse createEmptyInstance() => create();
+  static $pb.PbList<JoinWaitingRoomResponse> createRepeated() => $pb.PbList<JoinWaitingRoomResponse>();
+  @$core.pragma('dart2js:noInline')
+  static JoinWaitingRoomResponse getDefault() => _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<JoinWaitingRoomResponse>(create);
+  static JoinWaitingRoomResponse? _defaultInstance;
+}
+
+class CreateWaitingRoomResquest extends $pb.GeneratedMessage {
+  factory CreateWaitingRoomResquest({
+    $core.String? hostId,
+    $core.double? betAmt,
+  }) {
+    final $result = create();
+    if (hostId != null) {
+      $result.hostId = hostId;
+    }
+    if (betAmt != null) {
+      $result.betAmt = betAmt;
+    }
+    return $result;
+  }
+  CreateWaitingRoomResquest._() : super();
+  factory CreateWaitingRoomResquest.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
+  factory CreateWaitingRoomResquest.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'CreateWaitingRoomResquest', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'hostId')
+    ..a<$core.double>(2, _omitFieldNames ? '' : 'betAmt', $pb.PbFieldType.OD, protoName: 'betAmt')
+    ..hasRequiredFields = false
+  ;
+
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
+  'Will be removed in next major version')
+  CreateWaitingRoomResquest clone() => CreateWaitingRoomResquest()..mergeFromMessage(this);
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
+  'Will be removed in next major version')
+  CreateWaitingRoomResquest copyWith(void Function(CreateWaitingRoomResquest) updates) => super.copyWith((message) => updates(message as CreateWaitingRoomResquest)) as CreateWaitingRoomResquest;
+
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CreateWaitingRoomResquest create() => CreateWaitingRoomResquest._();
+  CreateWaitingRoomResquest createEmptyInstance() => create();
+  static $pb.PbList<CreateWaitingRoomResquest> createRepeated() => $pb.PbList<CreateWaitingRoomResquest>();
+  @$core.pragma('dart2js:noInline')
+  static CreateWaitingRoomResquest getDefault() => _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<CreateWaitingRoomResquest>(create);
+  static CreateWaitingRoomResquest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get hostId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set hostId($core.String v) { $_setString(0, v); }
+  @$pb.TagNumber(1)
+  $core.bool hasHostId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearHostId() => clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.double get betAmt => $_getN(1);
+  @$pb.TagNumber(2)
+  set betAmt($core.double v) { $_setDouble(1, v); }
+  @$pb.TagNumber(2)
+  $core.bool hasBetAmt() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearBetAmt() => clearField(2);
+}
+
+class CreateWaitingRoomResponse extends $pb.GeneratedMessage {
+  factory CreateWaitingRoomResponse({
+    WaitingRoom? wr,
+  }) {
+    final $result = create();
+    if (wr != null) {
+      $result.wr = wr;
+    }
+    return $result;
+  }
+  CreateWaitingRoomResponse._() : super();
+  factory CreateWaitingRoomResponse.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
+  factory CreateWaitingRoomResponse.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'CreateWaitingRoomResponse', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
+    ..aOM<WaitingRoom>(1, _omitFieldNames ? '' : 'wr', subBuilder: WaitingRoom.create)
+    ..hasRequiredFields = false
+  ;
+
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
+  'Will be removed in next major version')
+  CreateWaitingRoomResponse clone() => CreateWaitingRoomResponse()..mergeFromMessage(this);
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
+  'Will be removed in next major version')
+  CreateWaitingRoomResponse copyWith(void Function(CreateWaitingRoomResponse) updates) => super.copyWith((message) => updates(message as CreateWaitingRoomResponse)) as CreateWaitingRoomResponse;
+
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CreateWaitingRoomResponse create() => CreateWaitingRoomResponse._();
+  CreateWaitingRoomResponse createEmptyInstance() => create();
+  static $pb.PbList<CreateWaitingRoomResponse> createRepeated() => $pb.PbList<CreateWaitingRoomResponse>();
+  @$core.pragma('dart2js:noInline')
+  static CreateWaitingRoomResponse getDefault() => _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<CreateWaitingRoomResponse>(create);
+  static CreateWaitingRoomResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  WaitingRoom get wr => $_getN(0);
+  @$pb.TagNumber(1)
+  set wr(WaitingRoom v) { setField(1, v); }
+  @$pb.TagNumber(1)
+  $core.bool hasWr() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearWr() => clearField(1);
+  @$pb.TagNumber(1)
+  WaitingRoom ensureWr() => $_ensure(0);
+}
+
+class WaitingRoom extends $pb.GeneratedMessage {
+  factory WaitingRoom({
+    $core.String? id,
+    $core.String? hostId,
+    $core.Iterable<Player>? players,
+    $core.double? betAmt,
+  }) {
+    final $result = create();
+    if (id != null) {
+      $result.id = id;
+    }
+    if (hostId != null) {
+      $result.hostId = hostId;
+    }
+    if (players != null) {
+      $result.players.addAll(players);
+    }
+    if (betAmt != null) {
+      $result.betAmt = betAmt;
+    }
+    return $result;
+  }
+  WaitingRoom._() : super();
+  factory WaitingRoom.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
+  factory WaitingRoom.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'WaitingRoom', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'hostId')
+    ..pc<Player>(3, _omitFieldNames ? '' : 'players', $pb.PbFieldType.PM, subBuilder: Player.create)
+    ..a<$core.double>(4, _omitFieldNames ? '' : 'betAmt', $pb.PbFieldType.OD)
+    ..hasRequiredFields = false
+  ;
+
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
+  'Will be removed in next major version')
+  WaitingRoom clone() => WaitingRoom()..mergeFromMessage(this);
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
+  'Will be removed in next major version')
+  WaitingRoom copyWith(void Function(WaitingRoom) updates) => super.copyWith((message) => updates(message as WaitingRoom)) as WaitingRoom;
+
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static WaitingRoom create() => WaitingRoom._();
+  WaitingRoom createEmptyInstance() => create();
+  static $pb.PbList<WaitingRoom> createRepeated() => $pb.PbList<WaitingRoom>();
+  @$core.pragma('dart2js:noInline')
+  static WaitingRoom getDefault() => _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<WaitingRoom>(create);
+  static WaitingRoom? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get id => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set id($core.String v) { $_setString(0, v); }
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get hostId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set hostId($core.String v) { $_setString(1, v); }
+  @$pb.TagNumber(2)
+  $core.bool hasHostId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearHostId() => clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.List<Player> get players => $_getList(2);
+
+  @$pb.TagNumber(4)
+  $core.double get betAmt => $_getN(3);
+  @$pb.TagNumber(4)
+  set betAmt($core.double v) { $_setDouble(3, v); }
+  @$pb.TagNumber(4)
+  $core.bool hasBetAmt() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearBetAmt() => clearField(4);
+}
+
 class WaitingRoomRequest extends $pb.GeneratedMessage {
   factory WaitingRoomRequest() => create();
   WaitingRoomRequest._() : super();
@@ -47,13 +421,13 @@ class WaitingRoomRequest extends $pb.GeneratedMessage {
 
 class Player extends $pb.GeneratedMessage {
   factory Player({
-    $core.String? playerId,
+    $core.String? uid,
     $core.String? nick,
     $core.double? betAmount,
   }) {
     final $result = create();
-    if (playerId != null) {
-      $result.playerId = playerId;
+    if (uid != null) {
+      $result.uid = uid;
     }
     if (nick != null) {
       $result.nick = nick;
@@ -68,7 +442,7 @@ class Player extends $pb.GeneratedMessage {
   factory Player.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
 
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'Player', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
-    ..aOS(1, _omitFieldNames ? '' : 'playerId')
+    ..aOS(1, _omitFieldNames ? '' : 'uid')
     ..aOS(2, _omitFieldNames ? '' : 'nick')
     ..a<$core.double>(3, _omitFieldNames ? '' : 'betAmount', $pb.PbFieldType.OD, protoName: 'betAmount')
     ..hasRequiredFields = false
@@ -96,13 +470,13 @@ class Player extends $pb.GeneratedMessage {
   static Player? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $core.String get playerId => $_getSZ(0);
+  $core.String get uid => $_getSZ(0);
   @$pb.TagNumber(1)
-  set playerId($core.String v) { $_setString(0, v); }
+  set uid($core.String v) { $_setString(0, v); }
   @$pb.TagNumber(1)
-  $core.bool hasPlayerId() => $_has(0);
+  $core.bool hasUid() => $_has(0);
   @$pb.TagNumber(1)
-  void clearPlayerId() => clearField(1);
+  void clearUid() => clearField(1);
 
   @$pb.TagNumber(2)
   $core.String get nick => $_getSZ(1);
@@ -220,22 +594,22 @@ class StartNtfnStreamRequest extends $pb.GeneratedMessage {
 class NtfnStreamResponse extends $pb.GeneratedMessage {
   factory NtfnStreamResponse({
     $core.bool? started,
-    $core.int? playerNumber,
     $core.String? message,
-    $core.String? clientId,
+    $core.double? betAmt,
+    $core.int? playerNumber,
   }) {
     final $result = create();
     if (started != null) {
       $result.started = started;
     }
-    if (playerNumber != null) {
-      $result.playerNumber = playerNumber;
-    }
     if (message != null) {
       $result.message = message;
     }
-    if (clientId != null) {
-      $result.clientId = clientId;
+    if (betAmt != null) {
+      $result.betAmt = betAmt;
+    }
+    if (playerNumber != null) {
+      $result.playerNumber = playerNumber;
     }
     return $result;
   }
@@ -245,9 +619,9 @@ class NtfnStreamResponse extends $pb.GeneratedMessage {
 
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'NtfnStreamResponse', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
     ..aOB(1, _omitFieldNames ? '' : 'started')
-    ..a<$core.int>(2, _omitFieldNames ? '' : 'playerNumber', $pb.PbFieldType.O3)
-    ..aOS(3, _omitFieldNames ? '' : 'message')
-    ..aOS(4, _omitFieldNames ? '' : 'clientId')
+    ..aOS(2, _omitFieldNames ? '' : 'message')
+    ..a<$core.double>(3, _omitFieldNames ? '' : 'betAmt', $pb.PbFieldType.OD, protoName: 'betAmt')
+    ..a<$core.int>(4, _omitFieldNames ? '' : 'playerNumber', $pb.PbFieldType.O3)
     ..hasRequiredFields = false
   ;
 
@@ -282,31 +656,31 @@ class NtfnStreamResponse extends $pb.GeneratedMessage {
   void clearStarted() => clearField(1);
 
   @$pb.TagNumber(2)
-  $core.int get playerNumber => $_getIZ(1);
+  $core.String get message => $_getSZ(1);
   @$pb.TagNumber(2)
-  set playerNumber($core.int v) { $_setSignedInt32(1, v); }
+  set message($core.String v) { $_setString(1, v); }
   @$pb.TagNumber(2)
-  $core.bool hasPlayerNumber() => $_has(1);
+  $core.bool hasMessage() => $_has(1);
   @$pb.TagNumber(2)
-  void clearPlayerNumber() => clearField(2);
+  void clearMessage() => clearField(2);
 
   @$pb.TagNumber(3)
-  $core.String get message => $_getSZ(2);
+  $core.double get betAmt => $_getN(2);
   @$pb.TagNumber(3)
-  set message($core.String v) { $_setString(2, v); }
+  set betAmt($core.double v) { $_setDouble(2, v); }
   @$pb.TagNumber(3)
-  $core.bool hasMessage() => $_has(2);
+  $core.bool hasBetAmt() => $_has(2);
   @$pb.TagNumber(3)
-  void clearMessage() => clearField(3);
+  void clearBetAmt() => clearField(3);
 
   @$pb.TagNumber(4)
-  $core.String get clientId => $_getSZ(3);
+  $core.int get playerNumber => $_getIZ(3);
   @$pb.TagNumber(4)
-  set clientId($core.String v) { $_setString(3, v); }
+  set playerNumber($core.int v) { $_setSignedInt32(3, v); }
   @$pb.TagNumber(4)
-  $core.bool hasClientId() => $_has(3);
+  $core.bool hasPlayerNumber() => $_has(3);
   @$pb.TagNumber(4)
-  void clearClientId() => clearField(4);
+  void clearPlayerNumber() => clearField(4);
 }
 
 /// SignalReadyRequest contains information about the client signaling readiness

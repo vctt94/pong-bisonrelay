@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:golib_plugin/definitions.dart';
 import 'package:golib_plugin/golib_plugin.dart';
 import 'package:pongui/components/pong_game.dart';
+import 'package:pongui/components/waiting_rooms.dart';
 import 'package:pongui/config.dart';
 import 'package:pongui/grpc/grpc_client.dart';
 import 'package:pongui/screens/newconfig.dart';
@@ -57,7 +58,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> with WindowListener {
   Config? config;
-  List<Player> waitingPlayers = [];
+  List<WaitingRoom> waitingRooms = [];
   String serverAddr = '';
   bool isLoading = true;
   String errorMessage = '';
@@ -66,6 +67,7 @@ class _MyAppState extends State<MyApp> with WindowListener {
   GrpcPongClient? grpcClient;
   String nick = '';
   String clientId = '';
+  double betAmount = 0.0;
   Map<String, dynamic> gameState = {};
   late PongGame pongGame;
 
@@ -118,11 +120,10 @@ class _MyAppState extends State<MyApp> with WindowListener {
         clientId = localInfo.id;
         nick = localInfo.nick;
       });
-      var players = await Golib.getWRPlayers();
+      var rooms = await Golib.getWaitingRooms();
       setState(() {
-        waitingPlayers = players;
+        waitingRooms = rooms;
       });
-      print(waitingPlayers.length);
       List<String> parts = cfg.serverAddr.split(":");
       String ipAddress = parts[0]; // "127.0.0.1"
       int port = int.parse(parts[1]); // 50051 as an integer
@@ -178,6 +179,33 @@ class _MyAppState extends State<MyApp> with WindowListener {
     _startGameStream();
   }
 
+  Future<void> _createWaitingRoom() async {
+    try {
+      if (grpcClient != null && clientId.isNotEmpty) {
+        // Send a request to create a waiting room
+        // final response = await Golib.createWaitingRoom(clientId);
+
+        // setState(() {
+        //   waitingRooms.add(Player(
+        //     clientId,
+        //     nick,
+        //     betAmount,
+        //   ));
+          isReady = true; // Indicates the player is now in a waiting room
+        };
+
+        developer.log("Waiting room created for Client ID: $clientId");
+
+        // Start listening to the notification stream for the waiting room
+        _startListeningToStreams(grpcClient!, clientId);
+      } catch (error) {
+      developer.log("Error creating waiting room: $error");
+      setState(() {
+        errorMessage = "Failed to create waiting room. Please try again.";
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -190,12 +218,16 @@ class _MyAppState extends State<MyApp> with WindowListener {
         appBar: AppBar(
           title: Text('Pong Game'),
           actions: [
-            IconButton(
-              icon: Icon(Icons.settings),
-              onPressed: () {
-                // Open settings screen
-              },
-            ),
+            if (betAmount > 0)
+              Padding(
+                padding: const EdgeInsets.only(right: 10.0),
+                child: ElevatedButton(
+                  onPressed: _createWaitingRoom,
+                  child: Text('Create Waiting Room'),
+                  style:
+                      ElevatedButton.styleFrom(backgroundColor: Colors.amber),
+                ),
+              ),
           ],
         ),
         drawer: Drawer(
@@ -231,24 +263,6 @@ class _MyAppState extends State<MyApp> with WindowListener {
             ? Center(child: CircularProgressIndicator())
             : Stack(
                 children: [
-                  Positioned(
-                    top: 10,
-                    left: 10,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Connected to Server: $serverAddr',
-                          style: TextStyle(fontSize: 16, color: Colors.white70),
-                        ),
-                        SizedBox(height: 5),
-                        Text(
-                          'Client ID: $clientId',
-                          style: TextStyle(fontSize: 16, color: Colors.white70),
-                        ),
-                      ],
-                    ),
-                  ),
                   Center(
                     child: errorMessage.isNotEmpty
                         ? AlertDialog(
@@ -282,42 +296,29 @@ class _MyAppState extends State<MyApp> with WindowListener {
                                       ),
                                     ],
                                   )
-                            : Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  // Display waiting room players if there are any
-                                  if (waitingPlayers.isNotEmpty)
-                                    SizedBox(
-                                      height:
-                                          200, // Set a fixed height for the waiting list area
-                                      child: ListView.builder(
-                                        shrinkWrap: true,
-                                        itemCount: waitingPlayers.length,
-                                        itemBuilder: (context, index) {
-                                          final player = waitingPlayers[index];
-                                          print(player);
-                                          return ListTile(
-                                            title: Text(player.uid),
-                                            subtitle: Text(
-                                                'Bet: ${player.betAmount} DCR'),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  if (waitingPlayers.isNotEmpty)
-                                    SizedBox(height: 20),
-                                  // Start Game Button
-                                  ElevatedButton.icon(
-                                    onPressed: _startGameStream,
-                                    icon: Icon(Icons.play_arrow),
-                                    label: Text('Start Game'),
-                                    style: ElevatedButton.styleFrom(
-                                      padding: EdgeInsets.symmetric(
-                                          horizontal: 40, vertical: 20),
-                                    ),
-                                  ),
-                                ],
+                            : Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: WaitingRoomList(waitingRooms),
                               ),
+                  ),
+                  Positioned(
+                    bottom: 10,
+                    left: 0,
+                    right: 0,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          'Connected to Server: $serverAddr',
+                          style: TextStyle(fontSize: 16, color: Colors.white70),
+                        ),
+                        SizedBox(height: 5),
+                        Text(
+                          'Client ID: $clientId',
+                          style: TextStyle(fontSize: 16, color: Colors.white70),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),

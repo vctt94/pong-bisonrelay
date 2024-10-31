@@ -7,12 +7,15 @@ import (
 	"io"
 	"log"
 	"log/slog"
+	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 	"google.golang.org/grpc"
 )
+
+type UpdatedMsg struct{}
 
 type PongClientCfg struct {
 	ServerAddr    string      // Address of the Pong server
@@ -21,8 +24,15 @@ type PongClientCfg struct {
 	PaymentClient types.PaymentsServiceClient
 }
 type PongClient struct {
-	ctx          context.Context
-	ID           string
+	sync.RWMutex
+	ctx       context.Context
+	ID        string
+	BetAmount float64
+
+	CurrentWR *pong.WaitingRoom
+
+	WaitingRooms []*pong.WaitingRoom
+
 	playerNumber int32
 	cfg          *PongClientCfg
 	conn         *grpc.ClientConn
@@ -35,6 +45,7 @@ type PongClient struct {
 	stream    pong.PongGame_StartGameStreamClient
 	notifier  pong.PongGame_StartNtfnStreamClient
 	UpdatesCh chan tea.Msg
+	GameCh    chan *pong.GameUpdateBytes
 }
 
 func (pc *PongClient) StartNotifier() error {
@@ -62,6 +73,14 @@ func (pc *PongClient) StartNotifier() error {
 				if err != nil {
 					log.Printf("Error receiving notification: %v", err)
 					return
+				}
+				if ntfn.BetAmt > 0 {
+					log.Printf("Current Bet Amount: %.8f DCR\n", ntfn.BetAmt)
+					pc.BetAmount = ntfn.BetAmt
+					pc.UpdatesCh <- UpdatedMsg{}
+				}
+				if ntfn.Started {
+					pc.UpdatesCh <- UpdatedMsg{}
 				}
 				fmt.Printf("ntfn: %+v\n", ntfn)
 			}
@@ -97,8 +116,7 @@ func (pc *PongClient) SignalReady() error {
 
 				return
 			}
-			// fmt.Printf("update :%+v\n", update)
-			pc.UpdatesCh <- update
+			go func() { pc.UpdatesCh <- update }()
 		}
 	}()
 
@@ -119,6 +137,21 @@ func (pc *PongClient) SendInput(input string) error {
 	return nil
 }
 
+func (pc *PongClient) GetWaitingRooms() ([]*pong.WaitingRoom, error) {
+	ctx := context.Background()
+
+	res, err := pc.gc.GetWaitingRooms(ctx, &pong.WaitingRoomsRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("error sending input: %w", err)
+	}
+	pc.Lock()
+	pc.WaitingRooms = res.Wr
+	pc.Unlock()
+	go func() { pc.UpdatesCh <- UpdatedMsg{} }()
+
+	return res.Wr, nil
+}
+
 func (pc *PongClient) GetWRPlayers() ([]*pong.Player, error) {
 	ctx := context.Background()
 
@@ -127,6 +160,30 @@ func (pc *PongClient) GetWRPlayers() ([]*pong.Player, error) {
 		return nil, fmt.Errorf("error sending input: %w", err)
 	}
 	return wr.Players, nil
+}
+
+func (pc *PongClient) CreatewaitingRoom(ctx context.Context) (*pong.WaitingRoom, error) {
+	res, err := pc.gc.CreateWaitingRoom(ctx, &pong.CreateWaitingRoomResquest{
+		HostId: pc.ID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error sending input: %w", err)
+	}
+	pc.CurrentWR = res.Wr
+	go func() { pc.UpdatesCh <- UpdatedMsg{} }()
+	return res.Wr, nil
+}
+
+func (pc *PongClient) JoinWaitingRoom(ctx context.Context, roomID string) (*pong.JoinWaitingRoomResponse, error) {
+	res, err := pc.gc.JoinWaitingRoom(ctx, &pong.JoinWaitingRoomRequest{
+		ClientId: pc.ID,
+		RoomId:   roomID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error sending input: %w", err)
+	}
+	go func() { pc.UpdatesCh <- UpdatedMsg{} }()
+	return res, nil
 }
 
 func NewPongClient(clientID string, cfg *PongClientCfg) (*PongClient, error) {

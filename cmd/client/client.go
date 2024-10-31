@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"strings"
 	"sync"
@@ -15,11 +16,11 @@ import (
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/companyzero/bisonrelay/clientrpc/jsonrpc"
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
-
 	"github.com/decred/slog"
 )
 
@@ -27,9 +28,14 @@ type ID = zkidentity.ShortID
 
 type appMode int
 
+var isF2p = true
+
 const (
 	gameIdle appMode = iota
 	gameMode
+	listRooms
+	createRoom
+	joinRoom
 )
 
 var (
@@ -44,76 +50,180 @@ var (
 )
 
 type model struct {
-	mode           appMode
-	gameStateMutex sync.Mutex
-	gameState      *pong.GameUpdate
-	err            error
-	ctx            context.Context
-	cancel         context.CancelFunc
-	pc             *client.PongClient
+	sync.Mutex
+	mode              appMode
+	gameState         *pong.GameUpdate
+	ctx               context.Context
+	err               error
+	cancel            context.CancelFunc
+	pc                *client.PongClient
+	selectedRoomIndex int
+	msgCh             chan tea.Msg
+	viewport          viewport.Model
 }
 
 func (m *model) listenForUpdates() tea.Cmd {
 	return func() tea.Msg {
-		for msg := range m.pc.UpdatesCh {
-			return msg
-		}
+		// Start a goroutine to listen for updates
+		go func() {
+			for msg := range m.pc.UpdatesCh {
+				m.msgCh <- msg
+			}
+		}()
 		return nil
 	}
 }
 
 func (m *model) Init() tea.Cmd {
-	return tea.Batch(m.listenForUpdates(), func() tea.Msg {
-		for msg := range m.pc.UpdatesCh {
-			return msg
-		}
-		return nil
-	})
+	m.msgCh = make(chan tea.Msg)
+
+	// Initialize the viewport with zero dimensions; we'll set them upon receiving the window size
+	m.viewport = viewport.New(0, 0)
+
+	return tea.Batch(
+		m.listenForUpdates(),
+		tea.EnterAltScreen, // Optional: Use the alternate screen buffer
+	)
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.Lock()
+		m.viewport.Width = msg.Width
+		m.viewport.Height = msg.Height
+		m.viewport.SetContent(m.View())
+		m.Unlock()
+		return m, nil
+	case client.UpdatedMsg:
+		// Simply return the model to refresh the view with the new BetAmount
+		return m, m.waitForMsg()
 	case tea.KeyMsg:
-		switch msg.Type {
-		case tea.KeyF2:
-			if m.mode == gameIdle {
-				m.mode = gameMode
-			} else if m.mode == gameMode {
-				m.mode = gameIdle
-			} else {
-				// shouldn't be here
-			}
-		case tea.KeySpace:
-			m.mode = gameMode
-			return m, m.makeClientReady()
-		case tea.KeyEsc:
+		switch msg.String() {
+		case "q":
 			return m, tea.Quit
-		}
-		if m.mode == gameMode {
-			switch msg.String() {
-			case "w", "s", "up", "down":
+		case "l":
+			// Switch to list rooms mode
+			m.mode = listRooms
+			m.listWaitingRooms()
+			return m, nil
+		case "c":
+			// Switch to create room mode if player has a bet
+			if m.pc.BetAmount > 0 || isF2p {
+				m.createRoom()
+				return m, nil
+			} else {
+				log.Println("Bet amount must be > 0 to create a room.")
+			}
+		case "j":
+			// Switch to join room mode
+			m.mode = joinRoom
+			m.selectedRoomIndex = 0
+			m.listWaitingRooms()
+			return m, nil
+		case "w", "s":
+			if m.mode == gameMode {
 				return m, m.handleGameInput(msg)
 			}
+		case "up":
+			// Check mode to avoid duplicate handling of "up" key
+			if m.mode == joinRoom && m.selectedRoomIndex > 0 {
+				m.selectedRoomIndex--
+			} else if m.mode == gameMode {
+				return m, m.handleGameInput(msg)
+			}
+			return m, nil
+
+		case "down":
+			// Check mode to avoid duplicate handling of "down" key
+			if m.mode == joinRoom && m.selectedRoomIndex < len(m.pc.WaitingRooms)-1 {
+				m.selectedRoomIndex++
+			} else if m.mode == gameMode {
+				return m, m.handleGameInput(msg)
+			}
+			return m, nil
+		case "enter":
+			if m.mode == joinRoom && len(m.pc.WaitingRooms) > 0 {
+				selectedRoom := m.pc.WaitingRooms[m.selectedRoomIndex]
+				err := m.joinRoom(selectedRoom.Id)
+				if err != nil {
+					log.Printf("Error joining room: %v", err)
+				}
+			}
+			return m, nil
 		}
-		return m, nil
+
+		if m.mode == gameIdle && msg.Type == tea.KeyEsc {
+			m.cancel()
+			return m, tea.Quit
+		}
+		if msg.Type == tea.KeyF2 {
+			m.mode = gameMode
+			return m, nil
+		}
+		if msg.Type == tea.KeySpace {
+			m.mode = gameMode
+			m.makeClientReady()
+			return m, nil
+		}
+		if msg.Type == tea.KeyEsc {
+			m.mode = gameIdle
+			return m, nil
+		}
 	case *pong.GameUpdateBytes:
-		m.gameStateMutex.Lock()
 		var gameUpdate pong.GameUpdate
 		if err := json.Unmarshal(msg.Data, &gameUpdate); err != nil {
 			m.err = err
-			m.gameStateMutex.Unlock()
 			return m, nil
 		}
 		m.gameState = &gameUpdate
-		m.gameStateMutex.Unlock()
-		return m, m.listenForUpdates()
-	case pong.NtfnStreamResponse:
-		m.gameState = &pong.GameUpdate{}
-		return m, m.listenForUpdates()
-	case types.VersionResponse:
-		fmt.Printf("AppName: %s\nversion: %s\nGoRuntime: %s\n", msg.AppName, msg.AppVersion, msg.GoRuntime)
+		// fmt.Printf("game update: %+v\n", gameUpdate)
+
+		return m, m.waitForMsg()
 	}
-	return m, nil
+	return m, m.waitForMsg()
+}
+
+func (m *model) waitForMsg() tea.Cmd {
+	return func() tea.Msg {
+		return <-m.msgCh
+	}
+}
+
+func (m *model) listWaitingRooms() error {
+	_, err := m.pc.GetWaitingRooms()
+	if err != nil {
+		log.Printf("Error fetching waiting rooms: %v", err)
+		return err
+	}
+	return nil
+}
+
+func (m *model) createRoom() error {
+	var err error
+	_, err = m.pc.CreatewaitingRoom(m.ctx)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+func (m *model) joinRoom(roomID string) error {
+
+	// Send request to join the specified room
+	_, err := m.pc.JoinWaitingRoom(m.ctx, roomID)
+	if err != nil {
+		log.Printf("Error joining room %s: %v", roomID, err)
+		return err
+	}
+
+	m.Lock()
+	// Update mode to gameMode upon successful join
+	m.mode = gameMode
+	m.Unlock()
+	fmt.Printf("Game State Updated: %+v\n", m.gameState)
+
+	return nil
 }
 
 func (m *model) makeClientReady() tea.Cmd {
@@ -148,40 +258,95 @@ func (m *model) handleGameInput(msg tea.KeyMsg) tea.Cmd {
 
 func (m *model) View() string {
 	var b strings.Builder
-	if m.mode == gameIdle {
-		fmt.Fprintln(&b, "Idle mode: Press space to get ready for the game")
-		fmt.Fprintln(&b, "Idle mode: Press esc to quit.")
-	} else if m.mode == gameMode {
-		fmt.Fprintln(&b, "Game mode: 'q' to return to chat.")
-		if m.gameState == nil {
-			return "Waiting for game to start..."
-		}
 
-		var gameView strings.Builder
-		for y := 0; y < int(m.gameState.GameHeight); y++ {
-			for x := 0; x < int(m.gameState.GameWidth); x++ {
-				ballX := int(m.gameState.BallX)
-				ballY := int(m.gameState.BallY)
-				switch {
-				case x == ballX && y == ballY:
-					gameView.WriteString("O")
-				case x == 0 && y >= int(m.gameState.P1Y) && y < int(m.gameState.P1Y)+int(m.gameState.P1Height):
-					gameView.WriteString("|")
-				case x == int(m.gameState.GameWidth)-1 && y >= int(m.gameState.P2Y) && y < int(m.gameState.P2Y)+int(m.gameState.P2Height):
-					gameView.WriteString("|")
-				default:
-					gameView.WriteString(" ")
+	// Build the header
+	b.WriteString("=== Pong Game Client ===\n")
+	b.WriteString(fmt.Sprintf("Player: %s\nBet Amount: %.8f\nCurrent Room: %s\n", m.pc.ID, m.pc.BetAmount, m.pc.CurrentWR))
+	b.WriteString("Use the following keys to navigate:\n")
+
+	// Display different modes based on the current app mode
+	switch m.mode {
+	case gameIdle:
+		b.WriteString("\n[Idle Mode]\n")
+		b.WriteString("Press 'space' to get ready for the game.\n")
+		b.WriteString("Press 'l' to list available rooms.\n")
+		b.WriteString("Press 'c' to create a room (requires bet > 0).\n")
+		b.WriteString("Press 'j' to join an existing room.\n")
+		b.WriteString("Press 'esc' to quit.\n")
+
+	case gameMode:
+		b.WriteString("\n[Game Mode]\n")
+		b.WriteString("Press 'esc' to return to chat.\n")
+		b.WriteString("Use W/S or Arrow Keys to move.\n")
+		b.WriteString("Press 'q' to exit game mode.\n")
+
+		// Display game state if available
+		if m.gameState != nil {
+			var gameView strings.Builder
+			for y := 0; y < int(m.gameState.GameHeight); y++ {
+				for x := 0; x < int(m.gameState.GameWidth); x++ {
+					ballX := int(math.Round(m.gameState.BallX))
+					ballY := int(math.Round(m.gameState.BallY))
+					switch {
+					case x == ballX && y == ballY:
+						gameView.WriteString("O")
+					case x == 0 && y >= int(m.gameState.P1Y) && y < int(m.gameState.P1Y)+int(m.gameState.P1Height):
+						gameView.WriteString("|")
+					case x == int(m.gameState.GameWidth)-1 && y >= int(m.gameState.P2Y) && y < int(m.gameState.P2Y)+int(m.gameState.P2Height):
+						gameView.WriteString("|")
+					default:
+						gameView.WriteString(" ")
+					}
 				}
+				gameView.WriteString("\n")
 			}
-			gameView.WriteString("\n")
+			gameView.WriteString(fmt.Sprintf("Score: %d - %d\n", m.gameState.P1Score, m.gameState.P2Score))
+			b.WriteString(gameView.String())
+		} else {
+			b.WriteString("Waiting for game to start...\n")
 		}
-		gameView.WriteString(fmt.Sprintf("Score: %d - %d\n", m.gameState.P1Score, m.gameState.P2Score))
-		gameView.WriteString("Controls: W/S and Arrow Keys - Q to quit")
 
-		return gameView.String()
+	case listRooms:
+		b.WriteString("\n[List Rooms Mode]\n")
+		if len(m.pc.WaitingRooms) > 0 {
+			for i, room := range m.pc.WaitingRooms {
+				b.WriteString(fmt.Sprintf("%d: Room ID %s - Bet Price: %.8f\n", i+1, room.Id, room.BetAmt))
+			}
+		} else {
+			b.WriteString("No rooms available.\n")
+		}
+		b.WriteString("Press 'esc' to go back to the main menu.\n")
+
+	case createRoom:
+		b.WriteString("\n[Create Room Mode]\n")
+		b.WriteString("Creating a new room...\n")
+
+	case joinRoom:
+		b.WriteString("\n[Join Room Mode]\n")
+		b.WriteString("Select a room to join. Use [up]/[down] to navigate and [enter] to join.\n")
+		b.WriteString("Press [esc] to go back to the main menu.\n")
+
+		if len(m.pc.WaitingRooms) > 0 {
+			for i, room := range m.pc.WaitingRooms {
+				indicator := " " // Indicator for selected room
+				if i == m.selectedRoomIndex {
+					indicator = ">" // Mark the selected room
+				}
+				b.WriteString(fmt.Sprintf("%s %d: Room ID %s - Bet Price: %.8f\n", indicator, i+1, room.Id, room.BetAmt))
+			}
+		} else {
+			b.WriteString("No rooms available.\n")
+		}
+
+	default:
+		b.WriteString("\nUnknown mode.\n")
 	}
 
-	return b.String()
+	// Set the viewport content to the built string
+	m.viewport.SetContent(b.String())
+
+	// Return the viewport's view
+	return m.viewport.View()
 }
 
 func realMain() error {
@@ -227,9 +392,17 @@ func realMain() error {
 		ChatClient: chat,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create pong client: %v", err)
 	}
+	// Test the connection immediately after creating the client
+	_, err = pc.GetWaitingRooms()
+	if err != nil {
+		return fmt.Errorf("gRPC server connection failed: %v", err)
+	}
+
+	// Start the notifier in a goroutine
 	g.Go(func() error { return pc.StartNotifier() })
+
 	m := &model{
 		ctx:    ctx,
 		cancel: cancel,

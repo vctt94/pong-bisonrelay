@@ -13,6 +13,95 @@ import 'dart:convert' as $convert;
 import 'dart:core' as $core;
 import 'dart:typed_data' as $typed_data;
 
+@$core.Deprecated('Use waitingRoomsRequestDescriptor instead')
+const WaitingRoomsRequest$json = {
+  '1': 'WaitingRoomsRequest',
+};
+
+/// Descriptor for `WaitingRoomsRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List waitingRoomsRequestDescriptor = $convert.base64Decode(
+    'ChNXYWl0aW5nUm9vbXNSZXF1ZXN0');
+
+@$core.Deprecated('Use waitingRoomsResponseDescriptor instead')
+const WaitingRoomsResponse$json = {
+  '1': 'WaitingRoomsResponse',
+  '2': [
+    {'1': 'wr', '3': 1, '4': 3, '5': 11, '6': '.pong.WaitingRoom', '10': 'wr'},
+  ],
+};
+
+/// Descriptor for `WaitingRoomsResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List waitingRoomsResponseDescriptor = $convert.base64Decode(
+    'ChRXYWl0aW5nUm9vbXNSZXNwb25zZRIhCgJ3chgBIAMoCzIRLnBvbmcuV2FpdGluZ1Jvb21SAn'
+    'dy');
+
+@$core.Deprecated('Use joinWaitingRoomRequestDescriptor instead')
+const JoinWaitingRoomRequest$json = {
+  '1': 'JoinWaitingRoomRequest',
+  '2': [
+    {'1': 'room_id', '3': 1, '4': 1, '5': 9, '10': 'roomId'},
+    {'1': 'client_id', '3': 2, '4': 1, '5': 9, '10': 'clientId'},
+  ],
+};
+
+/// Descriptor for `JoinWaitingRoomRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List joinWaitingRoomRequestDescriptor = $convert.base64Decode(
+    'ChZKb2luV2FpdGluZ1Jvb21SZXF1ZXN0EhcKB3Jvb21faWQYASABKAlSBnJvb21JZBIbCgljbG'
+    'llbnRfaWQYAiABKAlSCGNsaWVudElk');
+
+@$core.Deprecated('Use joinWaitingRoomResponseDescriptor instead')
+const JoinWaitingRoomResponse$json = {
+  '1': 'JoinWaitingRoomResponse',
+};
+
+/// Descriptor for `JoinWaitingRoomResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List joinWaitingRoomResponseDescriptor = $convert.base64Decode(
+    'ChdKb2luV2FpdGluZ1Jvb21SZXNwb25zZQ==');
+
+@$core.Deprecated('Use createWaitingRoomResquestDescriptor instead')
+const CreateWaitingRoomResquest$json = {
+  '1': 'CreateWaitingRoomResquest',
+  '2': [
+    {'1': 'host_id', '3': 1, '4': 1, '5': 9, '10': 'hostId'},
+    {'1': 'betAmt', '3': 2, '4': 1, '5': 1, '10': 'betAmt'},
+  ],
+};
+
+/// Descriptor for `CreateWaitingRoomResquest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createWaitingRoomResquestDescriptor = $convert.base64Decode(
+    'ChlDcmVhdGVXYWl0aW5nUm9vbVJlc3F1ZXN0EhcKB2hvc3RfaWQYASABKAlSBmhvc3RJZBIWCg'
+    'ZiZXRBbXQYAiABKAFSBmJldEFtdA==');
+
+@$core.Deprecated('Use createWaitingRoomResponseDescriptor instead')
+const CreateWaitingRoomResponse$json = {
+  '1': 'CreateWaitingRoomResponse',
+  '2': [
+    {'1': 'wr', '3': 1, '4': 1, '5': 11, '6': '.pong.WaitingRoom', '10': 'wr'},
+  ],
+};
+
+/// Descriptor for `CreateWaitingRoomResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createWaitingRoomResponseDescriptor = $convert.base64Decode(
+    'ChlDcmVhdGVXYWl0aW5nUm9vbVJlc3BvbnNlEiEKAndyGAEgASgLMhEucG9uZy5XYWl0aW5nUm'
+    '9vbVICd3I=');
+
+@$core.Deprecated('Use waitingRoomDescriptor instead')
+const WaitingRoom$json = {
+  '1': 'WaitingRoom',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 9, '10': 'id'},
+    {'1': 'host_id', '3': 2, '4': 1, '5': 9, '10': 'hostId'},
+    {'1': 'players', '3': 3, '4': 3, '5': 11, '6': '.pong.Player', '10': 'players'},
+    {'1': 'bet_amt', '3': 4, '4': 1, '5': 1, '10': 'betAmt'},
+  ],
+};
+
+/// Descriptor for `WaitingRoom`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List waitingRoomDescriptor = $convert.base64Decode(
+    'CgtXYWl0aW5nUm9vbRIOCgJpZBgBIAEoCVICaWQSFwoHaG9zdF9pZBgCIAEoCVIGaG9zdElkEi'
+    'YKB3BsYXllcnMYAyADKAsyDC5wb25nLlBsYXllclIHcGxheWVycxIXCgdiZXRfYW10GAQgASgB'
+    'UgZiZXRBbXQ=');
+
 @$core.Deprecated('Use waitingRoomRequestDescriptor instead')
 const WaitingRoomRequest$json = {
   '1': 'WaitingRoomRequest',
@@ -26,7 +115,7 @@ final $typed_data.Uint8List waitingRoomRequestDescriptor = $convert.base64Decode
 const Player$json = {
   '1': 'Player',
   '2': [
-    {'1': 'player_id', '3': 1, '4': 1, '5': 9, '10': 'playerId'},
+    {'1': 'uid', '3': 1, '4': 1, '5': 9, '10': 'uid'},
     {'1': 'nick', '3': 2, '4': 1, '5': 9, '10': 'nick'},
     {'1': 'betAmount', '3': 3, '4': 1, '5': 1, '10': 'betAmount'},
   ],
@@ -34,8 +123,8 @@ const Player$json = {
 
 /// Descriptor for `Player`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List playerDescriptor = $convert.base64Decode(
-    'CgZQbGF5ZXISGwoJcGxheWVyX2lkGAEgASgJUghwbGF5ZXJJZBISCgRuaWNrGAIgASgJUgRuaW'
-    'NrEhwKCWJldEFtb3VudBgDIAEoAVIJYmV0QW1vdW50');
+    'CgZQbGF5ZXISEAoDdWlkGAEgASgJUgN1aWQSEgoEbmljaxgCIAEoCVIEbmljaxIcCgliZXRBbW'
+    '91bnQYAyABKAFSCWJldEFtb3VudA==');
 
 @$core.Deprecated('Use waitingRoomResponseDescriptor instead')
 const WaitingRoomResponse$json = {
@@ -67,17 +156,17 @@ const NtfnStreamResponse$json = {
   '1': 'NtfnStreamResponse',
   '2': [
     {'1': 'started', '3': 1, '4': 1, '5': 8, '10': 'started'},
-    {'1': 'player_number', '3': 2, '4': 1, '5': 5, '10': 'playerNumber'},
-    {'1': 'message', '3': 3, '4': 1, '5': 9, '10': 'message'},
-    {'1': 'client_id', '3': 4, '4': 1, '5': 9, '10': 'clientId'},
+    {'1': 'message', '3': 2, '4': 1, '5': 9, '10': 'message'},
+    {'1': 'betAmt', '3': 3, '4': 1, '5': 1, '10': 'betAmt'},
+    {'1': 'player_number', '3': 4, '4': 1, '5': 5, '10': 'playerNumber'},
   ],
 };
 
 /// Descriptor for `NtfnStreamResponse`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List ntfnStreamResponseDescriptor = $convert.base64Decode(
-    'ChJOdGZuU3RyZWFtUmVzcG9uc2USGAoHc3RhcnRlZBgBIAEoCFIHc3RhcnRlZBIjCg1wbGF5ZX'
-    'JfbnVtYmVyGAIgASgFUgxwbGF5ZXJOdW1iZXISGAoHbWVzc2FnZRgDIAEoCVIHbWVzc2FnZRIb'
-    'CgljbGllbnRfaWQYBCABKAlSCGNsaWVudElk');
+    'ChJOdGZuU3RyZWFtUmVzcG9uc2USGAoHc3RhcnRlZBgBIAEoCFIHc3RhcnRlZBIYCgdtZXNzYW'
+    'dlGAIgASgJUgdtZXNzYWdlEhYKBmJldEFtdBgDIAEoAVIGYmV0QW10EiMKDXBsYXllcl9udW1i'
+    'ZXIYBCABKAVSDHBsYXllck51bWJlcg==');
 
 @$core.Deprecated('Use startGameStreamRequestDescriptor instead')
 const StartGameStreamRequest$json = {

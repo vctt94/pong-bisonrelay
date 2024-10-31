@@ -67,6 +67,19 @@ Map<String, dynamic> _$PlayerToJson(Player instance) => <String, dynamic>{
       'bet_amt': instance.betAmount,
     };
 
+WaitingRoom _$WaitingRoomFromJson(Map<String, dynamic> json) => WaitingRoom(
+      json['id'] as String,
+      json['host_id'] as String,
+      (json['bet_amt'] as num).toDouble(),
+    );
+
+Map<String, dynamic> _$WaitingRoomToJson(WaitingRoom instance) =>
+    <String, dynamic>{
+      'id': instance.id,
+      'host_id': instance.host,
+      'bet_amt': instance.betAmount,
+    };
+
 LocalInfo _$LocalInfoFromJson(Map<String, dynamic> json) => LocalInfo(
       json['id'] as String,
       json['nick'] as String,

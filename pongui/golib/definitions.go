@@ -31,6 +31,13 @@ type localInfo struct {
 	Nick string            `json:"nick"`
 }
 
+type waitingRoom struct {
+	ID      string    `json:"id"`
+	BetAmt  float64   `json:"bet_amt"`
+	HostID  string    `json:"host_id"`
+	Players []*player `json:"players"`
+}
+
 type player struct {
 	UID    client.UserID `json:"uid"`
 	Nick   string        `json:"nick"`
@@ -39,7 +46,7 @@ type player struct {
 
 func playerFromServer(p *pong.Player) (*player, error) {
 	var id zkidentity.ShortID
-	err := id.FromString(p.PlayerId)
+	err := id.FromString(p.Uid)
 	if err != nil {
 		return nil, err
 	}

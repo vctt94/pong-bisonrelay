@@ -197,6 +197,33 @@ func handleClientCmd(cc *clientCtx, cmd *cmd) (interface{}, error) {
 			}
 		}
 		return res, nil
+	case CTGetWaitingRooms:
+		rooms, err := cc.c.GetWaitingRooms()
+		if err != nil {
+			return nil, err
+		}
+		res := make([]*waitingRoom, len(rooms))
+		for i, r := range rooms {
+			players := make([]*player, len(r.Players))
+			for i, p := range r.Players {
+				var id zkidentity.ShortID
+				err := id.FromString(p.Uid)
+				if err != nil {
+					return nil, err
+				}
+
+				players[i], err = playerFromServer(p)
+				if err != nil {
+					return nil, err
+				}
+			}
+			res[i] = &waitingRoom{
+				ID:     r.Id,
+				HostID: r.HostId,
+				BetAmt: r.BetAmt,
+			}
+		}
+		return res, nil
 
 	case CTStopClient:
 		cc.cancel()

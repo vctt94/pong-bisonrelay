@@ -32,14 +32,27 @@ type gameInstance struct {
 }
 
 type gameManager struct {
+	sync.RWMutex
+
 	ID             *zkidentity.ShortID
-	mu             sync.Mutex
 	games          map[string]*gameInstance
-	waitingRoom    *WaitingRoom
+	waitingRooms   []*WaitingRoom
 	playerSessions *PlayerSessions
 
 	debug slog.Level
 	log   slog.Logger
+}
+
+func (g *gameManager) GetWaitingRoom(roomID string) *WaitingRoom {
+	g.RLock()
+	defer g.RUnlock()
+
+	for _, room := range g.waitingRooms {
+		if room.ID == roomID {
+			return room
+		}
+	}
+	return nil
 }
 
 func (s *gameManager) cleanupGameInstance(instance *gameInstance) {
@@ -61,8 +74,8 @@ func (s *gameManager) cleanupGameInstance(instance *gameInstance) {
 }
 
 func (gm *gameManager) getPlayerGame(clientID zkidentity.ShortID) *gameInstance {
-	gm.mu.Lock()
-	defer gm.mu.Unlock()
+	gm.Lock()
+	defer gm.Unlock()
 	for _, game := range gm.games {
 		for _, player := range game.players {
 			if player.ID == clientID {
@@ -74,15 +87,18 @@ func (gm *gameManager) getPlayerGame(clientID zkidentity.ShortID) *gameInstance 
 	return nil
 }
 
-func (s *gameManager) startGame(ctx context.Context, players []*Player) *gameInstance {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	gameID := generateGameID()
+func (s *gameManager) startGame(ctx context.Context, players []*Player) (*gameInstance, error) {
+	s.Lock()
+	defer s.Unlock()
+	gameID, err := generateRandomID()
+	if err != nil {
+		return nil, err
+	}
 
 	newGameInstance := s.startNewGame(ctx, players, gameID)
 	s.games[gameID] = newGameInstance
 
-	return newGameInstance
+	return newGameInstance, nil
 }
 
 func (s *gameManager) startNewGame(ctx context.Context, players []*Player, id string) *gameInstance {
