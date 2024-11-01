@@ -16,11 +16,14 @@ import 'dart:typed_data' as $typed_data;
 @$core.Deprecated('Use waitingRoomsRequestDescriptor instead')
 const WaitingRoomsRequest$json = {
   '1': 'WaitingRoomsRequest',
+  '2': [
+    {'1': 'room_id', '3': 1, '4': 1, '5': 9, '10': 'roomId'},
+  ],
 };
 
 /// Descriptor for `WaitingRoomsRequest`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List waitingRoomsRequestDescriptor = $convert.base64Decode(
-    'ChNXYWl0aW5nUm9vbXNSZXF1ZXN0');
+    'ChNXYWl0aW5nUm9vbXNSZXF1ZXN0EhcKB3Jvb21faWQYASABKAlSBnJvb21JZA==');
 
 @$core.Deprecated('Use waitingRoomsResponseDescriptor instead')
 const WaitingRoomsResponse$json = {
@@ -156,17 +159,20 @@ const NtfnStreamResponse$json = {
   '1': 'NtfnStreamResponse',
   '2': [
     {'1': 'started', '3': 1, '4': 1, '5': 8, '10': 'started'},
-    {'1': 'message', '3': 2, '4': 1, '5': 9, '10': 'message'},
-    {'1': 'betAmt', '3': 3, '4': 1, '5': 1, '10': 'betAmt'},
-    {'1': 'player_number', '3': 4, '4': 1, '5': 5, '10': 'playerNumber'},
+    {'1': 'game_id', '3': 2, '4': 1, '5': 9, '10': 'gameId'},
+    {'1': 'message', '3': 3, '4': 1, '5': 9, '10': 'message'},
+    {'1': 'betAmt', '3': 4, '4': 1, '5': 1, '10': 'betAmt'},
+    {'1': 'player_number', '3': 5, '4': 1, '5': 5, '10': 'playerNumber'},
+    {'1': 'player_id', '3': 6, '4': 1, '5': 9, '10': 'playerId'},
   ],
 };
 
 /// Descriptor for `NtfnStreamResponse`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List ntfnStreamResponseDescriptor = $convert.base64Decode(
-    'ChJOdGZuU3RyZWFtUmVzcG9uc2USGAoHc3RhcnRlZBgBIAEoCFIHc3RhcnRlZBIYCgdtZXNzYW'
-    'dlGAIgASgJUgdtZXNzYWdlEhYKBmJldEFtdBgDIAEoAVIGYmV0QW10EiMKDXBsYXllcl9udW1i'
-    'ZXIYBCABKAVSDHBsYXllck51bWJlcg==');
+    'ChJOdGZuU3RyZWFtUmVzcG9uc2USGAoHc3RhcnRlZBgBIAEoCFIHc3RhcnRlZBIXCgdnYW1lX2'
+    'lkGAIgASgJUgZnYW1lSWQSGAoHbWVzc2FnZRgDIAEoCVIHbWVzc2FnZRIWCgZiZXRBbXQYBCAB'
+    'KAFSBmJldEFtdBIjCg1wbGF5ZXJfbnVtYmVyGAUgASgFUgxwbGF5ZXJOdW1iZXISGwoJcGxheW'
+    'VyX2lkGAYgASgJUghwbGF5ZXJJZA==');
 
 @$core.Deprecated('Use startGameStreamRequestDescriptor instead')
 const StartGameStreamRequest$json = {

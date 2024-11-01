@@ -8,6 +8,7 @@ import (
 	"log"
 	"log/slog"
 	"sync"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/companyzero/bisonrelay/clientrpc/types"
@@ -22,16 +23,17 @@ type PongClientCfg struct {
 	Log           slog.Logger // Application's logger
 	ChatClient    types.ChatServiceClient
 	PaymentClient types.PaymentsServiceClient
+
+	// Notifications tracks handlers for client events. If nil, the client
+	// will initialize a new notification manager. Specifying a
+	// notification manager in the config is useful to ensure no
+	// notifications are lost due to race conditions in client
+	// initialization.
+	Notifications *NotificationManager
 }
 type PongClient struct {
 	sync.RWMutex
-	ctx       context.Context
-	ID        string
-	BetAmount float64
-
-	CurrentWR *pong.WaitingRoom
-
-	WaitingRooms []*pong.WaitingRoom
+	ID string
 
 	playerNumber int32
 	cfg          *PongClientCfg
@@ -41,6 +43,8 @@ type PongClient struct {
 	// br clientrpc
 	chat    types.ChatServiceClient
 	payment types.PaymentsServiceClient
+
+	ntfns *NotificationManager
 
 	stream    pong.PongGame_StartGameStreamClient
 	notifier  pong.PongGame_StartNtfnStreamClient
@@ -76,13 +80,11 @@ func (pc *PongClient) StartNotifier() error {
 				}
 				if ntfn.BetAmt > 0 {
 					log.Printf("Current Bet Amount: %.8f DCR\n", ntfn.BetAmt)
-					pc.BetAmount = ntfn.BetAmt
-					pc.UpdatesCh <- UpdatedMsg{}
+					pc.ntfns.notifyBetAmtChanged(ntfn.PlayerId, ntfn.BetAmt, time.Now())
 				}
 				if ntfn.Started {
-					pc.UpdatesCh <- UpdatedMsg{}
+					pc.ntfns.notifyGameStarted(ntfn.GameId, time.Now())
 				}
-				fmt.Printf("ntfn: %+v\n", ntfn)
 			}
 		}
 	}()
@@ -116,6 +118,7 @@ func (pc *PongClient) SignalReady() error {
 
 				return
 			}
+			// game stream update
 			go func() { pc.UpdatesCh <- update }()
 		}
 	}()
@@ -144,10 +147,7 @@ func (pc *PongClient) GetWaitingRooms() ([]*pong.WaitingRoom, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error sending input: %w", err)
 	}
-	pc.Lock()
-	pc.WaitingRooms = res.Wr
-	pc.Unlock()
-	go func() { pc.UpdatesCh <- UpdatedMsg{} }()
+	go func() { pc.UpdatesCh <- res.Wr }()
 
 	return res.Wr, nil
 }
@@ -169,8 +169,7 @@ func (pc *PongClient) CreatewaitingRoom(ctx context.Context) (*pong.WaitingRoom,
 	if err != nil {
 		return nil, fmt.Errorf("error sending input: %w", err)
 	}
-	pc.CurrentWR = res.Wr
-	go func() { pc.UpdatesCh <- UpdatedMsg{} }()
+	pc.ntfns.notifyOnWRCreated(res.Wr, time.Now())
 	return res.Wr, nil
 }
 
@@ -193,6 +192,11 @@ func NewPongClient(clientID string, cfg *PongClientCfg) (*PongClient, error) {
 		return nil, err
 	}
 
+	ntfns := cfg.Notifications
+	if ntfns == nil {
+		ntfns = NewNotificationManager()
+	}
+
 	// Initialize the pongClient instance
 	pc := &PongClient{
 		ID:        clientID,
@@ -202,6 +206,8 @@ func NewPongClient(clientID string, cfg *PongClientCfg) (*PongClient, error) {
 		chat:      cfg.ChatClient,
 		payment:   cfg.PaymentClient,
 		UpdatesCh: make(chan tea.Msg),
+
+		ntfns: ntfns,
 	}
 
 	return pc, nil

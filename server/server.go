@@ -102,6 +102,7 @@ func (s *Server) StartGameStream(req *pong.StartGameStreamRequest, stream pong.P
 	}
 
 	player.stream = stream
+	player.ready = true
 
 	for range ctx.Done() {
 		s.handleDisconnect(clientID)
@@ -233,8 +234,10 @@ func (s *Server) ManageWaitingRoom(ctx context.Context, wr *WaitingRoom) error {
 	var err error
 	var game *gameInstance
 	for {
-		// loop which handle waiting rooms ready to start
 		if players, ready := wr.ReadyPlayers(); ready {
+			// remove wr after players are ready and removed from wr.
+			s.gameManager.RemoveWaitingRoom(wr.ID)
+
 			s.log.Debugf("Starting game with players: %v and %v", players[0].ID, players[1].ID)
 			go func(players []*Player) {
 				// Start the game with the ready players
@@ -255,7 +258,11 @@ func (s *Server) ManageWaitingRoom(ctx context.Context, wr *WaitingRoom) error {
 						}
 
 						// Send game start notification
-						if err = player.notifier.Send(&pong.NtfnStreamResponse{Message: "Game has started with ID: " + game.id, Started: true}); err != nil {
+						if err = player.notifier.Send(&pong.NtfnStreamResponse{
+							Message: "Game has started with ID: " + game.id,
+							Started: true,
+							GameId:  game.id,
+						}); err != nil {
 							s.log.Debugf("Failed to send game start notification to player %s: %v", player.ID, err)
 							return
 						}
@@ -296,7 +303,7 @@ func (s *Server) ManageWaitingRoom(ctx context.Context, wr *WaitingRoom) error {
 						s.log.Errorf("Failed to send bet to winner %s: %v", winner.String(), err)
 					} else {
 						s.log.Debugf("Try sending total bet amount %.8f to winner %s", game.betAmt, winner.String())
-						// Acknowledge tips from both players
+						// XXX Store on db and ack only after successfully send it back
 						for _, player := range players {
 							s.ackUnprocessedTipFromPlayer(ctx, player.ID)
 						}

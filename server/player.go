@@ -16,6 +16,7 @@ type Player struct {
 	score        int
 	stream       pong.PongGame_StartGameStreamServer
 	notifier     pong.PongGame_StartNtfnStreamServer
+	ready        bool
 }
 
 type PlayerSessions struct {

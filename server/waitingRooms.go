@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/companyzero/bisonrelay/client/clientintf"
@@ -31,8 +30,12 @@ func (wr *WaitingRoom) AddPlayer(player *Player) {
 func (wr *WaitingRoom) ReadyPlayers() ([]*Player, bool) {
 	wr.Lock()
 	defer wr.Unlock()
-	fmt.Printf("wr players: %+v\n", wr.players)
 	if len(wr.players) >= 2 {
+		for i := range wr.players {
+			if !wr.players[i].ready {
+				return nil, false
+			}
+		}
 		players := wr.players[:2]
 		wr.players = wr.players[2:]
 		return players, true

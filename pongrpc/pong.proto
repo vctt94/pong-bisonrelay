@@ -17,7 +17,9 @@ service PongGame {
   rpc JoinWaitingRoom(JoinWaitingRoomRequest) returns (JoinWaitingRoomResponse);
 }
 
-message WaitingRoomsRequest {}
+message WaitingRoomsRequest {
+  string room_id = 1;
+}
 
 message WaitingRoomsResponse {
   repeated WaitingRoom wr = 1;
@@ -64,9 +66,12 @@ message StartNtfnStreamRequest {
 
 message NtfnStreamResponse {
   bool started = 1;
-  string message = 2; // Confirmation message or additional details
-  double betAmt = 3;
-  int32 player_number = 4;  // Player 1 or Player 2
+  string game_id = 2;
+  string message = 3; // Confirmation message or additional details
+  double betAmt = 4;
+  int32 player_number = 5;  // Player 1 or Player 2
+  // some plager id change
+  string player_id = 6;
 }
 
 // SignalReadyRequest contains information about the client signaling readiness

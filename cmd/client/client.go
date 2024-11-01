@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"math"
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/vctt94/pong-bisonrelay/client"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
@@ -49,7 +49,7 @@ var (
 	rpcPass            = flag.String("rpcpass", "rpcpass", "RPC password for basic authentication")
 )
 
-type model struct {
+type appstate struct {
 	sync.Mutex
 	mode              appMode
 	gameState         *pong.GameUpdate
@@ -60,9 +60,23 @@ type model struct {
 	selectedRoomIndex int
 	msgCh             chan tea.Msg
 	viewport          viewport.Model
+	createdWRChan     chan struct{}
+	betAmtChangedChan chan struct{}
+
+	log     slog.Logger
+	players []*pong.Player
+
+	// player current bet amt
+	betAmount float64
+
+	currentWR *pong.WaitingRoom
+
+	waitingRooms []*pong.WaitingRoom
+
+	notification string
 }
 
-func (m *model) listenForUpdates() tea.Cmd {
+func (m *appstate) listenForUpdates() tea.Cmd {
 	return func() tea.Msg {
 		// Start a goroutine to listen for updates
 		go func() {
@@ -74,7 +88,7 @@ func (m *model) listenForUpdates() tea.Cmd {
 	}
 }
 
-func (m *model) Init() tea.Cmd {
+func (m *appstate) Init() tea.Cmd {
 	m.msgCh = make(chan tea.Msg)
 
 	// Initialize the viewport with zero dimensions; we'll set them upon receiving the window size
@@ -86,7 +100,7 @@ func (m *model) Init() tea.Cmd {
 	)
 }
 
-func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.Lock()
@@ -109,11 +123,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "c":
 			// Switch to create room mode if player has a bet
-			if m.pc.BetAmount > 0 || isF2p {
+			if m.betAmount > 0 || isF2p {
 				m.createRoom()
 				return m, nil
 			} else {
-				log.Println("Bet amount must be > 0 to create a room.")
+				m.notification = "Bet amount must be > 0 to create a room."
 			}
 		case "j":
 			// Switch to join room mode
@@ -136,18 +150,18 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "down":
 			// Check mode to avoid duplicate handling of "down" key
-			if m.mode == joinRoom && m.selectedRoomIndex < len(m.pc.WaitingRooms)-1 {
+			if m.mode == joinRoom && m.selectedRoomIndex < len(m.waitingRooms)-1 {
 				m.selectedRoomIndex++
 			} else if m.mode == gameMode {
 				return m, m.handleGameInput(msg)
 			}
 			return m, nil
 		case "enter":
-			if m.mode == joinRoom && len(m.pc.WaitingRooms) > 0 {
-				selectedRoom := m.pc.WaitingRooms[m.selectedRoomIndex]
+			if m.mode == joinRoom && len(m.waitingRooms) > 0 {
+				selectedRoom := m.waitingRooms[m.selectedRoomIndex]
 				err := m.joinRoom(selectedRoom.Id)
 				if err != nil {
-					log.Printf("Error joining room: %v", err)
+					m.log.Errorf("Error joining room: %v", err)
 				}
 			}
 			return m, nil
@@ -176,30 +190,34 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = err
 			return m, nil
 		}
+		m.Lock()
 		m.gameState = &gameUpdate
+		m.Unlock()
 		// fmt.Printf("game update: %+v\n", gameUpdate)
 
 		return m, m.waitForMsg()
+
 	}
 	return m, m.waitForMsg()
 }
 
-func (m *model) waitForMsg() tea.Cmd {
+func (m *appstate) waitForMsg() tea.Cmd {
 	return func() tea.Msg {
 		return <-m.msgCh
 	}
 }
 
-func (m *model) listWaitingRooms() error {
-	_, err := m.pc.GetWaitingRooms()
+func (m *appstate) listWaitingRooms() error {
+	wr, err := m.pc.GetWaitingRooms()
 	if err != nil {
-		log.Printf("Error fetching waiting rooms: %v", err)
+		m.log.Errorf("Error fetching waiting rooms: %v", err)
 		return err
 	}
+	m.waitingRooms = wr
 	return nil
 }
 
-func (m *model) createRoom() error {
+func (m *appstate) createRoom() error {
 	var err error
 	_, err = m.pc.CreatewaitingRoom(m.ctx)
 	if err != nil {
@@ -208,12 +226,12 @@ func (m *model) createRoom() error {
 
 	return nil
 }
-func (m *model) joinRoom(roomID string) error {
+func (m *appstate) joinRoom(roomID string) error {
 
 	// Send request to join the specified room
 	_, err := m.pc.JoinWaitingRoom(m.ctx, roomID)
 	if err != nil {
-		log.Printf("Error joining room %s: %v", roomID, err)
+		m.log.Errorf("Error joining room %s: %v", roomID, err)
 		return err
 	}
 
@@ -221,23 +239,22 @@ func (m *model) joinRoom(roomID string) error {
 	// Update mode to gameMode upon successful join
 	m.mode = gameMode
 	m.Unlock()
-	fmt.Printf("Game State Updated: %+v\n", m.gameState)
 
 	return nil
 }
 
-func (m *model) makeClientReady() tea.Cmd {
-	log.Println("Client signaling readiness")
+func (m *appstate) makeClientReady() tea.Cmd {
+	m.log.Debugf("Client signaling readiness")
 	go func() {
 		err := m.pc.SignalReady()
 		if err != nil {
-			log.Printf("Error signaling readiness: %v", err)
+			m.log.Errorf("Error signaling readiness: %v", err)
 		}
 	}()
 	return nil
 }
 
-func (m *model) handleGameInput(msg tea.KeyMsg) tea.Cmd {
+func (m *appstate) handleGameInput(msg tea.KeyMsg) tea.Cmd {
 	return func() tea.Msg {
 		var input string
 		switch msg.String() {
@@ -249,19 +266,24 @@ func (m *model) handleGameInput(msg tea.KeyMsg) tea.Cmd {
 		if input != "" {
 			err := m.pc.SendInput(input)
 			if err != nil {
-				log.Printf("Error sending game input: %v", err)
+				m.log.Errorf("Error sending game input: %v", err)
 			}
 		}
 		return nil
 	}
 }
 
-func (m *model) View() string {
+func (m *appstate) View() string {
 	var b strings.Builder
 
 	// Build the header
 	b.WriteString("=== Pong Game Client ===\n")
-	b.WriteString(fmt.Sprintf("Player: %s\nBet Amount: %.8f\nCurrent Room: %s\n", m.pc.ID, m.pc.BetAmount, m.pc.CurrentWR))
+	if m.notification != "" {
+		b.WriteString(fmt.Sprintf("Notification: %s\n", m.notification))
+	} else {
+		b.WriteString("No new notifications.\n")
+	}
+	b.WriteString(fmt.Sprintf("Player: %s\nBet Amount: %.8f\nCurrent Room: %s\n", m.pc.ID, m.betAmount, m.currentWR))
 	b.WriteString("Use the following keys to navigate:\n")
 
 	// Display different modes based on the current app mode
@@ -308,8 +330,8 @@ func (m *model) View() string {
 
 	case listRooms:
 		b.WriteString("\n[List Rooms Mode]\n")
-		if len(m.pc.WaitingRooms) > 0 {
-			for i, room := range m.pc.WaitingRooms {
+		if len(m.waitingRooms) > 0 {
+			for i, room := range m.waitingRooms {
 				b.WriteString(fmt.Sprintf("%d: Room ID %s - Bet Price: %.8f\n", i+1, room.Id, room.BetAmt))
 			}
 		} else {
@@ -326,8 +348,8 @@ func (m *model) View() string {
 		b.WriteString("Select a room to join. Use [up]/[down] to navigate and [enter] to join.\n")
 		b.WriteString("Press [esc] to go back to the main menu.\n")
 
-		if len(m.pc.WaitingRooms) > 0 {
-			for i, room := range m.pc.WaitingRooms {
+		if len(m.waitingRooms) > 0 {
+			for i, room := range m.waitingRooms {
 				indicator := " " // Indicator for selected room
 				if i == m.selectedRoomIndex {
 					indicator = ">" // Mark the selected room
@@ -386,14 +408,65 @@ func realMain() error {
 
 	clientID := hex.EncodeToString(publicIdentity.Identity[:])
 	copy(zkShortID[:], clientID)
+	as := &appstate{
+		ctx:    ctx,
+		cancel: cancel,
+		log:    log,
+	}
+	// Setup notification handlers.
+	ntfns := client.NewNotificationManager()
+	ntfns.RegisterSync(client.OnWRCreatedNtfn(func(wr *pong.WaitingRoom, ts time.Time) {
+		as.Lock()
+		as.waitingRooms = append(as.waitingRooms, wr)
+		as.currentWR = wr
+		as.betAmount = wr.BetAmt
+		as.Unlock()
+		as.notification = fmt.Sprintf("New waiting room created with ID: %s", wr.Id)
+
+		go func() {
+			select {
+			case as.createdWRChan <- struct{}{}:
+			case <-as.ctx.Done():
+			}
+		}()
+	}))
+
+	ntfns.Register(client.OnBetAmtChangedNtfn(func(playerID string, betAmt float64, ts time.Time) {
+		as.Lock()
+		// Update bet amount for the player in the local state (e.g., as.Players).
+		for i, p := range as.players {
+			if p.Uid == playerID {
+				as.players[i].BetAmount = betAmt
+				break
+			}
+		}
+		as.Unlock()
+		go func() {
+			select {
+			case as.betAmtChangedChan <- struct{}{}:
+			case <-as.ctx.Done():
+			}
+		}()
+	}))
+
+	ntfns.Register(client.OnGameStartedNtfn(func(id string, ts time.Time) {
+		as.mode = gameMode
+		as.notification = fmt.Sprintf("game started with ID %s", id)
+		go func() {
+			as.msgCh <- client.UpdatedMsg{}
+		}()
+	}))
 
 	pc, err := client.NewPongClient(clientID, &client.PongClientCfg{
-		ServerAddr: *serverAddr,
-		ChatClient: chat,
+		ServerAddr:    *serverAddr,
+		ChatClient:    chat,
+		Notifications: ntfns,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create pong client: %v", err)
 	}
+	as.pc = pc
+
 	// Test the connection immediately after creating the client
 	_, err = pc.GetWaitingRooms()
 	if err != nil {
@@ -403,14 +476,9 @@ func realMain() error {
 	// Start the notifier in a goroutine
 	g.Go(func() error { return pc.StartNotifier() })
 
-	m := &model{
-		ctx:    ctx,
-		cancel: cancel,
-		pc:     pc,
-	}
-	defer m.cancel()
+	defer as.cancel()
 
-	p := tea.NewProgram(m)
+	p := tea.NewProgram(as)
 
 	_, err = p.Run()
 	if err != nil {

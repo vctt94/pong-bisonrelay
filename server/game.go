@@ -55,6 +55,16 @@ func (g *gameManager) GetWaitingRoom(roomID string) *WaitingRoom {
 	return nil
 }
 
+func (gm *gameManager) RemoveWaitingRoom(roomID string) {
+	for i, room := range gm.waitingRooms {
+		if room.ID == roomID {
+			// Remove the room by appending the elements before and after it
+			gm.waitingRooms = append(gm.waitingRooms[:i], gm.waitingRooms[i+1:]...)
+			break
+		}
+	}
+}
+
 func (s *gameManager) cleanupGameInstance(instance *gameInstance) {
 	if !instance.cleanedUp {
 		instance.cleanedUp = true

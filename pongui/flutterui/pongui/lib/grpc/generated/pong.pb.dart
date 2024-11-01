@@ -14,12 +14,21 @@ import 'dart:core' as $core;
 import 'package:protobuf/protobuf.dart' as $pb;
 
 class WaitingRoomsRequest extends $pb.GeneratedMessage {
-  factory WaitingRoomsRequest() => create();
+  factory WaitingRoomsRequest({
+    $core.String? roomId,
+  }) {
+    final $result = create();
+    if (roomId != null) {
+      $result.roomId = roomId;
+    }
+    return $result;
+  }
   WaitingRoomsRequest._() : super();
   factory WaitingRoomsRequest.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory WaitingRoomsRequest.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
 
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'WaitingRoomsRequest', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'roomId')
     ..hasRequiredFields = false
   ;
 
@@ -43,6 +52,15 @@ class WaitingRoomsRequest extends $pb.GeneratedMessage {
   @$core.pragma('dart2js:noInline')
   static WaitingRoomsRequest getDefault() => _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<WaitingRoomsRequest>(create);
   static WaitingRoomsRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get roomId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set roomId($core.String v) { $_setString(0, v); }
+  @$pb.TagNumber(1)
+  $core.bool hasRoomId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearRoomId() => clearField(1);
 }
 
 class WaitingRoomsResponse extends $pb.GeneratedMessage {
@@ -594,13 +612,18 @@ class StartNtfnStreamRequest extends $pb.GeneratedMessage {
 class NtfnStreamResponse extends $pb.GeneratedMessage {
   factory NtfnStreamResponse({
     $core.bool? started,
+    $core.String? gameId,
     $core.String? message,
     $core.double? betAmt,
     $core.int? playerNumber,
+    $core.String? playerId,
   }) {
     final $result = create();
     if (started != null) {
       $result.started = started;
+    }
+    if (gameId != null) {
+      $result.gameId = gameId;
     }
     if (message != null) {
       $result.message = message;
@@ -611,6 +634,9 @@ class NtfnStreamResponse extends $pb.GeneratedMessage {
     if (playerNumber != null) {
       $result.playerNumber = playerNumber;
     }
+    if (playerId != null) {
+      $result.playerId = playerId;
+    }
     return $result;
   }
   NtfnStreamResponse._() : super();
@@ -619,9 +645,11 @@ class NtfnStreamResponse extends $pb.GeneratedMessage {
 
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'NtfnStreamResponse', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
     ..aOB(1, _omitFieldNames ? '' : 'started')
-    ..aOS(2, _omitFieldNames ? '' : 'message')
-    ..a<$core.double>(3, _omitFieldNames ? '' : 'betAmt', $pb.PbFieldType.OD, protoName: 'betAmt')
-    ..a<$core.int>(4, _omitFieldNames ? '' : 'playerNumber', $pb.PbFieldType.O3)
+    ..aOS(2, _omitFieldNames ? '' : 'gameId')
+    ..aOS(3, _omitFieldNames ? '' : 'message')
+    ..a<$core.double>(4, _omitFieldNames ? '' : 'betAmt', $pb.PbFieldType.OD, protoName: 'betAmt')
+    ..a<$core.int>(5, _omitFieldNames ? '' : 'playerNumber', $pb.PbFieldType.O3)
+    ..aOS(6, _omitFieldNames ? '' : 'playerId')
     ..hasRequiredFields = false
   ;
 
@@ -656,31 +684,50 @@ class NtfnStreamResponse extends $pb.GeneratedMessage {
   void clearStarted() => clearField(1);
 
   @$pb.TagNumber(2)
-  $core.String get message => $_getSZ(1);
+  $core.String get gameId => $_getSZ(1);
   @$pb.TagNumber(2)
-  set message($core.String v) { $_setString(1, v); }
+  set gameId($core.String v) { $_setString(1, v); }
   @$pb.TagNumber(2)
-  $core.bool hasMessage() => $_has(1);
+  $core.bool hasGameId() => $_has(1);
   @$pb.TagNumber(2)
-  void clearMessage() => clearField(2);
+  void clearGameId() => clearField(2);
 
   @$pb.TagNumber(3)
-  $core.double get betAmt => $_getN(2);
+  $core.String get message => $_getSZ(2);
   @$pb.TagNumber(3)
-  set betAmt($core.double v) { $_setDouble(2, v); }
+  set message($core.String v) { $_setString(2, v); }
   @$pb.TagNumber(3)
-  $core.bool hasBetAmt() => $_has(2);
+  $core.bool hasMessage() => $_has(2);
   @$pb.TagNumber(3)
-  void clearBetAmt() => clearField(3);
+  void clearMessage() => clearField(3);
 
   @$pb.TagNumber(4)
-  $core.int get playerNumber => $_getIZ(3);
+  $core.double get betAmt => $_getN(3);
   @$pb.TagNumber(4)
-  set playerNumber($core.int v) { $_setSignedInt32(3, v); }
+  set betAmt($core.double v) { $_setDouble(3, v); }
   @$pb.TagNumber(4)
-  $core.bool hasPlayerNumber() => $_has(3);
+  $core.bool hasBetAmt() => $_has(3);
   @$pb.TagNumber(4)
-  void clearPlayerNumber() => clearField(4);
+  void clearBetAmt() => clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.int get playerNumber => $_getIZ(4);
+  @$pb.TagNumber(5)
+  set playerNumber($core.int v) { $_setSignedInt32(4, v); }
+  @$pb.TagNumber(5)
+  $core.bool hasPlayerNumber() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearPlayerNumber() => clearField(5);
+
+  /// some plager id change
+  @$pb.TagNumber(6)
+  $core.String get playerId => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set playerId($core.String v) { $_setString(5, v); }
+  @$pb.TagNumber(6)
+  $core.bool hasPlayerId() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearPlayerId() => clearField(6);
 }
 
 /// SignalReadyRequest contains information about the client signaling readiness
