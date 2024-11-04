@@ -13,10 +13,38 @@ service PongGame {
   // waiting room
   rpc GetWaitingRoom(WaitingRoomRequest) returns (WaitingRoomResponse);
   rpc GetWaitingRooms(WaitingRoomsRequest) returns (WaitingRoomsResponse);
-  rpc CreateWaitingRoom(CreateWaitingRoomResquest) returns (CreateWaitingRoomResponse);
+  rpc CreateWaitingRoom(CreateWaitingRoomRequest) returns (CreateWaitingRoomResponse);
   rpc JoinWaitingRoom(JoinWaitingRoomRequest) returns (JoinWaitingRoomResponse);
 }
 
+// Notification Messages
+enum NotificationType {
+  UNKNOWN = 0;
+  MESSAGE = 1;
+  GAME_START = 2;
+  GAME_END = 3;
+  OPPONENT_DISCONNECTED = 4;
+  BET_AMOUNT_UPDATE = 5;
+  PLAYER_JOINED_WR = 6;
+}
+
+message StartNtfnStreamRequest {
+  string client_id = 1;
+}
+
+message NtfnStreamResponse {
+  NotificationType notification_type = 1; // Type of the notification
+  bool started = 2;
+  string game_id = 3;
+  string message = 4;  // message or additional details
+  double betAmt = 5;
+  int32 player_number = 6;  // Player 1 or Player 2
+  string player_id = 7;
+  string room_id = 8;
+  WaitingRoom wr=9;
+}
+
+// Waiting Room Messages
 message WaitingRoomsRequest {
   string room_id = 1;
 }
@@ -30,9 +58,11 @@ message JoinWaitingRoomRequest {
   string client_id = 2;
 }
 
-message JoinWaitingRoomResponse {}
+message JoinWaitingRoomResponse {
+  WaitingRoom wr = 1;
+}
 
-message CreateWaitingRoomResquest {
+message CreateWaitingRoomRequest {
   string host_id = 1;
   double betAmt = 2;
 }
@@ -50,28 +80,15 @@ message WaitingRoom {
 
 message WaitingRoomRequest {}
 
-message Player {
-  string uid = 1;
-  string nick = 2;
-  double betAmount = 3;
-}
-
 message WaitingRoomResponse {
   repeated Player players = 1;
 }
 
-message StartNtfnStreamRequest {
-  string client_id = 1;
-}
-
-message NtfnStreamResponse {
-  bool started = 1;
-  string game_id = 2;
-  string message = 3; // Confirmation message or additional details
-  double betAmt = 4;
-  int32 player_number = 5;  // Player 1 or Player 2
-  // some plager id change
-  string player_id = 6;
+// Game Messages
+message Player {
+  string uid = 1;
+  string nick = 2;
+  double betAmount = 3;
 }
 
 // SignalReadyRequest contains information about the client signaling readiness

@@ -29,7 +29,7 @@ type PongGameClient interface {
 	// waiting room
 	GetWaitingRoom(ctx context.Context, in *WaitingRoomRequest, opts ...grpc.CallOption) (*WaitingRoomResponse, error)
 	GetWaitingRooms(ctx context.Context, in *WaitingRoomsRequest, opts ...grpc.CallOption) (*WaitingRoomsResponse, error)
-	CreateWaitingRoom(ctx context.Context, in *CreateWaitingRoomResquest, opts ...grpc.CallOption) (*CreateWaitingRoomResponse, error)
+	CreateWaitingRoom(ctx context.Context, in *CreateWaitingRoomRequest, opts ...grpc.CallOption) (*CreateWaitingRoomResponse, error)
 	JoinWaitingRoom(ctx context.Context, in *JoinWaitingRoomRequest, opts ...grpc.CallOption) (*JoinWaitingRoomResponse, error)
 }
 
@@ -132,7 +132,7 @@ func (c *pongGameClient) GetWaitingRooms(ctx context.Context, in *WaitingRoomsRe
 	return out, nil
 }
 
-func (c *pongGameClient) CreateWaitingRoom(ctx context.Context, in *CreateWaitingRoomResquest, opts ...grpc.CallOption) (*CreateWaitingRoomResponse, error) {
+func (c *pongGameClient) CreateWaitingRoom(ctx context.Context, in *CreateWaitingRoomRequest, opts ...grpc.CallOption) (*CreateWaitingRoomResponse, error) {
 	out := new(CreateWaitingRoomResponse)
 	err := c.cc.Invoke(ctx, "/pong.PongGame/CreateWaitingRoom", in, out, opts...)
 	if err != nil {
@@ -161,7 +161,7 @@ type PongGameServer interface {
 	// waiting room
 	GetWaitingRoom(context.Context, *WaitingRoomRequest) (*WaitingRoomResponse, error)
 	GetWaitingRooms(context.Context, *WaitingRoomsRequest) (*WaitingRoomsResponse, error)
-	CreateWaitingRoom(context.Context, *CreateWaitingRoomResquest) (*CreateWaitingRoomResponse, error)
+	CreateWaitingRoom(context.Context, *CreateWaitingRoomRequest) (*CreateWaitingRoomResponse, error)
 	JoinWaitingRoom(context.Context, *JoinWaitingRoomRequest) (*JoinWaitingRoomResponse, error)
 	mustEmbedUnimplementedPongGameServer()
 }
@@ -185,7 +185,7 @@ func (UnimplementedPongGameServer) GetWaitingRoom(context.Context, *WaitingRoomR
 func (UnimplementedPongGameServer) GetWaitingRooms(context.Context, *WaitingRoomsRequest) (*WaitingRoomsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWaitingRooms not implemented")
 }
-func (UnimplementedPongGameServer) CreateWaitingRoom(context.Context, *CreateWaitingRoomResquest) (*CreateWaitingRoomResponse, error) {
+func (UnimplementedPongGameServer) CreateWaitingRoom(context.Context, *CreateWaitingRoomRequest) (*CreateWaitingRoomResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateWaitingRoom not implemented")
 }
 func (UnimplementedPongGameServer) JoinWaitingRoom(context.Context, *JoinWaitingRoomRequest) (*JoinWaitingRoomResponse, error) {
@@ -301,7 +301,7 @@ func _PongGame_GetWaitingRooms_Handler(srv interface{}, ctx context.Context, dec
 }
 
 func _PongGame_CreateWaitingRoom_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateWaitingRoomResquest)
+	in := new(CreateWaitingRoomRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -313,7 +313,7 @@ func _PongGame_CreateWaitingRoom_Handler(srv interface{}, ctx context.Context, d
 		FullMethod: "/pong.PongGame/CreateWaitingRoom",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PongGameServer).CreateWaitingRoom(ctx, req.(*CreateWaitingRoomResquest))
+		return srv.(PongGameServer).CreateWaitingRoom(ctx, req.(*CreateWaitingRoomRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

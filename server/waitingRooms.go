@@ -1,14 +1,19 @@
 package server
 
 import (
+	"context"
+	"encoding/hex"
 	"sync"
 
 	"github.com/companyzero/bisonrelay/client/clientintf"
 	"github.com/companyzero/bisonrelay/zkidentity"
+	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 )
 
 type WaitingRoom struct {
 	sync.RWMutex
+	ctx       context.Context
+	cancel    context.CancelFunc
 	ID        string
 	hostID    clientintf.UserID
 	players   []*Player
@@ -82,4 +87,30 @@ func (wr *WaitingRoom) length() int {
 	wr.RLock()
 	defer wr.RUnlock()
 	return len(wr.players)
+}
+
+// ToPongWaitingRoom converts a WaitingRoom instance to a pong.WaitingRoom instance.
+func (wr *WaitingRoom) ToPongWaitingRoom() (*pong.WaitingRoom, error) {
+	wr.Lock()
+	defer wr.Unlock()
+
+	hostIDStr := hex.EncodeToString(wr.hostID[:])
+
+	// Prepare players for pong.WaitingRoom
+	var players []*pong.Player
+	for _, player := range wr.players {
+		p := &pong.Player{
+			Uid:       player.ID.String(),
+			Nick:      player.Nick,
+			BetAmount: player.BetAmt,
+		}
+		players = append(players, p)
+	}
+
+	return &pong.WaitingRoom{
+		Id:      wr.ID,
+		HostId:  hostIDStr,
+		Players: players,
+		BetAmt:  wr.BetAmount,
+	}, nil
 }

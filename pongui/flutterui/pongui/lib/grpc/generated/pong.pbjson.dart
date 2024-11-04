@@ -13,6 +13,26 @@ import 'dart:convert' as $convert;
 import 'dart:core' as $core;
 import 'dart:typed_data' as $typed_data;
 
+@$core.Deprecated('Use notificationTypeDescriptor instead')
+const NotificationType$json = {
+  '1': 'NotificationType',
+  '2': [
+    {'1': 'UNKNOWN', '2': 0},
+    {'1': 'MESSAGE', '2': 1},
+    {'1': 'GAME_START', '2': 2},
+    {'1': 'GAME_END', '2': 3},
+    {'1': 'OPPONENT_DISCONNECTED', '2': 4},
+    {'1': 'BET_AMOUNT_UPDATE', '2': 5},
+    {'1': 'PLAYER_JOINED_WR', '2': 6},
+  ],
+};
+
+/// Descriptor for `NotificationType`. Decode as a `google.protobuf.EnumDescriptorProto`.
+final $typed_data.Uint8List notificationTypeDescriptor = $convert.base64Decode(
+    'ChBOb3RpZmljYXRpb25UeXBlEgsKB1VOS05PV04QABILCgdNRVNTQUdFEAESDgoKR0FNRV9TVE'
+    'FSVBACEgwKCEdBTUVfRU5EEAMSGQoVT1BQT05FTlRfRElTQ09OTkVDVEVEEAQSFQoRQkVUX0FN'
+    'T1VOVF9VUERBVEUQBRIUChBQTEFZRVJfSk9JTkVEX1dSEAY=');
+
 @$core.Deprecated('Use waitingRoomsRequestDescriptor instead')
 const WaitingRoomsRequest$json = {
   '1': 'WaitingRoomsRequest',
@@ -55,25 +75,29 @@ final $typed_data.Uint8List joinWaitingRoomRequestDescriptor = $convert.base64De
 @$core.Deprecated('Use joinWaitingRoomResponseDescriptor instead')
 const JoinWaitingRoomResponse$json = {
   '1': 'JoinWaitingRoomResponse',
+  '2': [
+    {'1': 'wr', '3': 1, '4': 1, '5': 11, '6': '.pong.WaitingRoom', '10': 'wr'},
+  ],
 };
 
 /// Descriptor for `JoinWaitingRoomResponse`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List joinWaitingRoomResponseDescriptor = $convert.base64Decode(
-    'ChdKb2luV2FpdGluZ1Jvb21SZXNwb25zZQ==');
+    'ChdKb2luV2FpdGluZ1Jvb21SZXNwb25zZRIhCgJ3chgBIAEoCzIRLnBvbmcuV2FpdGluZ1Jvb2'
+    '1SAndy');
 
-@$core.Deprecated('Use createWaitingRoomResquestDescriptor instead')
-const CreateWaitingRoomResquest$json = {
-  '1': 'CreateWaitingRoomResquest',
+@$core.Deprecated('Use createWaitingRoomRequestDescriptor instead')
+const CreateWaitingRoomRequest$json = {
+  '1': 'CreateWaitingRoomRequest',
   '2': [
     {'1': 'host_id', '3': 1, '4': 1, '5': 9, '10': 'hostId'},
     {'1': 'betAmt', '3': 2, '4': 1, '5': 1, '10': 'betAmt'},
   ],
 };
 
-/// Descriptor for `CreateWaitingRoomResquest`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List createWaitingRoomResquestDescriptor = $convert.base64Decode(
-    'ChlDcmVhdGVXYWl0aW5nUm9vbVJlc3F1ZXN0EhcKB2hvc3RfaWQYASABKAlSBmhvc3RJZBIWCg'
-    'ZiZXRBbXQYAiABKAFSBmJldEFtdA==');
+/// Descriptor for `CreateWaitingRoomRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createWaitingRoomRequestDescriptor = $convert.base64Decode(
+    'ChhDcmVhdGVXYWl0aW5nUm9vbVJlcXVlc3QSFwoHaG9zdF9pZBgBIAEoCVIGaG9zdElkEhYKBm'
+    'JldEFtdBgCIAEoAVIGYmV0QW10');
 
 @$core.Deprecated('Use createWaitingRoomResponseDescriptor instead')
 const CreateWaitingRoomResponse$json = {
@@ -158,21 +182,26 @@ final $typed_data.Uint8List startNtfnStreamRequestDescriptor = $convert.base64De
 const NtfnStreamResponse$json = {
   '1': 'NtfnStreamResponse',
   '2': [
-    {'1': 'started', '3': 1, '4': 1, '5': 8, '10': 'started'},
-    {'1': 'game_id', '3': 2, '4': 1, '5': 9, '10': 'gameId'},
-    {'1': 'message', '3': 3, '4': 1, '5': 9, '10': 'message'},
-    {'1': 'betAmt', '3': 4, '4': 1, '5': 1, '10': 'betAmt'},
-    {'1': 'player_number', '3': 5, '4': 1, '5': 5, '10': 'playerNumber'},
-    {'1': 'player_id', '3': 6, '4': 1, '5': 9, '10': 'playerId'},
+    {'1': 'notification_type', '3': 1, '4': 1, '5': 14, '6': '.pong.NotificationType', '10': 'notificationType'},
+    {'1': 'started', '3': 2, '4': 1, '5': 8, '10': 'started'},
+    {'1': 'game_id', '3': 3, '4': 1, '5': 9, '10': 'gameId'},
+    {'1': 'message', '3': 4, '4': 1, '5': 9, '10': 'message'},
+    {'1': 'betAmt', '3': 5, '4': 1, '5': 1, '10': 'betAmt'},
+    {'1': 'player_number', '3': 6, '4': 1, '5': 5, '10': 'playerNumber'},
+    {'1': 'player_id', '3': 7, '4': 1, '5': 9, '10': 'playerId'},
+    {'1': 'room_id', '3': 8, '4': 1, '5': 9, '10': 'roomId'},
+    {'1': 'wr', '3': 9, '4': 1, '5': 11, '6': '.pong.WaitingRoom', '10': 'wr'},
   ],
 };
 
 /// Descriptor for `NtfnStreamResponse`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List ntfnStreamResponseDescriptor = $convert.base64Decode(
-    'ChJOdGZuU3RyZWFtUmVzcG9uc2USGAoHc3RhcnRlZBgBIAEoCFIHc3RhcnRlZBIXCgdnYW1lX2'
-    'lkGAIgASgJUgZnYW1lSWQSGAoHbWVzc2FnZRgDIAEoCVIHbWVzc2FnZRIWCgZiZXRBbXQYBCAB'
-    'KAFSBmJldEFtdBIjCg1wbGF5ZXJfbnVtYmVyGAUgASgFUgxwbGF5ZXJOdW1iZXISGwoJcGxheW'
-    'VyX2lkGAYgASgJUghwbGF5ZXJJZA==');
+    'ChJOdGZuU3RyZWFtUmVzcG9uc2USQwoRbm90aWZpY2F0aW9uX3R5cGUYASABKA4yFi5wb25nLk'
+    '5vdGlmaWNhdGlvblR5cGVSEG5vdGlmaWNhdGlvblR5cGUSGAoHc3RhcnRlZBgCIAEoCFIHc3Rh'
+    'cnRlZBIXCgdnYW1lX2lkGAMgASgJUgZnYW1lSWQSGAoHbWVzc2FnZRgEIAEoCVIHbWVzc2FnZR'
+    'IWCgZiZXRBbXQYBSABKAFSBmJldEFtdBIjCg1wbGF5ZXJfbnVtYmVyGAYgASgFUgxwbGF5ZXJO'
+    'dW1iZXISGwoJcGxheWVyX2lkGAcgASgJUghwbGF5ZXJJZBIXCgdyb29tX2lkGAggASgJUgZyb2'
+    '9tSWQSIQoCd3IYCSABKAsyES5wb25nLldhaXRpbmdSb29tUgJ3cg==');
 
 @$core.Deprecated('Use startGameStreamRequestDescriptor instead')
 const StartGameStreamRequest$json = {

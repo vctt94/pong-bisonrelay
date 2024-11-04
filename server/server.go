@@ -95,7 +95,8 @@ func (s *Server) StartGameStream(req *pong.StartGameStreamRequest, stream pong.P
 		minAmt := *flagDCRAmount
 		if player.BetAmt < minAmt {
 			player.notifier.Send(&pong.NtfnStreamResponse{
-				Message: fmt.Sprintf("player needs to place bet higher or equal to: %.8f", minAmt),
+				NotificationType: pong.NotificationType_MESSAGE,
+				Message:          fmt.Sprintf("player needs to place bet higher or equal to: %.8f", minAmt),
 			})
 			return fmt.Errorf("player needs to place bet higher or equal to: %.8f DCR", minAmt)
 		}
@@ -117,11 +118,26 @@ func (s *Server) handleDisconnect(clientID zkidentity.ShortID) {
 	if playerSession != nil {
 		s.gameManager.playerSessions.RemovePlayer(clientID)
 	}
-	// playerwr := s.gameManager.waitingRoom.GetPlayer(clientID)
-	// if playerwr != nil {
-	// 	// XXX return tip
-	// 	s.gameManager.waitingRoom.RemovePlayer(clientID)
-	// }
+
+	waitingRoom := s.gameManager.GetWaitingRoomFromPlayer(clientID)
+	if waitingRoom != nil {
+		// Notify remaining players in the waiting room about disconnection if needed
+		remainingPlayers := getRemainingPlayersInWaitingRoom(waitingRoom, clientID)
+		for _, player := range remainingPlayers {
+			if player.notifier != nil {
+				player.notifier.Send(&pong.NtfnStreamResponse{
+					NotificationType: pong.NotificationType_OPPONENT_DISCONNECTED,
+					Message:          "Opponent left the waiting room.",
+					Started:          false,
+				})
+			}
+		}
+
+		// Return the tip if necessary
+		s.log.Debugf("Player %s disconnected; removing waiting room %s", clientID, waitingRoom.ID)
+		waitingRoom.cancel()
+		s.gameManager.RemoveWaitingRoom(waitingRoom.ID)
+	}
 
 	game := s.gameManager.getPlayerGame(clientID)
 	// if player not in active game and have unprocessed tips, send them back.
@@ -133,15 +149,15 @@ func (s *Server) handleDisconnect(clientID zkidentity.ShortID) {
 		}
 	}
 	if game != nil {
-		remainingPlayer := game.players[0]
-		// Notify the remaining player about the disconnection
-		if remainingPlayer.notifier != nil {
+		remainingPlayer := getRemainingPlayerInGame(game, clientID)
+		if remainingPlayer != nil && remainingPlayer.notifier != nil {
 			remainingPlayer.notifier.Send(&pong.NtfnStreamResponse{
-				Message: "Opponent disconnected. Game over.",
-				Started: false,
+				NotificationType: pong.NotificationType_OPPONENT_DISCONNECTED,
+				Message:          "Opponent disconnected. Game over.",
+				Started:          false,
 			})
-			s.log.Debugf("Player %s disconnected and cleaned up", clientID)
 		}
+		s.log.Debugf("Player %s disconnected and cleaned up", clientID)
 		s.gameManager.cleanupGameInstance(game)
 	}
 }
@@ -169,7 +185,11 @@ func (s *Server) StartNtfnStream(req *pong.StartNtfnStreamRequest, stream pong.P
 	}
 	s.Unlock()
 
-	player.notifier.Send(&pong.NtfnStreamResponse{Message: "Notifier stream Initialized", BetAmt: player.BetAmt})
+	player.notifier.Send(&pong.NtfnStreamResponse{
+		NotificationType: pong.NotificationType_BET_AMOUNT_UPDATE,
+		Message:          "Notifier stream Initialized",
+		BetAmt:           player.BetAmt,
+	})
 
 	<-ctx.Done()
 	s.handleDisconnect(clientID)
@@ -234,87 +254,95 @@ func (s *Server) ManageWaitingRoom(ctx context.Context, wr *WaitingRoom) error {
 	var err error
 	var game *gameInstance
 	for {
-		if players, ready := wr.ReadyPlayers(); ready {
-			// remove wr after players are ready and removed from wr.
-			s.gameManager.RemoveWaitingRoom(wr.ID)
+		select {
+		case <-ctx.Done():
+			s.log.Debugf("Exiting ManageWaitingRoom for waiting room %s as context was cancelled", wr.ID)
+			return nil // Exit the function if context is cancelled
 
-			s.log.Debugf("Starting game with players: %v and %v", players[0].ID, players[1].ID)
-			go func(players []*Player) {
-				// Start the game with the ready players
-				game, err = s.gameManager.startGame(ctx, players)
-				if err != nil {
-					return
-				}
-				go game.Run()
+		default:
+			if players, ready := wr.ReadyPlayers(); ready {
+				// Remove waiting room after players are ready and removed from wr.
+				s.gameManager.RemoveWaitingRoom(wr.ID)
 
-				var wg sync.WaitGroup
-				for _, player := range players {
-					wg.Add(1)
-					go func(player *Player) {
-						defer wg.Done()
-						s.log.Debugf("Notifying player %s that game %s started", player.ID, game.id)
-						if player.notifier == nil {
-							return
-						}
+				s.log.Debugf("Starting game with players: %v and %v", players[0].ID, players[1].ID)
+				go func(players []*Player) {
+					// Start the game with the ready players
+					game, err = s.gameManager.startGame(ctx, players)
+					if err != nil {
+						return
+					}
+					go game.Run()
 
-						// Send game start notification
-						if err = player.notifier.Send(&pong.NtfnStreamResponse{
-							Message: "Game has started with ID: " + game.id,
-							Started: true,
-							GameId:  game.id,
-						}); err != nil {
-							s.log.Debugf("Failed to send game start notification to player %s: %v", player.ID, err)
-							return
-						}
-
-						// Game loop to handle frames and end game logic
-						for {
-							select {
-							case <-ctx.Done():
-								s.handleDisconnect(player.ID)
+					var wg sync.WaitGroup
+					for _, player := range players {
+						wg.Add(1)
+						go func(player *Player) {
+							defer wg.Done()
+							s.log.Debugf("Notifying player %s that game %s started", player.ID, game.id)
+							if player.notifier == nil {
 								return
-							case frame, ok := <-game.framesch:
-								if !ok {
-									return
-								}
-								// Send game frame update
-								if err := player.stream.Send(&pong.GameUpdateBytes{Data: frame}); err != nil {
+							}
+
+							// Send game start notification
+							if err = player.notifier.Send(&pong.NtfnStreamResponse{
+								NotificationType: pong.NotificationType_GAME_START,
+								Message:          "Game has started with ID: " + game.id,
+								Started:          true,
+								GameId:           game.id,
+							}); err != nil {
+								s.log.Debugf("Failed to send game start notification to player %s: %v", player.ID, err)
+								return
+							}
+
+							// Game loop to handle frames and end game logic
+							for {
+								select {
+								case <-ctx.Done():
 									s.handleDisconnect(player.ID)
 									return
+								case frame, ok := <-game.framesch:
+									if !ok {
+										return
+									}
+									// Send game frame update
+									if err := player.stream.Send(&pong.GameUpdateBytes{Data: frame}); err != nil {
+										s.handleDisconnect(player.ID)
+										return
+									}
 								}
 							}
-						}
-					}(player)
-				}
-
-				// Wait for all player routines to finish
-				wg.Wait()
-
-				// pay winner
-				winner := game.winner
-				if winner != nil {
-					paymentReq := &types.TipUserRequest{
-						User:        winner.String(),
-						DcrAmount:   game.betAmt,
-						MaxAttempts: 3,
+						}(player)
 					}
-					resp := &types.TipUserResponse{}
-					if err = s.paymentClient.TipUser(ctx, paymentReq, resp); err != nil {
-						s.log.Errorf("Failed to send bet to winner %s: %v", winner.String(), err)
-					} else {
-						s.log.Debugf("Try sending total bet amount %.8f to winner %s", game.betAmt, winner.String())
-						// XXX Store on db and ack only after successfully send it back
-						for _, player := range players {
-							s.ackUnprocessedTipFromPlayer(ctx, player.ID)
+
+					// Wait for all player routines to finish
+					wg.Wait()
+
+					// Pay winner
+					winner := game.winner
+					if winner != nil {
+						paymentReq := &types.TipUserRequest{
+							User:        winner.String(),
+							DcrAmount:   game.betAmt,
+							MaxAttempts: 3,
+						}
+						resp := &types.TipUserResponse{}
+						if err = s.paymentClient.TipUser(ctx, paymentReq, resp); err != nil {
+							s.log.Errorf("Failed to send bet to winner %s: %v", winner.String(), err)
+						} else {
+							s.log.Debugf("Try sending total bet amount %.8f to winner %s", game.betAmt, winner.String())
+							// XXX Store on db and ack only after successfully send it back
+							for _, player := range players {
+								s.ackUnprocessedTipFromPlayer(ctx, player.ID)
+							}
 						}
 					}
-				}
-			}(players)
-			return err
-		} else {
-			s.log.Debugf("Not enough players ready. Current ready players: %v", wr.length())
+				}(players)
+				return err
+			} else {
+				s.log.Debugf("Not enough players ready. Current ready players: %v", wr.length())
+			}
+			time.Sleep(time.Second)
 		}
-		time.Sleep(time.Second)
 	}
 }
 
@@ -333,8 +361,11 @@ func (s *Server) Run(ctx context.Context) error {
 				s.log.Debugf("Found waiting room with ID: %s, HostID: %s, BetAmount: %.8f",
 					wr.ID, wr.hostID, wr.BetAmount)
 
-				// Start managing the waiting room
-				go s.ManageWaitingRoom(ctx, wr)
+				// Create a cancellable context for managing each waiting room
+				roomCtx, cancel := context.WithCancel(ctx)
+				wr.ctx = roomCtx
+				wr.cancel = cancel
+				go s.ManageWaitingRoom(roomCtx, wr)
 			}
 			s.gameManager.RUnlock()
 
@@ -391,6 +422,7 @@ func (s *Server) GetWaitingRooms(ctx context.Context, req *pong.WaitingRoomsRequ
 		Wr: pongWaitingRooms,
 	}, nil
 }
+
 func (s *Server) JoinWaitingRoom(ctx context.Context, req *pong.JoinWaitingRoomRequest) (*pong.JoinWaitingRoomResponse, error) {
 	var uid zkidentity.ShortID
 	s.log.Debugf("client: %s entering room: %s", req.ClientId, req.RoomId)
@@ -406,10 +438,26 @@ func (s *Server) JoinWaitingRoom(ctx context.Context, req *pong.JoinWaitingRoomR
 	wr := s.gameManager.GetWaitingRoom(req.RoomId)
 	wr.AddPlayer(player)
 
-	return &pong.JoinWaitingRoomResponse{}, nil
+	pwr, err := wr.ToPongWaitingRoom()
+	if err != nil {
+		return nil, err
+	}
+
+	host := s.gameManager.playerSessions.GetPlayer(wr.hostID)
+	host.notifier.Send(&pong.NtfnStreamResponse{
+		NotificationType: pong.NotificationType_PLAYER_JOINED_WR,
+		Message:          fmt.Sprintf("new player joined your waiting room: %s", player.Nick),
+		PlayerId:         player.ID.String(),
+		RoomId:           wr.ID,
+		Wr:               pwr,
+	})
+
+	return &pong.JoinWaitingRoomResponse{
+		Wr: pwr,
+	}, nil
 }
 
-func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingRoomResquest) (*pong.CreateWaitingRoomResponse, error) {
+func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingRoomRequest) (*pong.CreateWaitingRoomResponse, error) {
 	var hostID zkidentity.ShortID
 	err := hostID.FromString(req.HostId)
 	if err != nil {
@@ -437,10 +485,10 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 		players:   []*Player{player},
 	}
 	s.Lock()
-	nwr := append(s.gameManager.waitingRooms, wr)
-	s.gameManager.waitingRooms = nwr
+	s.gameManager.waitingRooms = append(s.gameManager.waitingRooms, wr)
 	s.Unlock()
-	s.log.Debugf("waiting room created. waiting room: %d", len(s.gameManager.waitingRooms))
+	s.log.Debugf("waiting room created. waiting room count: %d", len(s.gameManager.waitingRooms))
+
 	// Signal that a new waiting room has been created
 	select {
 	case s.waitingRoomCreated <- struct{}{}:
@@ -448,18 +496,11 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 		// Non-blocking send to avoid deadlock in case of rapid room creations
 	}
 
-	pp := &pong.Player{
-		Uid:       player.ID.String(),
-		BetAmount: player.BetAmt,
-		Nick:      player.Nick,
-	}
-	pongWR := &pong.WaitingRoom{
-		Id:      wr.ID,
-		HostId:  wr.hostID.String(),
-		Players: []*pong.Player{pp},
-		BetAmt:  wr.BetAmount,
+	pwr, err := wr.ToPongWaitingRoom()
+	if err != nil {
+		return nil, err
 	}
 	return &pong.CreateWaitingRoomResponse{
-		Wr: pongWR,
+		Wr: pwr,
 	}, nil
 }

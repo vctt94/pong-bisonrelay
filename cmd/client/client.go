@@ -52,6 +52,7 @@ var (
 type appstate struct {
 	sync.Mutex
 	mode              appMode
+	isReady           bool
 	gameState         *pong.GameUpdate
 	ctx               context.Context
 	err               error
@@ -114,8 +115,6 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.waitForMsg()
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q":
-			return m, tea.Quit
 		case "l":
 			// Switch to list rooms mode
 			m.mode = listRooms
@@ -229,28 +228,25 @@ func (m *appstate) createRoom() error {
 func (m *appstate) joinRoom(roomID string) error {
 
 	// Send request to join the specified room
-	_, err := m.pc.JoinWaitingRoom(m.ctx, roomID)
+	res, err := m.pc.JoinWaitingRoom(m.ctx, roomID)
 	if err != nil {
 		m.log.Errorf("Error joining room %s: %v", roomID, err)
 		return err
 	}
 
-	m.Lock()
-	// Update mode to gameMode upon successful join
+	m.currentWR = res.Wr
 	m.mode = gameMode
-	m.Unlock()
 
 	return nil
 }
 
 func (m *appstate) makeClientReady() tea.Cmd {
 	m.log.Debugf("Client signaling readiness")
-	go func() {
-		err := m.pc.SignalReady()
-		if err != nil {
-			m.log.Errorf("Error signaling readiness: %v", err)
-		}
-	}()
+	m.isReady = true
+	err := m.pc.SignalReady()
+	if err != nil {
+		m.log.Errorf("Error signaling readiness: %v", err)
+	}
 	return nil
 }
 
@@ -283,7 +279,7 @@ func (m *appstate) View() string {
 	} else {
 		b.WriteString("No new notifications.\n")
 	}
-	b.WriteString(fmt.Sprintf("Player: %s\nBet Amount: %.8f\nCurrent Room: %s\n", m.pc.ID, m.betAmount, m.currentWR))
+	b.WriteString(fmt.Sprintf("Player: %s\nBet Amount: %.8f\nStatus Ready: %t\n\nCurrent Room: %s\n", m.pc.ID, m.betAmount, m.isReady, m.currentWR))
 	b.WriteString("Use the following keys to navigate:\n")
 
 	// Display different modes based on the current app mode
@@ -300,7 +296,6 @@ func (m *appstate) View() string {
 		b.WriteString("\n[Game Mode]\n")
 		b.WriteString("Press 'esc' to return to chat.\n")
 		b.WriteString("Use W/S or Arrow Keys to move.\n")
-		b.WriteString("Press 'q' to exit game mode.\n")
 
 		// Display game state if available
 		if m.gameState != nil {
@@ -325,7 +320,7 @@ func (m *appstate) View() string {
 			gameView.WriteString(fmt.Sprintf("Score: %d - %d\n", m.gameState.P1Score, m.gameState.P2Score))
 			b.WriteString(gameView.String())
 		} else {
-			b.WriteString("Waiting for game to start...\n")
+			b.WriteString("Waiting for game to start... Not all players ready\nHit [space] to get ready\n")
 		}
 
 	case listRooms:
@@ -452,6 +447,14 @@ func realMain() error {
 	ntfns.Register(client.OnGameStartedNtfn(func(id string, ts time.Time) {
 		as.mode = gameMode
 		as.notification = fmt.Sprintf("game started with ID %s", id)
+		go func() {
+			as.msgCh <- client.UpdatedMsg{}
+		}()
+	}))
+
+	ntfns.Register(client.OnPlayerJoinedNtfn(func(wr *pong.WaitingRoom, ts time.Time) {
+		as.currentWR = wr
+		as.notification = "new player joined your waiting room"
 		go func() {
 			as.msgCh <- client.UpdatedMsg{}
 		}()

@@ -35,6 +35,13 @@ type OnGameStartedNtfn func(string, time.Time)
 
 func (_ OnGameStartedNtfn) typ() string { return onGameStartedFnType }
 
+const OnPlayerJoinedNtfnType = "onPlayerJoinedWR"
+
+// OnPlayerJoinedNtfn is the handler for when a player enters the wr.
+type OnPlayerJoinedNtfn func(*pong.WaitingRoom, time.Time)
+
+func (_ OnPlayerJoinedNtfn) typ() string { return OnPlayerJoinedNtfnType }
+
 // UINotificationsConfig is the configuration for how UI notifications are
 // emitted.
 type UINotificationsConfig struct {
@@ -350,6 +357,14 @@ func (nmgr *NotificationManager) notifyBetAmtChanged(playerID string, betAmt flo
 func (nmgr *NotificationManager) notifyGameStarted(gameID string, ts time.Time) {
 	nmgr.handlers[onGameStartedFnType].(*handlersFor[OnGameStartedNtfn]).
 		visit(func(h OnGameStartedNtfn) { h(gameID, ts) })
+
+	// XXX add ui ntfn for game started
+	// nmgr.addUINtfn(id, player.Nick(), UINtfnBetChange, fmt.Sprintf("New bet amount: %d", betAmt), ts)
+}
+
+func (nmgr *NotificationManager) notifyPlayerJoinedWR(wr *pong.WaitingRoom, ts time.Time) {
+	nmgr.handlers[OnPlayerJoinedNtfnType].(*handlersFor[OnPlayerJoinedNtfn]).
+		visit(func(h OnPlayerJoinedNtfn) { h(wr, ts) })
 }
 
 func NewNotificationManager() *NotificationManager {
@@ -360,10 +375,11 @@ func NewNotificationManager() *NotificationManager {
 		},
 		uiTimer: time.NewTimer(time.Hour * 24),
 		handlers: map[string]handlersRegistry{
-			onTestNtfnType:        &handlersFor[onTestNtfn]{},
-			onWRCreatedfnType:     &handlersFor[OnWRCreatedNtfn]{},
-			onBetAmtChangedFnType: &handlersFor[OnBetAmtChangedNtfn]{},
-			onGameStartedFnType:   &handlersFor[OnGameStartedNtfn]{},
+			onTestNtfnType:         &handlersFor[onTestNtfn]{},
+			onWRCreatedfnType:      &handlersFor[OnWRCreatedNtfn]{},
+			onBetAmtChangedFnType:  &handlersFor[OnBetAmtChangedNtfn]{},
+			onGameStartedFnType:    &handlersFor[OnGameStartedNtfn]{},
+			OnPlayerJoinedNtfnType: &handlersFor[OnPlayerJoinedNtfn]{},
 
 			onUINtfnType: &handlersFor[OnUINotification]{},
 		},

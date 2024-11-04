@@ -5,13 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
-	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/decred/slog"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/companyzero/bisonrelay/clientrpc/types"
+
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 	"google.golang.org/grpc"
 )
@@ -46,6 +47,7 @@ type PongClient struct {
 
 	ntfns *NotificationManager
 
+	log       slog.Logger
 	stream    pong.PongGame_StartGameStreamClient
 	notifier  pong.PongGame_StartNtfnStreamClient
 	UpdatesCh chan tea.Msg
@@ -64,26 +66,42 @@ func (pc *PongClient) StartNotifier() error {
 	}
 	pc.notifier = gameStartedStream
 
-	go func() {
+	go func() error {
 		for {
 			select {
 			case <-ctx.Done():
-				return
+				return nil
 			default:
 				ntfn, err := pc.notifier.Recv()
 				if errors.Is(err, io.EOF) {
 					break
 				}
 				if err != nil {
-					log.Printf("Error receiving notification: %v", err)
-					return
+					return err
 				}
-				if ntfn.BetAmt > 0 {
-					log.Printf("Current Bet Amount: %.8f DCR\n", ntfn.BetAmt)
-					pc.ntfns.notifyBetAmtChanged(ntfn.PlayerId, ntfn.BetAmt, time.Now())
-				}
-				if ntfn.Started {
-					pc.ntfns.notifyGameStarted(ntfn.GameId, time.Now())
+
+				// Handle notifications based on NotificationType
+				switch ntfn.NotificationType {
+				case pong.NotificationType_MESSAGE:
+				case pong.NotificationType_PLAYER_JOINED_WR:
+					pc.ntfns.notifyPlayerJoinedWR(ntfn.Wr, time.Now())
+				case pong.NotificationType_GAME_START:
+					if ntfn.Started {
+						pc.ntfns.notifyGameStarted(ntfn.GameId, time.Now())
+					}
+				case pong.NotificationType_GAME_END:
+					pc.log.Warnf("Game over. Game ID: %s", ntfn.GameId)
+					// pc.ntfns.notifyGameEnded(ntfn.GameId, time.Now())
+				case pong.NotificationType_OPPONENT_DISCONNECTED:
+					// XXX Reset waiting room to client when oponent disconnect
+				case pong.NotificationType_BET_AMOUNT_UPDATE:
+					if ntfn.BetAmt > 0 {
+						pc.log.Warnf("Current Bet Amount: %.8f DCR\n", ntfn.BetAmt)
+						pc.ntfns.notifyBetAmtChanged(ntfn.PlayerId, ntfn.BetAmt, time.Now())
+					}
+
+				default:
+					pc.log.Warnf("Unknown notification type: %d", ntfn.NotificationType)
 				}
 			}
 		}
@@ -111,7 +129,7 @@ func (pc *PongClient) SignalReady() error {
 		for {
 			update, err := pc.stream.Recv()
 			if err != nil {
-				log.Printf("stream receive error: %v", err)
+				pc.log.Errorf("stream receive error: %v", err)
 				if errors.Is(err, io.EOF) {
 					break
 				}
@@ -163,7 +181,7 @@ func (pc *PongClient) GetWRPlayers() ([]*pong.Player, error) {
 }
 
 func (pc *PongClient) CreatewaitingRoom(ctx context.Context) (*pong.WaitingRoom, error) {
-	res, err := pc.gc.CreateWaitingRoom(ctx, &pong.CreateWaitingRoomResquest{
+	res, err := pc.gc.CreateWaitingRoom(ctx, &pong.CreateWaitingRoomRequest{
 		HostId: pc.ID,
 	})
 	if err != nil {
@@ -181,7 +199,6 @@ func (pc *PongClient) JoinWaitingRoom(ctx context.Context, roomID string) (*pong
 	if err != nil {
 		return nil, fmt.Errorf("error sending input: %w", err)
 	}
-	go func() { pc.UpdatesCh <- UpdatedMsg{} }()
 	return res, nil
 }
 

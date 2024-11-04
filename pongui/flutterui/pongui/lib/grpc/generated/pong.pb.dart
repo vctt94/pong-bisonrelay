@@ -13,6 +13,10 @@ import 'dart:core' as $core;
 
 import 'package:protobuf/protobuf.dart' as $pb;
 
+import 'pong.pbenum.dart';
+
+export 'pong.pbenum.dart';
+
 class WaitingRoomsRequest extends $pb.GeneratedMessage {
   factory WaitingRoomsRequest({
     $core.String? roomId,
@@ -172,12 +176,21 @@ class JoinWaitingRoomRequest extends $pb.GeneratedMessage {
 }
 
 class JoinWaitingRoomResponse extends $pb.GeneratedMessage {
-  factory JoinWaitingRoomResponse() => create();
+  factory JoinWaitingRoomResponse({
+    WaitingRoom? wr,
+  }) {
+    final $result = create();
+    if (wr != null) {
+      $result.wr = wr;
+    }
+    return $result;
+  }
   JoinWaitingRoomResponse._() : super();
   factory JoinWaitingRoomResponse.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory JoinWaitingRoomResponse.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
 
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'JoinWaitingRoomResponse', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
+    ..aOM<WaitingRoom>(1, _omitFieldNames ? '' : 'wr', subBuilder: WaitingRoom.create)
     ..hasRequiredFields = false
   ;
 
@@ -201,10 +214,21 @@ class JoinWaitingRoomResponse extends $pb.GeneratedMessage {
   @$core.pragma('dart2js:noInline')
   static JoinWaitingRoomResponse getDefault() => _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<JoinWaitingRoomResponse>(create);
   static JoinWaitingRoomResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  WaitingRoom get wr => $_getN(0);
+  @$pb.TagNumber(1)
+  set wr(WaitingRoom v) { setField(1, v); }
+  @$pb.TagNumber(1)
+  $core.bool hasWr() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearWr() => clearField(1);
+  @$pb.TagNumber(1)
+  WaitingRoom ensureWr() => $_ensure(0);
 }
 
-class CreateWaitingRoomResquest extends $pb.GeneratedMessage {
-  factory CreateWaitingRoomResquest({
+class CreateWaitingRoomRequest extends $pb.GeneratedMessage {
+  factory CreateWaitingRoomRequest({
     $core.String? hostId,
     $core.double? betAmt,
   }) {
@@ -217,11 +241,11 @@ class CreateWaitingRoomResquest extends $pb.GeneratedMessage {
     }
     return $result;
   }
-  CreateWaitingRoomResquest._() : super();
-  factory CreateWaitingRoomResquest.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
-  factory CreateWaitingRoomResquest.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+  CreateWaitingRoomRequest._() : super();
+  factory CreateWaitingRoomRequest.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
+  factory CreateWaitingRoomRequest.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
 
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'CreateWaitingRoomResquest', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'CreateWaitingRoomRequest', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
     ..aOS(1, _omitFieldNames ? '' : 'hostId')
     ..a<$core.double>(2, _omitFieldNames ? '' : 'betAmt', $pb.PbFieldType.OD, protoName: 'betAmt')
     ..hasRequiredFields = false
@@ -231,22 +255,22 @@ class CreateWaitingRoomResquest extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
   'Will be removed in next major version')
-  CreateWaitingRoomResquest clone() => CreateWaitingRoomResquest()..mergeFromMessage(this);
+  CreateWaitingRoomRequest clone() => CreateWaitingRoomRequest()..mergeFromMessage(this);
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  CreateWaitingRoomResquest copyWith(void Function(CreateWaitingRoomResquest) updates) => super.copyWith((message) => updates(message as CreateWaitingRoomResquest)) as CreateWaitingRoomResquest;
+  CreateWaitingRoomRequest copyWith(void Function(CreateWaitingRoomRequest) updates) => super.copyWith((message) => updates(message as CreateWaitingRoomRequest)) as CreateWaitingRoomRequest;
 
   $pb.BuilderInfo get info_ => _i;
 
   @$core.pragma('dart2js:noInline')
-  static CreateWaitingRoomResquest create() => CreateWaitingRoomResquest._();
-  CreateWaitingRoomResquest createEmptyInstance() => create();
-  static $pb.PbList<CreateWaitingRoomResquest> createRepeated() => $pb.PbList<CreateWaitingRoomResquest>();
+  static CreateWaitingRoomRequest create() => CreateWaitingRoomRequest._();
+  CreateWaitingRoomRequest createEmptyInstance() => create();
+  static $pb.PbList<CreateWaitingRoomRequest> createRepeated() => $pb.PbList<CreateWaitingRoomRequest>();
   @$core.pragma('dart2js:noInline')
-  static CreateWaitingRoomResquest getDefault() => _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<CreateWaitingRoomResquest>(create);
-  static CreateWaitingRoomResquest? _defaultInstance;
+  static CreateWaitingRoomRequest getDefault() => _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<CreateWaitingRoomRequest>(create);
+  static CreateWaitingRoomRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
   $core.String get hostId => $_getSZ(0);
@@ -611,14 +635,20 @@ class StartNtfnStreamRequest extends $pb.GeneratedMessage {
 
 class NtfnStreamResponse extends $pb.GeneratedMessage {
   factory NtfnStreamResponse({
+    NotificationType? notificationType,
     $core.bool? started,
     $core.String? gameId,
     $core.String? message,
     $core.double? betAmt,
     $core.int? playerNumber,
     $core.String? playerId,
+    $core.String? roomId,
+    WaitingRoom? wr,
   }) {
     final $result = create();
+    if (notificationType != null) {
+      $result.notificationType = notificationType;
+    }
     if (started != null) {
       $result.started = started;
     }
@@ -637,6 +667,12 @@ class NtfnStreamResponse extends $pb.GeneratedMessage {
     if (playerId != null) {
       $result.playerId = playerId;
     }
+    if (roomId != null) {
+      $result.roomId = roomId;
+    }
+    if (wr != null) {
+      $result.wr = wr;
+    }
     return $result;
   }
   NtfnStreamResponse._() : super();
@@ -644,12 +680,15 @@ class NtfnStreamResponse extends $pb.GeneratedMessage {
   factory NtfnStreamResponse.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
 
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'NtfnStreamResponse', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
-    ..aOB(1, _omitFieldNames ? '' : 'started')
-    ..aOS(2, _omitFieldNames ? '' : 'gameId')
-    ..aOS(3, _omitFieldNames ? '' : 'message')
-    ..a<$core.double>(4, _omitFieldNames ? '' : 'betAmt', $pb.PbFieldType.OD, protoName: 'betAmt')
-    ..a<$core.int>(5, _omitFieldNames ? '' : 'playerNumber', $pb.PbFieldType.O3)
-    ..aOS(6, _omitFieldNames ? '' : 'playerId')
+    ..e<NotificationType>(1, _omitFieldNames ? '' : 'notificationType', $pb.PbFieldType.OE, defaultOrMaker: NotificationType.UNKNOWN, valueOf: NotificationType.valueOf, enumValues: NotificationType.values)
+    ..aOB(2, _omitFieldNames ? '' : 'started')
+    ..aOS(3, _omitFieldNames ? '' : 'gameId')
+    ..aOS(4, _omitFieldNames ? '' : 'message')
+    ..a<$core.double>(5, _omitFieldNames ? '' : 'betAmt', $pb.PbFieldType.OD, protoName: 'betAmt')
+    ..a<$core.int>(6, _omitFieldNames ? '' : 'playerNumber', $pb.PbFieldType.O3)
+    ..aOS(7, _omitFieldNames ? '' : 'playerId')
+    ..aOS(8, _omitFieldNames ? '' : 'roomId')
+    ..aOM<WaitingRoom>(9, _omitFieldNames ? '' : 'wr', subBuilder: WaitingRoom.create)
     ..hasRequiredFields = false
   ;
 
@@ -675,59 +714,87 @@ class NtfnStreamResponse extends $pb.GeneratedMessage {
   static NtfnStreamResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $core.bool get started => $_getBF(0);
+  NotificationType get notificationType => $_getN(0);
   @$pb.TagNumber(1)
-  set started($core.bool v) { $_setBool(0, v); }
+  set notificationType(NotificationType v) { setField(1, v); }
   @$pb.TagNumber(1)
-  $core.bool hasStarted() => $_has(0);
+  $core.bool hasNotificationType() => $_has(0);
   @$pb.TagNumber(1)
-  void clearStarted() => clearField(1);
+  void clearNotificationType() => clearField(1);
 
   @$pb.TagNumber(2)
-  $core.String get gameId => $_getSZ(1);
+  $core.bool get started => $_getBF(1);
   @$pb.TagNumber(2)
-  set gameId($core.String v) { $_setString(1, v); }
+  set started($core.bool v) { $_setBool(1, v); }
   @$pb.TagNumber(2)
-  $core.bool hasGameId() => $_has(1);
+  $core.bool hasStarted() => $_has(1);
   @$pb.TagNumber(2)
-  void clearGameId() => clearField(2);
+  void clearStarted() => clearField(2);
 
   @$pb.TagNumber(3)
-  $core.String get message => $_getSZ(2);
+  $core.String get gameId => $_getSZ(2);
   @$pb.TagNumber(3)
-  set message($core.String v) { $_setString(2, v); }
+  set gameId($core.String v) { $_setString(2, v); }
   @$pb.TagNumber(3)
-  $core.bool hasMessage() => $_has(2);
+  $core.bool hasGameId() => $_has(2);
   @$pb.TagNumber(3)
-  void clearMessage() => clearField(3);
+  void clearGameId() => clearField(3);
 
   @$pb.TagNumber(4)
-  $core.double get betAmt => $_getN(3);
+  $core.String get message => $_getSZ(3);
   @$pb.TagNumber(4)
-  set betAmt($core.double v) { $_setDouble(3, v); }
+  set message($core.String v) { $_setString(3, v); }
   @$pb.TagNumber(4)
-  $core.bool hasBetAmt() => $_has(3);
+  $core.bool hasMessage() => $_has(3);
   @$pb.TagNumber(4)
-  void clearBetAmt() => clearField(4);
+  void clearMessage() => clearField(4);
 
   @$pb.TagNumber(5)
-  $core.int get playerNumber => $_getIZ(4);
+  $core.double get betAmt => $_getN(4);
   @$pb.TagNumber(5)
-  set playerNumber($core.int v) { $_setSignedInt32(4, v); }
+  set betAmt($core.double v) { $_setDouble(4, v); }
   @$pb.TagNumber(5)
-  $core.bool hasPlayerNumber() => $_has(4);
+  $core.bool hasBetAmt() => $_has(4);
   @$pb.TagNumber(5)
-  void clearPlayerNumber() => clearField(5);
+  void clearBetAmt() => clearField(5);
 
-  /// some plager id change
   @$pb.TagNumber(6)
-  $core.String get playerId => $_getSZ(5);
+  $core.int get playerNumber => $_getIZ(5);
   @$pb.TagNumber(6)
-  set playerId($core.String v) { $_setString(5, v); }
+  set playerNumber($core.int v) { $_setSignedInt32(5, v); }
   @$pb.TagNumber(6)
-  $core.bool hasPlayerId() => $_has(5);
+  $core.bool hasPlayerNumber() => $_has(5);
   @$pb.TagNumber(6)
-  void clearPlayerId() => clearField(6);
+  void clearPlayerNumber() => clearField(6);
+
+  @$pb.TagNumber(7)
+  $core.String get playerId => $_getSZ(6);
+  @$pb.TagNumber(7)
+  set playerId($core.String v) { $_setString(6, v); }
+  @$pb.TagNumber(7)
+  $core.bool hasPlayerId() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearPlayerId() => clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.String get roomId => $_getSZ(7);
+  @$pb.TagNumber(8)
+  set roomId($core.String v) { $_setString(7, v); }
+  @$pb.TagNumber(8)
+  $core.bool hasRoomId() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearRoomId() => clearField(8);
+
+  @$pb.TagNumber(9)
+  WaitingRoom get wr => $_getN(8);
+  @$pb.TagNumber(9)
+  set wr(WaitingRoom v) { setField(9, v); }
+  @$pb.TagNumber(9)
+  $core.bool hasWr() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearWr() => clearField(9);
+  @$pb.TagNumber(9)
+  WaitingRoom ensureWr() => $_ensure(8);
 }
 
 /// SignalReadyRequest contains information about the client signaling readiness

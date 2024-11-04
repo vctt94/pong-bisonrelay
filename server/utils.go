@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/decred/slog"
 	"google.golang.org/grpc/metadata"
 )
@@ -51,4 +52,25 @@ func GetDebugLevel(debugStr string) slog.Level {
 	}
 
 	return debugLevel
+}
+
+// Helper function to get remaining players in the waiting room
+func getRemainingPlayersInWaitingRoom(waitingRoom *WaitingRoom, disconnectedID zkidentity.ShortID) []*Player {
+	var remainingPlayers []*Player
+	for _, player := range waitingRoom.players {
+		if player.ID != disconnectedID {
+			remainingPlayers = append(remainingPlayers, player)
+		}
+	}
+	return remainingPlayers
+}
+
+// Helper function to get the remaining player in a game
+func getRemainingPlayerInGame(game *gameInstance, disconnectedID zkidentity.ShortID) *Player {
+	for _, player := range game.players {
+		if player.ID != disconnectedID {
+			return player
+		}
+	}
+	return nil
 }

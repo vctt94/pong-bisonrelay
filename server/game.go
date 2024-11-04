@@ -43,6 +43,20 @@ type gameManager struct {
 	log   slog.Logger
 }
 
+func (g *gameManager) GetWaitingRoomFromPlayer(playerID zkidentity.ShortID) *WaitingRoom {
+	g.RLock()
+	defer g.RUnlock()
+
+	for _, room := range g.waitingRooms {
+		for _, p := range room.players {
+			if p.ID == playerID {
+				return room
+			}
+		}
+	}
+	return nil
+}
+
 func (g *gameManager) GetWaitingRoom(roomID string) *WaitingRoom {
 	g.RLock()
 	defer g.RUnlock()
@@ -56,6 +70,8 @@ func (g *gameManager) GetWaitingRoom(roomID string) *WaitingRoom {
 }
 
 func (gm *gameManager) RemoveWaitingRoom(roomID string) {
+	gm.Lock()
+	defer gm.Unlock()
 	for i, room := range gm.waitingRooms {
 		if room.ID == roomID {
 			// Remove the room by appending the elements before and after it
