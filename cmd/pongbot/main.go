@@ -117,7 +117,7 @@ func realMain() error {
 	})
 
 	// Run server
-	g.Go(func() error { return srv.Run(ctx) })
+	g.Go(func() error { return srv.Run(gctx) })
 	g.Go(func() error { return srv.SendTipProgressLoop(gctx) })
 	g.Go(func() error { return srv.ReceiveTipLoop(gctx) })
 
