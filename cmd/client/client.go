@@ -111,7 +111,7 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Unlock()
 		return m, nil
 	case client.UpdatedMsg:
-		// Simply return the model to refresh the view with the new BetAmount
+		// Simply return the model to refresh the view
 		return m, m.waitForMsg()
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -427,15 +427,21 @@ func realMain() error {
 	}))
 
 	ntfns.Register(client.OnBetAmtChangedNtfn(func(playerID string, betAmt float64, ts time.Time) {
-		as.Lock()
 		// Update bet amount for the player in the local state (e.g., as.Players).
+		if clientID == playerID {
+			as.notification = "bet amount updated"
+			as.betAmount = betAmt
+			as.msgCh <- client.UpdatedMsg{}
+		}
 		for i, p := range as.players {
 			if p.Uid == playerID {
+				as.Lock()
 				as.players[i].BetAmount = betAmt
+				as.Unlock()
+
 				break
 			}
 		}
-		as.Unlock()
 		go func() {
 			select {
 			case as.betAmtChangedChan <- struct{}{}:
@@ -464,6 +470,7 @@ func realMain() error {
 		ServerAddr:    *serverAddr,
 		ChatClient:    chat,
 		Notifications: ntfns,
+		Log:           log,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create pong client: %v", err)
@@ -477,7 +484,7 @@ func realMain() error {
 	}
 
 	// Start the notifier in a goroutine
-	g.Go(func() error { return pc.StartNotifier() })
+	g.Go(func() error { return pc.StartNotifier(ctx) })
 
 	defer as.cancel()
 

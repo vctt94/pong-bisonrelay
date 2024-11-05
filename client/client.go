@@ -54,9 +54,7 @@ type PongClient struct {
 	GameCh    chan *pong.GameUpdateBytes
 }
 
-func (pc *PongClient) StartNotifier() error {
-	ctx := context.Background()
-
+func (pc *PongClient) StartNotifier(ctx context.Context) error {
 	// Creates game start stream so we can notify when the game starts
 	gameStartedStream, err := pc.gc.StartNtfnStream(ctx, &pong.StartNtfnStreamRequest{
 		ClientId: pc.ID,
@@ -66,18 +64,21 @@ func (pc *PongClient) StartNotifier() error {
 	}
 	pc.notifier = gameStartedStream
 
-	go func() error {
+	go func() {
 		for {
 			select {
 			case <-ctx.Done():
-				return nil
+				pc.log.Infof("ntfn stream closed")
+				return
 			default:
 				ntfn, err := pc.notifier.Recv()
 				if errors.Is(err, io.EOF) {
-					break
+					pc.log.Infof("ntfn stream closed")
+					return
 				}
 				if err != nil {
-					return err
+					pc.log.Errorf("err: %v", err)
+					return
 				}
 
 				// Handle notifications based on NotificationType
@@ -91,15 +92,12 @@ func (pc *PongClient) StartNotifier() error {
 					}
 				case pong.NotificationType_GAME_END:
 					pc.log.Warnf("Game over. Game ID: %s", ntfn.GameId)
-					// pc.ntfns.notifyGameEnded(ntfn.GameId, time.Now())
 				case pong.NotificationType_OPPONENT_DISCONNECTED:
-					// XXX Reset waiting room to client when oponent disconnect
 				case pong.NotificationType_BET_AMOUNT_UPDATE:
 					if ntfn.BetAmt > 0 {
 						pc.log.Warnf("Current Bet Amount: %.8f DCR\n", ntfn.BetAmt)
 						pc.ntfns.notifyBetAmtChanged(ntfn.PlayerId, ntfn.BetAmt, time.Now())
 					}
-
 				default:
 					pc.log.Warnf("Unknown notification type: %d", ntfn.NotificationType)
 				}
@@ -203,6 +201,9 @@ func (pc *PongClient) JoinWaitingRoom(ctx context.Context, roomID string) (*pong
 }
 
 func NewPongClient(clientID string, cfg *PongClientCfg) (*PongClient, error) {
+	if cfg.Log == nil {
+		return nil, fmt.Errorf("client must have logger")
+	}
 	// Establish a gRPC connection to the server using the address in cfg
 	pongConn, err := grpc.Dial(cfg.ServerAddr, grpc.WithInsecure())
 	if err != nil {
@@ -223,6 +224,7 @@ func NewPongClient(clientID string, cfg *PongClientCfg) (*PongClient, error) {
 		chat:      cfg.ChatClient,
 		payment:   cfg.PaymentClient,
 		UpdatesCh: make(chan tea.Msg),
+		log:       cfg.Log,
 
 		ntfns: ntfns,
 	}

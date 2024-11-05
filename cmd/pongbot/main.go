@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	"github.com/companyzero/bisonrelay/clientrpc/jsonrpc"
 	"github.com/companyzero/bisonrelay/clientrpc/types"
@@ -20,7 +22,7 @@ import (
 )
 
 var (
-	certDir = flag.String("serverdir", "/home/pongbot/.pongserver", "Path to server dir")
+	serverDir = flag.String("serverdir", "/home/pongbot/.pongserver", "Path to server dir")
 
 	flagURL = flag.String("url", "wss://127.0.0.1:7676/ws", "URL of the websocket endpoint")
 
@@ -42,6 +44,15 @@ func realMain() error {
 	log := bknd.Logger("[Bot]")
 	log.SetLevel(debugLevel)
 
+	// Signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		log.Infof("Received shutdown signal")
+		cancel()
+	}()
+
 	g, gctx := errgroup.WithContext(ctx)
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
@@ -49,8 +60,8 @@ func realMain() error {
 	}
 
 	// Paths for the generated certificate and key in .pongserver directory
-	certPath := filepath.Join(*certDir, "server.cert")
-	keyPath := filepath.Join(*certDir, "server.key")
+	certPath := filepath.Join(*serverDir, "server.cert")
+	keyPath := filepath.Join(*serverDir, "server.key")
 
 	// Initialize the Pong plugin and GameServer
 
@@ -101,20 +112,25 @@ func realMain() error {
 		Debug:                 debugLevel,
 		PaymentClient:         payment,
 		ChatClient:            chat,
+		ServerDir:             *serverDir,
+		HTTPPort:              "8888",
 	})
-	go func() error {
-		if err := srv.Run(ctx); err != nil {
-			return fmt.Errorf("failed to manage games: %v", err)
-		}
-		return nil
-	}()
+
+	// Run server
+	g.Go(func() error { return srv.Run(ctx) })
 	g.Go(func() error { return srv.SendTipProgressLoop(gctx) })
 	g.Go(func() error { return srv.ReceiveTipLoop(gctx) })
-	// s := grpc.NewServer(grpc.Creds(creds))
+
 	s := grpc.NewServer()
 	pong.RegisterPongGameServer(s, srv)
 
 	log.Infof("server listening at %v", lis.Addr())
+	go func() {
+		<-ctx.Done()
+		log.Info("shutting down gRPC server gracefully")
+		s.GracefulStop()
+	}()
+
 	if err := s.Serve(lis); err != nil {
 		return fmt.Errorf("failed to serve gRPC server: %v", err)
 	}

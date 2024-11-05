@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/hex"
 	"sync"
 
 	"github.com/companyzero/bisonrelay/client/clientintf"
@@ -94,8 +93,6 @@ func (wr *WaitingRoom) ToPongWaitingRoom() (*pong.WaitingRoom, error) {
 	wr.Lock()
 	defer wr.Unlock()
 
-	hostIDStr := hex.EncodeToString(wr.hostID[:])
-
 	// Prepare players for pong.WaitingRoom
 	var players []*pong.Player
 	for _, player := range wr.players {
@@ -109,7 +106,7 @@ func (wr *WaitingRoom) ToPongWaitingRoom() (*pong.WaitingRoom, error) {
 
 	return &pong.WaitingRoom{
 		Id:      wr.ID,
-		HostId:  hostIDStr,
+		HostId:  wr.hostID.String(),
 		Players: players,
 		BetAmt:  wr.BetAmount,
 	}, nil

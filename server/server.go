@@ -2,10 +2,13 @@ package server
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -14,6 +17,7 @@ import (
 	"github.com/decred/slog"
 	canvas "github.com/vctt94/pong-bisonrelay/pong"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
+	"github.com/vctt94/pong-bisonrelay/server/serverdb"
 )
 
 const (
@@ -28,10 +32,13 @@ var (
 )
 
 type ServerConfig struct {
+	ServerDir string
+
 	Debug                 slog.Level
 	DebugGameManagerLevel slog.Level
 	PaymentClient         types.PaymentsServiceClient
 	ChatClient            types.ChatServiceClient
+	HTTPPort              string
 }
 
 type Server struct {
@@ -42,11 +49,14 @@ type Server struct {
 	log                slog.Logger
 	waitingRoomCreated chan struct{}
 
-	paymentClient   types.PaymentsServiceClient
-	chatClient      types.ChatServiceClient
-	users           map[zkidentity.ShortID]*Player
-	gameManager     *gameManager
-	unprocessedTips map[zkidentity.ShortID][]*types.ReceivedTip
+	paymentClient types.PaymentsServiceClient
+	chatClient    types.ChatServiceClient
+	users         map[zkidentity.ShortID]*Player
+	gameManager   *gameManager
+
+	httpServer    *http.Server
+	activeStreams sync.Map
+	db            serverdb.ServerDB
 }
 
 func NewServer(id *zkidentity.ShortID, cfg ServerConfig) *Server {
@@ -57,25 +67,50 @@ func NewServer(id *zkidentity.ShortID, cfg ServerConfig) *Server {
 	logGM := bknd.Logger("[GM]")
 	logGM.SetLevel(cfg.DebugGameManagerLevel)
 
-	return &Server{
-		log:   log,
-		debug: cfg.Debug,
-		gameManager: &gameManager{
-			ID:           id,
-			games:        make(map[string]*gameInstance),
-			waitingRooms: []*WaitingRoom{},
-			playerSessions: &PlayerSessions{
-				sessions: make(map[zkidentity.ShortID]*Player),
-			},
-			debug: cfg.DebugGameManagerLevel,
-			log:   logGM,
-		},
+	dbPath := filepath.Join(cfg.ServerDir, "server.db")
+	db, err := serverdb.NewBoltDB(dbPath)
+	if err != nil {
+		fmt.Printf("Failed to open database: %v\n", err)
+		os.Exit(1)
+	}
+
+	s := &Server{
+		log:                log,
+		debug:              cfg.Debug,
+		db:                 db,
 		paymentClient:      cfg.PaymentClient,
 		chatClient:         cfg.ChatClient,
 		waitingRoomCreated: make(chan struct{}, 1),
 		users:              make(map[zkidentity.ShortID]*Player),
-		unprocessedTips:    make(map[zkidentity.ShortID][]*types.ReceivedTip),
+		gameManager: &gameManager{
+			ID:             id,
+			games:          make(map[string]*gameInstance),
+			waitingRooms:   []*WaitingRoom{},
+			playerSessions: &PlayerSessions{sessions: make(map[zkidentity.ShortID]*Player)},
+			debug:          cfg.DebugGameManagerLevel,
+			log:            logGM,
+		},
 	}
+
+	if cfg.HTTPPort != "" {
+		// Set up HTTP server for db calls
+		mux := http.NewServeMux()
+		mux.HandleFunc("/fetchTipsByClientID", s.FetchTipsByClientIDHandler)
+		mux.HandleFunc("/fetchAllUnprocessedTips", s.FetchAllUnprocessedTipsHandler)
+		s.httpServer = &http.Server{
+			Addr:    fmt.Sprintf(":%s", cfg.HTTPPort),
+			Handler: mux,
+		}
+
+		go func() {
+			s.log.Infof("Starting HTTP server on port %s", cfg.HTTPPort)
+			if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				s.log.Errorf("HTTP server error: %v", err)
+			}
+		}()
+	}
+
+	return s
 }
 
 func (s *Server) StartGameStream(req *pong.StartGameStreamRequest, stream pong.PongGame_StartGameStreamServer) error {
@@ -142,10 +177,35 @@ func (s *Server) handleDisconnect(clientID zkidentity.ShortID) {
 	game := s.gameManager.getPlayerGame(clientID)
 	// if player not in active game and have unprocessed tips, send them back.
 	if game == nil {
-		if len(s.unprocessedTips[clientID]) > 0 {
-			// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			// defer cancel()
-			// s.sendUnprocessedTipToUser(ctx, clientID)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		tips, err := s.db.FetchReceivedTipsByUID(ctx, clientID, serverdb.StatusUnprocessed)
+		if err != nil {
+			s.log.Errorf("failed to fetch unprocessed user %s tips: %v", clientID.String(), err)
+		}
+		if len(tips) > 0 {
+			totalDcrAmount := 0.0
+			for _, w := range tips {
+				totalDcrAmount += float64(w.Tip.AmountMatoms) / 1e11 // Convert matoms to DCR
+			}
+			paymentReq := &types.TipUserRequest{
+				User:        clientID.String(),
+				DcrAmount:   totalDcrAmount,
+				MaxAttempts: 3,
+			}
+			resp := &types.TipUserResponse{}
+			if err = s.paymentClient.TipUser(ctx, paymentReq, resp); err != nil {
+				s.log.Errorf("failed to send bet to winner %s: %v", clientID.String(), err)
+			} else {
+				s.log.Infof("unprocessed tip returned to user %s: %.8f", clientID.String(), totalDcrAmount)
+				for _, w := range tips {
+					tipID := make([]byte, 8)
+					binary.BigEndian.PutUint64(tipID, w.Tip.SequenceId)
+					if err := s.db.UpdateTipStatus(ctx, clientID.Bytes(), tipID, serverdb.StatusSending); err != nil {
+						s.log.Errorf("failed to update tip status to sending from player %s: %w", clientID.String(), err)
+					}
+				}
+			}
 		}
 	}
 	if game != nil {
@@ -163,32 +223,41 @@ func (s *Server) handleDisconnect(clientID zkidentity.ShortID) {
 }
 
 func (s *Server) StartNtfnStream(req *pong.StartNtfnStreamRequest, stream pong.PongGame_StartNtfnStreamServer) error {
-	ctx := stream.Context()
+	ctx, cancel := context.WithCancel(stream.Context())
+	defer cancel()
 
 	var clientID zkidentity.ShortID
 	clientID.FromString(req.ClientId)
 	s.log.Debugf("StartNtfnStream called by client %s", clientID)
 
+	s.activeStreams.Store(clientID, cancel)
+
+	// Cleanup the stream from activeStreams on exit
+	defer s.activeStreams.Delete(clientID)
+
 	player := s.gameManager.playerSessions.GetOrCreateSession(clientID)
 	player.notifier = stream
-
 	s.users[clientID] = player
 
-	s.Lock()
-	if tips, exists := s.unprocessedTips[clientID]; exists {
-		totalDcrAmount := 0.0
-		for _, tip := range tips {
-			totalDcrAmount += float64(tip.AmountMatoms) / 1e11 // Convert matoms to DCR
-		}
-		player.BetAmt = totalDcrAmount
-		s.log.Debugf("Pending payments applied to client %s, total amount: %.8f", clientID, totalDcrAmount)
+	// Fetch unprocessed tips from the database
+	tipsResult, err := s.db.FetchReceivedTipsByUID(ctx, clientID, serverdb.StatusUnprocessed)
+	if err != nil {
+		s.log.Errorf("Failed to fetch unprocessed tips for client %s: %v", clientID, err)
+		return err
 	}
-	s.Unlock()
 
-	player.notifier.Send(&pong.NtfnStreamResponse{
+	totalDcrAmount := 0.0
+	for _, w := range tipsResult {
+		totalDcrAmount += float64(w.Tip.AmountMatoms) / 1e11 // Convert matoms to DCR
+	}
+	player.BetAmt = totalDcrAmount
+	s.log.Debugf("Pending payments applied to client %s, total amount: %.8f", clientID, totalDcrAmount)
+
+	s.users[clientID].notifier.Send(&pong.NtfnStreamResponse{
 		NotificationType: pong.NotificationType_BET_AMOUNT_UPDATE,
 		Message:          "Notifier stream Initialized",
 		BetAmt:           player.BetAmt,
+		PlayerId:         player.ID.String(),
 	})
 
 	<-ctx.Done()
@@ -230,24 +299,6 @@ func (s *Server) SendInput(ctx context.Context, req *pong.PlayerInput) (*pong.Ga
 	game.inputch <- inputBytes
 
 	return &pong.GameUpdate{}, nil
-}
-
-func (s *Server) ackUnprocessedTipFromPlayer(ctx context.Context, clientID zkidentity.ShortID) {
-	s.Lock()
-	defer s.Unlock()
-	if tips, exists := s.unprocessedTips[clientID]; exists {
-		for _, tip := range tips {
-			ackRes := &types.AckResponse{}
-			err := s.paymentClient.AckTipReceived(ctx, &types.AckRequest{SequenceId: tip.SequenceId}, ackRes)
-			if err != nil {
-				s.log.Debugf("Failed to acknowledge tip for player %s: %v", clientID, err)
-			} else {
-				s.log.Debugf("Acknowledged tip with SequenceId %d for player %s", tip.SequenceId, clientID)
-			}
-		}
-		// Remove acknowledged tips for this player
-		delete(s.unprocessedTips, clientID)
-	}
 }
 
 func (s *Server) ManageWaitingRoom(ctx context.Context, wr *WaitingRoom) error {
@@ -330,9 +381,18 @@ func (s *Server) ManageWaitingRoom(ctx context.Context, wr *WaitingRoom) error {
 							s.log.Errorf("Failed to send bet to winner %s: %v", winner.String(), err)
 						} else {
 							s.log.Debugf("Try sending total bet amount %.8f to winner %s", game.betAmt, winner.String())
-							// XXX Store on db and ack only after successfully send it back
 							for _, player := range players {
-								s.ackUnprocessedTipFromPlayer(ctx, player.ID)
+								unprocessedTips, err := s.db.FetchReceivedTipsByUID(ctx, player.ID, serverdb.StatusUnprocessed)
+								if err != nil {
+									s.log.Errorf("Failed to mark tip as processed for player %s: %v", player.ID.String(), err)
+								}
+								for _, w := range unprocessedTips {
+									tipID := make([]byte, 8)
+									binary.BigEndian.PutUint64(tipID, w.Tip.SequenceId)
+									if err := s.db.UpdateTipStatus(ctx, player.ID.Bytes(), tipID, serverdb.StatusSending); err != nil {
+										s.log.Errorf("failed to update tip status to sending from player %s: %w", player.ID.String(), err)
+									}
+								}
 							}
 						}
 					}
@@ -350,28 +410,30 @@ func (s *Server) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			// Call the server's Shutdown method
+			if err := s.Shutdown(ctx); err != nil {
+				s.log.Errorf("Error during server shutdown: %v", err)
+			}
+
 			return nil
 
 		case <-s.waitingRoomCreated:
-			// Handle the new waiting room(s) when triggered
 			s.log.Debugf("New waiting room created")
 
 			s.gameManager.RLock()
 			for _, wr := range s.gameManager.waitingRooms {
-				s.log.Debugf("Found waiting room with ID: %s, HostID: %s, BetAmount: %.8f",
-					wr.ID, wr.hostID, wr.BetAmount)
-
-				// Create a cancellable context for managing each waiting room
-				roomCtx, cancel := context.WithCancel(ctx)
-				wr.ctx = roomCtx
-				wr.cancel = cancel
-				go s.ManageWaitingRoom(roomCtx, wr)
+				if wr.ctx.Err() == nil { // Only manage rooms with active contexts
+					s.log.Debugf("Managing waiting room: %s", wr.ID)
+					go s.ManageWaitingRoom(wr.ctx, wr)
+				}
 			}
 			s.gameManager.RUnlock()
 
 		default:
-			// Optional: Add sleep to avoid tight looping
-			time.Sleep(time.Millisecond * 100)
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
@@ -478,7 +540,10 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 	if err != nil {
 		return nil, fmt.Errorf("error generating id: %w", err)
 	}
+	roomCtx, cancel := context.WithCancel(ctx)
 	wr := &WaitingRoom{
+		ctx:       roomCtx,
+		cancel:    cancel,
 		ID:        id,
 		hostID:    hostID,
 		BetAmount: player.BetAmt,
@@ -503,4 +568,42 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 	return &pong.CreateWaitingRoomResponse{
 		Wr: pwr,
 	}, nil
+}
+
+// Shutdown forcefully shuts down the server, closing HTTP server, database, waiting rooms, and games.
+func (s *Server) Shutdown(ctx context.Context) error {
+	// Stop HTTP server
+	if s.httpServer != nil {
+		s.log.Info("Shutting down HTTP server...")
+		if err := s.httpServer.Shutdown(ctx); err != nil {
+			s.log.Errorf("Error shutting down HTTP server: %v", err)
+		}
+	}
+
+	// Close the database
+	s.log.Info("Closing database...")
+	if err := s.db.Close(); err != nil {
+		s.log.Errorf("Error closing database: %v", err)
+	}
+
+	s.log.Info("Canceling active gRPC streams...")
+	s.activeStreams.Range(func(key, value interface{}) bool {
+		if cancel, ok := value.(context.CancelFunc); ok {
+			cancel()
+		}
+		return true
+	})
+
+	// Gracefully close all waiting rooms and ongoing games
+	s.log.Info("Shutting down waiting rooms and games...")
+	s.gameManager.Lock()
+	for _, wr := range s.gameManager.waitingRooms {
+		wr.cancel() // Cancel each waiting room context
+	}
+	s.users = nil
+	s.gameManager.waitingRooms = nil // Clear all waiting rooms
+	s.gameManager.Unlock()
+
+	s.log.Info("Server shut down completed.")
+	return nil
 }

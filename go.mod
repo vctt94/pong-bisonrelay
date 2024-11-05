@@ -14,6 +14,7 @@ require (
 	github.com/ndabAP/ping-pong v0.0.0-20231119080825-15ed4850b548
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58
 	github.com/prometheus/procfs v0.12.0
+	go.etcd.io/bbolt v1.3.8
 	golang.org/x/mobile v0.0.0-20240604190613-2782386b8afd
 	golang.org/x/sync v0.8.0
 	google.golang.org/grpc v1.62.0
@@ -139,7 +140,6 @@ require (
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
 	github.com/xiang90/probing v0.0.0-20221125231312-a49e3df8f510 // indirect
 	gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec // indirect
-	go.etcd.io/bbolt v1.3.8 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.7 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.7 // indirect
 	go.etcd.io/etcd/client/v2 v2.305.7 // indirect
