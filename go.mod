@@ -22,7 +22,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 )
 
-replace github.com/companyzero/bisonrelay => /home/vctt/projects/bisonrelay-projects/bisonrelay
+replace github.com/companyzero/bisonrelay => github.com/vctt94/bisonrelay v0.0.0-20241105192107-e02453230ee8
 
 require (
 	decred.org/cspp/v2 v2.2.0 // indirect
