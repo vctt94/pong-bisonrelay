@@ -91,11 +91,11 @@ func (pc *PongClient) StartNotifier(ctx context.Context) error {
 						pc.ntfns.notifyGameStarted(ntfn.GameId, time.Now())
 					}
 				case pong.NotificationType_GAME_END:
-					pc.log.Warnf("Game over. Game ID: %s", ntfn.GameId)
+					pc.ntfns.notifyGameEnded(ntfn.GameId, ntfn.Message, time.Now())
+					pc.log.Infof("%s", ntfn.Message)
 				case pong.NotificationType_OPPONENT_DISCONNECTED:
 				case pong.NotificationType_BET_AMOUNT_UPDATE:
 					if ntfn.BetAmt > 0 {
-						pc.log.Warnf("Current Bet Amount: %.8f DCR\n", ntfn.BetAmt)
 						pc.ntfns.notifyBetAmtChanged(ntfn.PlayerId, ntfn.BetAmt, time.Now())
 					}
 				default:

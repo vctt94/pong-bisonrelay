@@ -40,6 +40,7 @@ const (
 
 var (
 	serverAddr = flag.String("server_addr", "104.131.180.29:50051", "The server address in the format of host:port")
+	// serverAddr = flag.String("server_addr", "localhost:50051", "The server address in the format of host:port")
 	// brdatadir          = flag.String("brdatadir", "", "Directory containing the certificates and keys")
 	flagURL            = flag.String("url", "wss://127.0.0.1:7676/ws", "URL of the websocket endpoint")
 	flagServerCertPath = flag.String("servercert", "/home/vctt/.brclient/rpc.cert", "Path to rpc.cert file")
@@ -548,6 +549,16 @@ func realMain() error {
 	ntfns.Register(client.OnPlayerJoinedNtfn(func(wr *pong.WaitingRoom, ts time.Time) {
 		as.currentWR = wr
 		as.notification = "new player joined your waiting room"
+		go func() {
+			as.msgCh <- client.UpdatedMsg{}
+		}()
+	}))
+
+	ntfns.Register(client.OnGameEndedNtfn(func(gameID, msg string, ts time.Time) {
+		as.notification = fmt.Sprintf("game %s ended\n%s", gameID, msg)
+		as.betAmount = 0
+		as.isGameRunning = false
+		as.mode = gameIdle
 		go func() {
 			as.msgCh <- client.UpdatedMsg{}
 		}()

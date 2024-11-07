@@ -81,24 +81,6 @@ func (gm *gameManager) RemoveWaitingRoom(roomID string) {
 	}
 }
 
-func (s *gameManager) cleanupGameInstance(instance *gameInstance) {
-	if !instance.cleanedUp {
-		instance.cleanedUp = true
-		instance.cancel()
-		close(instance.framesch)
-		close(instance.inputch)
-		close(instance.roundResult)
-	}
-
-	for gameID, game := range s.games {
-		if game == instance {
-			delete(s.games, gameID)
-			s.log.Infof("Game %s cleaned up", gameID)
-			break
-		}
-	}
-}
-
 func (gm *gameManager) getPlayerGame(clientID zkidentity.ShortID) *gameInstance {
 	gm.Lock()
 	defer gm.Unlock()
@@ -190,7 +172,8 @@ func (g *gameInstance) Run() {
 
 			// Check if the game should continue or end
 			if g.shouldEndGame() {
-				g.Stop() // Stop the game if necessary
+				// clean up the game after ending
+				g.Cleanup()
 				break
 			} else {
 				g.engine.NewRound(g.ctx, g.framesch, g.inputch, g.roundResult)
@@ -208,8 +191,7 @@ func (g *gameInstance) handleRoundResult(winner int32) {
 	}
 }
 
-func (g *gameInstance) Stop() {
-	g.running = false
+func (g *gameInstance) Cleanup() {
 	g.cleanedUp = true
 	g.cancel()
 	close(g.framesch)
@@ -223,6 +205,7 @@ func (g *gameInstance) shouldEndGame() bool {
 		if player.score >= maxScore {
 			g.log.Debugf("Game ending: Player %s reached the maximum score of %d", player.ID, maxScore)
 			g.winner = &player.ID
+			g.running = false
 			return true
 		}
 	}

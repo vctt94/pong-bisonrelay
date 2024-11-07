@@ -42,6 +42,13 @@ type OnPlayerJoinedNtfn func(*pong.WaitingRoom, time.Time)
 
 func (_ OnPlayerJoinedNtfn) typ() string { return OnPlayerJoinedNtfnType }
 
+const onGameEndedfnType = "onGameEnded"
+
+// onWRCreatedNtfn is the handler for received private messages.
+type OnGameEndedNtfn func(string, string, time.Time)
+
+func (_ OnGameEndedNtfn) typ() string { return onGameEndedfnType }
+
 // UINotificationsConfig is the configuration for how UI notifications are
 // emitted.
 type UINotificationsConfig struct {
@@ -367,6 +374,11 @@ func (nmgr *NotificationManager) notifyPlayerJoinedWR(wr *pong.WaitingRoom, ts t
 		visit(func(h OnPlayerJoinedNtfn) { h(wr, ts) })
 }
 
+func (nmgr *NotificationManager) notifyGameEnded(gameID string, msg string, ts time.Time) {
+	nmgr.handlers[onGameEndedfnType].(*handlersFor[OnGameEndedNtfn]).
+		visit(func(h OnGameEndedNtfn) { h(gameID, msg, ts) })
+}
+
 func NewNotificationManager() *NotificationManager {
 	nmgr := &NotificationManager{
 		uiConfig: UINotificationsConfig{
@@ -380,6 +392,7 @@ func NewNotificationManager() *NotificationManager {
 			onBetAmtChangedFnType:  &handlersFor[OnBetAmtChangedNtfn]{},
 			onGameStartedFnType:    &handlersFor[OnGameStartedNtfn]{},
 			OnPlayerJoinedNtfnType: &handlersFor[OnPlayerJoinedNtfn]{},
+			onGameEndedfnType:      &handlersFor[OnGameEndedNtfn]{},
 
 			onUINtfnType: &handlersFor[OnUINotification]{},
 		},
