@@ -64,8 +64,9 @@ type appstate struct {
 	createdWRChan     chan struct{}
 	betAmtChangedChan chan struct{}
 
-	log     slog.Logger
-	players []*pong.Player
+	isGameRunning bool
+	log           slog.Logger
+	players       []*pong.Player
 
 	// player current bet amt
 	betAmount float64
@@ -271,35 +272,39 @@ func (m *appstate) handleGameInput(msg tea.KeyMsg) tea.Cmd {
 func (m *appstate) View() string {
 	var b strings.Builder
 
-	// Build the header
-	b.WriteString("========== Pong Game Client ==========\n\n")
+	// Show the header and controls only if the game is not in game mode
+	if !m.isGameRunning {
+		// Build the header
+		b.WriteString("========== Pong Game Client ==========\n\n")
 
-	if m.notification != "" {
-		b.WriteString(fmt.Sprintf("🔔 Notification: %s\n\n", m.notification))
-	} else {
-		b.WriteString("🔔 No new notifications.\n\n")
+		if m.notification != "" {
+			b.WriteString(fmt.Sprintf("🔔 Notification: %s\n\n", m.notification))
+		} else {
+			b.WriteString("🔔 No new notifications.\n\n")
+		}
+
+		b.WriteString(fmt.Sprintf("👤 Player ID: %s\n", m.pc.ID))
+		b.WriteString(fmt.Sprintf("💵 Bet Amount: %.8f\n", m.betAmount))
+		b.WriteString(fmt.Sprintf("✅ Status Ready: %t\n", m.isReady))
+
+		// Display the current room or show a placeholder if not in a room
+		if m.currentWR != nil {
+			b.WriteString(fmt.Sprintf("🏠 Current Room: %s\n\n", m.currentWR.Id))
+		} else {
+			b.WriteString("🏠 Current Room: None\n\n")
+		}
+
+		// Instructions
+		b.WriteString("===== Controls =====\n")
+		b.WriteString("Use the following keys to navigate:\n")
+		b.WriteString("[L] - List rooms\n")
+		b.WriteString("[C] - Create room\n")
+		b.WriteString("[J] - Join room\n")
+		b.WriteString("[Esc] - Exit\n")
+		b.WriteString("====================\n\n")
 	}
 
-	b.WriteString(fmt.Sprintf("👤 Player ID: %s\n", m.pc.ID))
-	b.WriteString(fmt.Sprintf("💵 Bet Amount: %.8f\n", m.betAmount))
-	b.WriteString(fmt.Sprintf("✅ Status Ready: %t\n", m.isReady))
-
-	// Display the current room or show a placeholder if not in a room
-	if m.currentWR != nil {
-		b.WriteString(fmt.Sprintf("🏠 Current Room: %s\n\n", m.currentWR.Id))
-	} else {
-		b.WriteString("🏠 Current Room: None\n\n")
-	}
-
-	// Instructions
-	b.WriteString("===== Controls =====\n")
-	b.WriteString("Use the following keys to navigate:\n")
-	b.WriteString("[L] - List rooms\n")
-	b.WriteString("[C] - Create room\n")
-	b.WriteString("[J] - Join room\n")
-	b.WriteString("[Esc] - Exit\n")
-	b.WriteString("====================\n\n")
-
+	// Switch based on the current mode
 	switch m.mode {
 	case gameIdle:
 		b.WriteString("\n[Idle Mode]\n")
@@ -533,6 +538,7 @@ func realMain() error {
 
 	ntfns.Register(client.OnGameStartedNtfn(func(id string, ts time.Time) {
 		as.mode = gameMode
+		as.isGameRunning = true
 		as.notification = fmt.Sprintf("game started with ID %s", id)
 		go func() {
 			as.msgCh <- client.UpdatedMsg{}
