@@ -39,12 +39,12 @@ const (
 )
 
 var (
-	serverAddr = flag.String("server_addr", "localhost:50051", "The server address in the format of host:port")
+	serverAddr = flag.String("server_addr", "104.131.180.29:50051", "The server address in the format of host:port")
 	// brdatadir          = flag.String("brdatadir", "", "Directory containing the certificates and keys")
-	flagURL            = flag.String("url", "wss://127.0.0.1:7777/ws", "URL of the websocket endpoint")
-	flagServerCertPath = flag.String("servercert", "/home/vctt/brclientdir/rpc.cert", "Path to rpc.cert file")
-	flagClientCertPath = flag.String("clientcert", "/home/vctt/brclientdir/rpc-client.cert", "Path to rpc-client.cert file")
-	flagClientKeyPath  = flag.String("clientkey", "/home/vctt/brclientdir/rpc-client.key", "Path to rpc-client.key file")
+	flagURL            = flag.String("url", "wss://127.0.0.1:7676/ws", "URL of the websocket endpoint")
+	flagServerCertPath = flag.String("servercert", "/home/vctt/.brclient/rpc.cert", "Path to rpc.cert file")
+	flagClientCertPath = flag.String("clientcert", "/home/vctt/.brclient/rpc-client.cert", "Path to rpc-client.cert file")
+	flagClientKeyPath  = flag.String("clientkey", "/home/vctt/.brclient/rpc-client.key", "Path to rpc-client.key file")
 	rpcUser            = flag.String("rpcuser", "rpcuser", "RPC user for basic authentication")
 	rpcPass            = flag.String("rpcpass", "rpcpass", "RPC password for basic authentication")
 )
@@ -107,7 +107,6 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Lock()
 		m.viewport.Width = msg.Width
 		m.viewport.Height = msg.Height
-		m.viewport.SetContent(m.View())
 		m.Unlock()
 		return m, nil
 	case client.UpdatedMsg:
@@ -262,7 +261,7 @@ func (m *appstate) handleGameInput(msg tea.KeyMsg) tea.Cmd {
 		if input != "" {
 			err := m.pc.SendInput(input)
 			if err != nil {
-				m.log.Errorf("Error sending game input: %v", err)
+				m.log.Debugf("Error sending game input: %v", err)
 			}
 		}
 		return nil
@@ -273,43 +272,122 @@ func (m *appstate) View() string {
 	var b strings.Builder
 
 	// Build the header
-	b.WriteString("=== Pong Game Client ===\n")
-	if m.notification != "" {
-		b.WriteString(fmt.Sprintf("Notification: %s\n", m.notification))
-	} else {
-		b.WriteString("No new notifications.\n")
-	}
-	b.WriteString(fmt.Sprintf("Player: %s\nBet Amount: %.8f\nStatus Ready: %t\n\nCurrent Room: %s\n", m.pc.ID, m.betAmount, m.isReady, m.currentWR))
-	b.WriteString("Use the following keys to navigate:\n")
+	b.WriteString("========== Pong Game Client ==========\n\n")
 
-	// Display different modes based on the current app mode
+	if m.notification != "" {
+		b.WriteString(fmt.Sprintf("🔔 Notification: %s\n\n", m.notification))
+	} else {
+		b.WriteString("🔔 No new notifications.\n\n")
+	}
+
+	b.WriteString(fmt.Sprintf("👤 Player ID: %s\n", m.pc.ID))
+	b.WriteString(fmt.Sprintf("💵 Bet Amount: %.8f\n", m.betAmount))
+	b.WriteString(fmt.Sprintf("✅ Status Ready: %t\n", m.isReady))
+
+	// Display the current room or show a placeholder if not in a room
+	if m.currentWR != nil {
+		b.WriteString(fmt.Sprintf("🏠 Current Room: %s\n\n", m.currentWR.Id))
+	} else {
+		b.WriteString("🏠 Current Room: None\n\n")
+	}
+
+	// Instructions
+	b.WriteString("===== Controls =====\n")
+	b.WriteString("Use the following keys to navigate:\n")
+	b.WriteString("[L] - List rooms\n")
+	b.WriteString("[C] - Create room\n")
+	b.WriteString("[J] - Join room\n")
+	b.WriteString("[Esc] - Exit\n")
+	b.WriteString("====================\n\n")
+
 	switch m.mode {
 	case gameIdle:
 		b.WriteString("\n[Idle Mode]\n")
-		b.WriteString("Press 'space' to get ready for the game.\n")
-		b.WriteString("Press 'l' to list available rooms.\n")
-		b.WriteString("Press 'c' to create a room (requires bet > 0).\n")
-		b.WriteString("Press 'j' to join an existing room.\n")
-		b.WriteString("Press 'esc' to quit.\n")
 
 	case gameMode:
 		b.WriteString("\n[Game Mode]\n")
-		b.WriteString("Press 'esc' to return to chat.\n")
-		b.WriteString("Use W/S or Arrow Keys to move.\n")
+		b.WriteString("Press 'Esc' to return to the main menu.\n")
+		b.WriteString("Use W/S or Arrow Keys to move.\n\n")
 
-		// Display game state if available
 		if m.gameState != nil {
 			var gameView strings.Builder
-			for y := 0; y < int(m.gameState.GameHeight); y++ {
-				for x := 0; x < int(m.gameState.GameWidth); x++ {
-					ballX := int(math.Round(m.gameState.BallX))
-					ballY := int(math.Round(m.gameState.BallY))
+
+			// Calculate header and footer sizes
+			headerLines := countLines(b.String())
+			footerLines := 2 // For the score and any additional messages
+
+			// Calculate available space
+			availableHeight := m.viewport.Height - headerLines - footerLines
+			availableWidth := m.viewport.Width
+
+			// Minimum game size constraints
+			const minGameHeight = 5
+			const minGameWidth = 10
+
+			if availableHeight < minGameHeight || availableWidth < minGameWidth {
+				b.WriteString("\n[Warning] Terminal window is too small to display the game.\n")
+				b.WriteString("Please resize your window or use a larger terminal.\n")
+				return b.String()
+			}
+
+			// Original game dimensions
+			gameHeight := int(m.gameState.GameHeight)
+			gameWidth := int(m.gameState.GameWidth)
+
+			// Calculate scaling factors for width and height
+			scaleY := float64(availableHeight) / float64(gameHeight)
+			scaleX := float64(availableWidth) / float64(gameWidth)
+
+			// Use the smaller scaling factor to ensure the game fits in both dimensions
+			scale := math.Min(scaleX, scaleY)
+			scale = math.Min(scale, 1.0) // Prevent upscaling
+
+			// Scale the game elements
+			scaledGameHeight := int(float64(gameHeight) * scale)
+			scaledGameWidth := int(float64(gameWidth) * scale)
+
+			// Ensure scaled dimensions do not exceed available space
+			if scaledGameHeight > availableHeight {
+				scaledGameHeight = availableHeight
+			}
+			if scaledGameWidth > availableWidth {
+				scaledGameWidth = availableWidth
+			}
+
+			// Scale ball position
+			ballX := int(math.Round(float64(m.gameState.BallX) * scale))
+			ballY := int(math.Round(float64(m.gameState.BallY) * scale))
+
+			// Scale paddle positions and sizes
+			p1Y := int(math.Round(float64(m.gameState.P1Y) * scale))
+			p1Height := int(math.Round(float64(m.gameState.P1Height) * scale))
+
+			p2Y := int(math.Round(float64(m.gameState.P2Y) * scale))
+			p2Height := int(math.Round(float64(m.gameState.P2Height) * scale))
+
+			// Ensure positions are within bounds
+			if ballX >= scaledGameWidth {
+				ballX = scaledGameWidth - 1
+			}
+			if ballY >= scaledGameHeight {
+				ballY = scaledGameHeight - 1
+			}
+			if p1Y+p1Height > scaledGameHeight {
+				p1Height = scaledGameHeight - p1Y
+			}
+			if p2Y+p2Height > scaledGameHeight {
+				p2Height = scaledGameHeight - p2Y
+			}
+
+			// Drawing the game
+			for y := 0; y < scaledGameHeight; y++ {
+				for x := 0; x < scaledGameWidth; x++ {
 					switch {
 					case x == ballX && y == ballY:
 						gameView.WriteString("O")
-					case x == 0 && y >= int(m.gameState.P1Y) && y < int(m.gameState.P1Y)+int(m.gameState.P1Height):
+					case x == 0 && y >= p1Y && y < p1Y+p1Height:
 						gameView.WriteString("|")
-					case x == int(m.gameState.GameWidth)-1 && y >= int(m.gameState.P2Y) && y < int(m.gameState.P2Y)+int(m.gameState.P2Height):
+					case x == scaledGameWidth-1 && y >= p2Y && y < p2Y+p2Height:
 						gameView.WriteString("|")
 					default:
 						gameView.WriteString(" ")
@@ -317,10 +395,12 @@ func (m *appstate) View() string {
 				}
 				gameView.WriteString("\n")
 			}
+
+			// Append the score
 			gameView.WriteString(fmt.Sprintf("Score: %d - %d\n", m.gameState.P1Score, m.gameState.P2Score))
 			b.WriteString(gameView.String())
 		} else {
-			b.WriteString("Waiting for game to start... Not all players ready\nHit [space] to get ready\n")
+			b.WriteString("Waiting for game to start... Not all players are ready.\nHit [Space] to get ready\n")
 		}
 
 	case listRooms:
@@ -407,6 +487,7 @@ func realMain() error {
 		ctx:    ctx,
 		cancel: cancel,
 		log:    log,
+		mode:   gameIdle,
 	}
 	// Setup notification handlers.
 	ntfns := client.NewNotificationManager()
