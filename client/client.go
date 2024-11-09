@@ -83,6 +83,8 @@ func (pc *PongClient) StartNotifier(ctx context.Context) error {
 
 				// Handle notifications based on NotificationType
 				switch ntfn.NotificationType {
+				case pong.NotificationType_ON_WR_CREATED:
+					pc.ntfns.notifyOnWRCreated(ntfn.Wr, time.Now())
 				case pong.NotificationType_MESSAGE:
 				case pong.NotificationType_PLAYER_JOINED_WR:
 					pc.ntfns.notifyPlayerJoinedWR(ntfn.Wr, time.Now())
@@ -185,7 +187,6 @@ func (pc *PongClient) CreatewaitingRoom(ctx context.Context) (*pong.WaitingRoom,
 	if err != nil {
 		return nil, fmt.Errorf("error sending input: %w", err)
 	}
-	pc.ntfns.notifyOnWRCreated(res.Wr, time.Now())
 	return res.Wr, nil
 }
 

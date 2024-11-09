@@ -131,12 +131,12 @@ func handleInitClient(handle uint32, args initClient) (*localInfo, error) {
 	pc, err := client.NewPongClient(localInfo.ID.String(), &client.PongClientCfg{
 		ServerAddr: args.ServerAddr,
 		ChatClient: chat,
+		Log:        logBknd.logger("client"),
 	})
 	if err != nil {
 		cancel()
 		return nil, err
 	}
-
 	cctx := &clientCtx{
 		ID:      localInfo,
 		ctx:     gctx,

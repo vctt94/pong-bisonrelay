@@ -95,7 +95,7 @@ class Player {
 }
 
 @JsonSerializable()
-class WaitingRoom {
+class LocalWaitingRoom {
   @JsonKey(name: 'id')
   final String id;
   @JsonKey(name: 'host_id')
@@ -103,10 +103,10 @@ class WaitingRoom {
   @JsonKey(name: 'bet_amt')
   final double betAmount;
 
-  const WaitingRoom(this.id, this.host, this.betAmount);
+  const LocalWaitingRoom(this.id, this.host, this.betAmount);
 
-  factory WaitingRoom.fromJson(Map<String, dynamic> json) => _$WaitingRoomFromJson(json);
-  Map<String, dynamic> toJson() => _$WaitingRoomToJson(this);
+  factory LocalWaitingRoom.fromJson(Map<String, dynamic> json) => _$LocalWaitingRoomFromJson(json);
+  Map<String, dynamic> toJson() => _$LocalWaitingRoomToJson(this);
 }
 
 @JsonSerializable()
@@ -419,15 +419,15 @@ abstract class PluginPlatform {
     }
     return (res as List).map<Player>((v) => Player.fromJson(v)).toList();
   }
-  Future<List<WaitingRoom>> getWaitingRooms() async {
+  Future<List<LocalWaitingRoom>> getWaitingRooms() async {
     var res = await asyncCall(CTGetWaitingRooms, "");
     // print(res);
     if (res == null) {
       return [];
     }
-    return (res as List).map<WaitingRoom>((v) {
+    return (res as List).map<LocalWaitingRoom>((v) {
       print(v);  // Print each element in res
-      return WaitingRoom.fromJson(v);
+      return LocalWaitingRoom.fromJson(v);
     }).toList();
   }
 }
@@ -444,4 +444,3 @@ const int CTCloseLockFile = 0x05;
 const int notificationsStartID = 0x1000;
 const int notificationClientStopped = 0x1001;
 const int NTNOP = 0X1004;
-// const int NTPM = 0x1004;

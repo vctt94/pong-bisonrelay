@@ -336,6 +336,15 @@ func (s *Server) handleGameLifecycle(ctx context.Context, players []*Player, bet
 		return
 	}
 	defer func() {
+		// reset player status
+		for _, g := range s.gameManager.games {
+			if g == game {
+				for _, player := range game.players {
+					player.score = 0
+					player.playerNumber = 0
+				}
+			}
+		}
 		// remove game from gameManager after it ended
 		for gameID, g := range s.gameManager.games {
 			if g == game {
@@ -604,6 +613,19 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 		// Non-blocking send to avoid deadlock in case of rapid room creations
 	}
 
+	pongWR, err := wr.ToPongWaitingRoom()
+	if err != nil {
+		return nil, err
+	}
+
+	s.RLock()
+	for _, user := range s.users {
+		user.notifier.Send(&pong.NtfnStreamResponse{
+			Wr:               pongWR,
+			NotificationType: pong.NotificationType_ON_WR_CREATED,
+		})
+	}
+	s.RUnlock()
 	pwr, err := wr.ToPongWaitingRoom()
 	if err != nil {
 		return nil, err

@@ -10,6 +10,7 @@ import 'package:golib_plugin/golib_plugin.dart';
 import 'package:pongui/components/pong_game.dart';
 import 'package:pongui/components/waiting_rooms.dart';
 import 'package:pongui/config.dart';
+import 'package:pongui/grpc/generated/pong.pbgrpc.dart';
 import 'package:pongui/grpc/grpc_client.dart';
 import 'package:pongui/screens/newconfig.dart';
 import 'package:window_manager/window_manager.dart';
@@ -58,7 +59,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> with WindowListener {
   Config? config;
-  List<WaitingRoom> waitingRooms = [];
+  List<LocalWaitingRoom> waitingRooms = [];
   String serverAddr = '';
   bool isLoading = true;
   String errorMessage = '';
@@ -79,20 +80,30 @@ class _MyAppState extends State<MyApp> with WindowListener {
     windowManager.addListener(this);
   }
 
-  void _startListeningToStreams(GrpcPongClient grpcClient, String clientId) {
-    // Start notification stream
-    grpcClient.startNtfnStreamRequest(clientId).listen((response) {
-      if (response.started) {
+  void _startListeningToNtfn(GrpcPongClient grpcClient, String clientId) {
+  // Start notification stream
+  grpcClient.startNtfnStreamRequest(clientId).listen((ntfn) {
+    developer.log("Notification Stream Response: $ntfn", level: 0);
+
+    // Handle notifications based on NotificationType
+    switch (ntfn.notificationType) {
+      case NotificationType.ON_WR_CREATED:
         setState(() {
-          gameStarted = true;
+          waitingRooms.add(LocalWaitingRoom(
+            ntfn.wr.id, // Use appropriate fields from the notification
+            ntfn.wr.hostId,
+            ntfn.wr.betAmt,
+          ));
         });
-      }
-      developer.log("Notification Stream Response: ${response}");
-      // Handle the response (e.g., update UI or handle game state)
-    }, onError: (error) {
-      developer.log("Error in notification stream: $error");
-    });
-  }
+        break;
+
+      default:
+        developer.log("Unknown notification type: ${ntfn.notificationType}");
+    }
+  }, onError: (error) {
+    developer.log("Error in notification stream: $error");
+  });
+}
 
   Future<void> initClient() async {
     try {
@@ -138,7 +149,7 @@ class _MyAppState extends State<MyApp> with WindowListener {
         serverAddr = cfg.serverAddr;
         isLoading = false;
       });
-      _startListeningToStreams(grpcClient!, clientId);
+      _startListeningToNtfn(grpcClient!, clientId);
     } catch (exception) {
       print("**********************exception***********");
       print(exception);
@@ -196,8 +207,6 @@ class _MyAppState extends State<MyApp> with WindowListener {
 
         developer.log("Waiting room created for Client ID: $clientId");
 
-        // Start listening to the notification stream for the waiting room
-        _startListeningToStreams(grpcClient!, clientId);
       } catch (error) {
       developer.log("Error creating waiting room: $error");
       setState(() {

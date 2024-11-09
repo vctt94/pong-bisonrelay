@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:golib_plugin/definitions.dart';
 
 class WaitingRoomList extends StatelessWidget {
-  final List<WaitingRoom> waitingRooms;
+  final List<LocalWaitingRoom> waitingRooms;
 
   const WaitingRoomList(this.waitingRooms);
 

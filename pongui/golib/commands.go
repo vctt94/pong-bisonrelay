@@ -37,6 +37,7 @@ const (
 	NTClientStopped  = 0x1002
 	NTLogLine        = 0x1003
 	NTNOP            = 0x1004
+	NTWRCreated      = 0x1005
 )
 
 type cmd struct {

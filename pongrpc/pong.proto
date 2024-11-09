@@ -26,6 +26,7 @@ enum NotificationType {
   OPPONENT_DISCONNECTED = 4;
   BET_AMOUNT_UPDATE = 5;
   PLAYER_JOINED_WR = 6;
+  ON_WR_CREATED = 7;
 }
 
 message StartNtfnStreamRequest {

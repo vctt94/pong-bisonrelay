@@ -24,6 +24,7 @@ const NotificationType$json = {
     {'1': 'OPPONENT_DISCONNECTED', '2': 4},
     {'1': 'BET_AMOUNT_UPDATE', '2': 5},
     {'1': 'PLAYER_JOINED_WR', '2': 6},
+    {'1': 'ON_WR_CREATED', '2': 7},
   ],
 };
 
@@ -31,7 +32,44 @@ const NotificationType$json = {
 final $typed_data.Uint8List notificationTypeDescriptor = $convert.base64Decode(
     'ChBOb3RpZmljYXRpb25UeXBlEgsKB1VOS05PV04QABILCgdNRVNTQUdFEAESDgoKR0FNRV9TVE'
     'FSVBACEgwKCEdBTUVfRU5EEAMSGQoVT1BQT05FTlRfRElTQ09OTkVDVEVEEAQSFQoRQkVUX0FN'
-    'T1VOVF9VUERBVEUQBRIUChBQTEFZRVJfSk9JTkVEX1dSEAY=');
+    'T1VOVF9VUERBVEUQBRIUChBQTEFZRVJfSk9JTkVEX1dSEAYSEQoNT05fV1JfQ1JFQVRFRBAH');
+
+@$core.Deprecated('Use startNtfnStreamRequestDescriptor instead')
+const StartNtfnStreamRequest$json = {
+  '1': 'StartNtfnStreamRequest',
+  '2': [
+    {'1': 'client_id', '3': 1, '4': 1, '5': 9, '10': 'clientId'},
+  ],
+};
+
+/// Descriptor for `StartNtfnStreamRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List startNtfnStreamRequestDescriptor = $convert.base64Decode(
+    'ChZTdGFydE50Zm5TdHJlYW1SZXF1ZXN0EhsKCWNsaWVudF9pZBgBIAEoCVIIY2xpZW50SWQ=');
+
+@$core.Deprecated('Use ntfnStreamResponseDescriptor instead')
+const NtfnStreamResponse$json = {
+  '1': 'NtfnStreamResponse',
+  '2': [
+    {'1': 'notification_type', '3': 1, '4': 1, '5': 14, '6': '.pong.NotificationType', '10': 'notificationType'},
+    {'1': 'started', '3': 2, '4': 1, '5': 8, '10': 'started'},
+    {'1': 'game_id', '3': 3, '4': 1, '5': 9, '10': 'gameId'},
+    {'1': 'message', '3': 4, '4': 1, '5': 9, '10': 'message'},
+    {'1': 'betAmt', '3': 5, '4': 1, '5': 1, '10': 'betAmt'},
+    {'1': 'player_number', '3': 6, '4': 1, '5': 5, '10': 'playerNumber'},
+    {'1': 'player_id', '3': 7, '4': 1, '5': 9, '10': 'playerId'},
+    {'1': 'room_id', '3': 8, '4': 1, '5': 9, '10': 'roomId'},
+    {'1': 'wr', '3': 9, '4': 1, '5': 11, '6': '.pong.WaitingRoom', '10': 'wr'},
+  ],
+};
+
+/// Descriptor for `NtfnStreamResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List ntfnStreamResponseDescriptor = $convert.base64Decode(
+    'ChJOdGZuU3RyZWFtUmVzcG9uc2USQwoRbm90aWZpY2F0aW9uX3R5cGUYASABKA4yFi5wb25nLk'
+    '5vdGlmaWNhdGlvblR5cGVSEG5vdGlmaWNhdGlvblR5cGUSGAoHc3RhcnRlZBgCIAEoCFIHc3Rh'
+    'cnRlZBIXCgdnYW1lX2lkGAMgASgJUgZnYW1lSWQSGAoHbWVzc2FnZRgEIAEoCVIHbWVzc2FnZR'
+    'IWCgZiZXRBbXQYBSABKAFSBmJldEFtdBIjCg1wbGF5ZXJfbnVtYmVyGAYgASgFUgxwbGF5ZXJO'
+    'dW1iZXISGwoJcGxheWVyX2lkGAcgASgJUghwbGF5ZXJJZBIXCgdyb29tX2lkGAggASgJUgZyb2'
+    '9tSWQSIQoCd3IYCSABKAsyES5wb25nLldhaXRpbmdSb29tUgJ3cg==');
 
 @$core.Deprecated('Use waitingRoomsRequestDescriptor instead')
 const WaitingRoomsRequest$json = {
@@ -138,6 +176,19 @@ const WaitingRoomRequest$json = {
 final $typed_data.Uint8List waitingRoomRequestDescriptor = $convert.base64Decode(
     'ChJXYWl0aW5nUm9vbVJlcXVlc3Q=');
 
+@$core.Deprecated('Use waitingRoomResponseDescriptor instead')
+const WaitingRoomResponse$json = {
+  '1': 'WaitingRoomResponse',
+  '2': [
+    {'1': 'players', '3': 1, '4': 3, '5': 11, '6': '.pong.Player', '10': 'players'},
+  ],
+};
+
+/// Descriptor for `WaitingRoomResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List waitingRoomResponseDescriptor = $convert.base64Decode(
+    'ChNXYWl0aW5nUm9vbVJlc3BvbnNlEiYKB3BsYXllcnMYASADKAsyDC5wb25nLlBsYXllclIHcG'
+    'xheWVycw==');
+
 @$core.Deprecated('Use playerDescriptor instead')
 const Player$json = {
   '1': 'Player',
@@ -152,56 +203,6 @@ const Player$json = {
 final $typed_data.Uint8List playerDescriptor = $convert.base64Decode(
     'CgZQbGF5ZXISEAoDdWlkGAEgASgJUgN1aWQSEgoEbmljaxgCIAEoCVIEbmljaxIcCgliZXRBbW'
     '91bnQYAyABKAFSCWJldEFtb3VudA==');
-
-@$core.Deprecated('Use waitingRoomResponseDescriptor instead')
-const WaitingRoomResponse$json = {
-  '1': 'WaitingRoomResponse',
-  '2': [
-    {'1': 'players', '3': 1, '4': 3, '5': 11, '6': '.pong.Player', '10': 'players'},
-  ],
-};
-
-/// Descriptor for `WaitingRoomResponse`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List waitingRoomResponseDescriptor = $convert.base64Decode(
-    'ChNXYWl0aW5nUm9vbVJlc3BvbnNlEiYKB3BsYXllcnMYASADKAsyDC5wb25nLlBsYXllclIHcG'
-    'xheWVycw==');
-
-@$core.Deprecated('Use startNtfnStreamRequestDescriptor instead')
-const StartNtfnStreamRequest$json = {
-  '1': 'StartNtfnStreamRequest',
-  '2': [
-    {'1': 'client_id', '3': 1, '4': 1, '5': 9, '10': 'clientId'},
-  ],
-};
-
-/// Descriptor for `StartNtfnStreamRequest`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List startNtfnStreamRequestDescriptor = $convert.base64Decode(
-    'ChZTdGFydE50Zm5TdHJlYW1SZXF1ZXN0EhsKCWNsaWVudF9pZBgBIAEoCVIIY2xpZW50SWQ=');
-
-@$core.Deprecated('Use ntfnStreamResponseDescriptor instead')
-const NtfnStreamResponse$json = {
-  '1': 'NtfnStreamResponse',
-  '2': [
-    {'1': 'notification_type', '3': 1, '4': 1, '5': 14, '6': '.pong.NotificationType', '10': 'notificationType'},
-    {'1': 'started', '3': 2, '4': 1, '5': 8, '10': 'started'},
-    {'1': 'game_id', '3': 3, '4': 1, '5': 9, '10': 'gameId'},
-    {'1': 'message', '3': 4, '4': 1, '5': 9, '10': 'message'},
-    {'1': 'betAmt', '3': 5, '4': 1, '5': 1, '10': 'betAmt'},
-    {'1': 'player_number', '3': 6, '4': 1, '5': 5, '10': 'playerNumber'},
-    {'1': 'player_id', '3': 7, '4': 1, '5': 9, '10': 'playerId'},
-    {'1': 'room_id', '3': 8, '4': 1, '5': 9, '10': 'roomId'},
-    {'1': 'wr', '3': 9, '4': 1, '5': 11, '6': '.pong.WaitingRoom', '10': 'wr'},
-  ],
-};
-
-/// Descriptor for `NtfnStreamResponse`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List ntfnStreamResponseDescriptor = $convert.base64Decode(
-    'ChJOdGZuU3RyZWFtUmVzcG9uc2USQwoRbm90aWZpY2F0aW9uX3R5cGUYASABKA4yFi5wb25nLk'
-    '5vdGlmaWNhdGlvblR5cGVSEG5vdGlmaWNhdGlvblR5cGUSGAoHc3RhcnRlZBgCIAEoCFIHc3Rh'
-    'cnRlZBIXCgdnYW1lX2lkGAMgASgJUgZnYW1lSWQSGAoHbWVzc2FnZRgEIAEoCVIHbWVzc2FnZR'
-    'IWCgZiZXRBbXQYBSABKAFSBmJldEFtdBIjCg1wbGF5ZXJfbnVtYmVyGAYgASgFUgxwbGF5ZXJO'
-    'dW1iZXISGwoJcGxheWVyX2lkGAcgASgJUghwbGF5ZXJJZBIXCgdyb29tX2lkGAggASgJUgZyb2'
-    '9tSWQSIQoCd3IYCSABKAsyES5wb25nLldhaXRpbmdSb29tUgJ3cg==');
 
 @$core.Deprecated('Use startGameStreamRequestDescriptor instead')
 const StartGameStreamRequest$json = {

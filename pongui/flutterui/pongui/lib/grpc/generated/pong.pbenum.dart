@@ -13,6 +13,7 @@ import 'dart:core' as $core;
 
 import 'package:protobuf/protobuf.dart' as $pb;
 
+/// Notification Messages
 class NotificationType extends $pb.ProtobufEnum {
   static const NotificationType UNKNOWN = NotificationType._(0, _omitEnumNames ? '' : 'UNKNOWN');
   static const NotificationType MESSAGE = NotificationType._(1, _omitEnumNames ? '' : 'MESSAGE');
@@ -21,6 +22,7 @@ class NotificationType extends $pb.ProtobufEnum {
   static const NotificationType OPPONENT_DISCONNECTED = NotificationType._(4, _omitEnumNames ? '' : 'OPPONENT_DISCONNECTED');
   static const NotificationType BET_AMOUNT_UPDATE = NotificationType._(5, _omitEnumNames ? '' : 'BET_AMOUNT_UPDATE');
   static const NotificationType PLAYER_JOINED_WR = NotificationType._(6, _omitEnumNames ? '' : 'PLAYER_JOINED_WR');
+  static const NotificationType ON_WR_CREATED = NotificationType._(7, _omitEnumNames ? '' : 'ON_WR_CREATED');
 
   static const $core.List<NotificationType> values = <NotificationType> [
     UNKNOWN,
@@ -30,6 +32,7 @@ class NotificationType extends $pb.ProtobufEnum {
     OPPONENT_DISCONNECTED,
     BET_AMOUNT_UPDATE,
     PLAYER_JOINED_WR,
+    ON_WR_CREATED,
   ];
 
   static final $core.Map<$core.int, NotificationType> _byValue = $pb.ProtobufEnum.initByValue(values);

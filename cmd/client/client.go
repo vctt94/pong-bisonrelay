@@ -39,8 +39,8 @@ const (
 )
 
 var (
-	serverAddr = flag.String("server_addr", "104.131.180.29:50051", "The server address in the format of host:port")
-	// serverAddr = flag.String("server_addr", "localhost:50051", "The server address in the format of host:port")
+	// serverAddr = flag.String("server_addr", "104.131.180.29:50051", "The server address in the format of host:port")
+	serverAddr = flag.String("server_addr", "localhost:50051", "The server address in the format of host:port")
 	// brdatadir          = flag.String("brdatadir", "", "Directory containing the certificates and keys")
 	flagURL            = flag.String("url", "wss://127.0.0.1:7676/ws", "URL of the websocket endpoint")
 	flagServerCertPath = flag.String("servercert", "/home/vctt/.brclient/rpc.cert", "Path to rpc.cert file")
@@ -503,7 +503,7 @@ func realMain() error {
 		as.currentWR = wr
 		as.betAmount = wr.BetAmt
 		as.Unlock()
-		as.notification = fmt.Sprintf("New waiting room created with ID: %s", wr.Id)
+		as.notification = fmt.Sprintf("New waiting room created: %s", wr.Id)
 
 		go func() {
 			select {
