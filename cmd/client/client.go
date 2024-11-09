@@ -229,7 +229,7 @@ func (m *appstate) createRoom() error {
 func (m *appstate) joinRoom(roomID string) error {
 
 	// Send request to join the specified room
-	res, err := m.pc.JoinWaitingRoom(m.ctx, roomID)
+	res, err := m.pc.JoinWaitingRoom(roomID)
 	if err != nil {
 		m.log.Errorf("Error joining room %s: %v", roomID, err)
 		return err

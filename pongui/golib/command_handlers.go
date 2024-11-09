@@ -1,6 +1,7 @@
 package golib
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -224,6 +225,17 @@ func handleClientCmd(cc *clientCtx, cmd *cmd) (interface{}, error) {
 			}
 		}
 		return res, nil
+	case CTJoinWaitingRoom:
+		id := string(bytes.Trim(cmd.Payload, "\""))
+		res, err := cc.c.JoinWaitingRoom(id)
+		if err != nil {
+			return nil, err
+		}
+		return &waitingRoom{
+			ID:     res.Wr.Id,
+			HostID: res.Wr.HostId,
+			BetAmt: res.Wr.BetAmt,
+		}, nil
 
 	case CTStopClient:
 		cc.cancel()

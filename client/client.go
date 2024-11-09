@@ -163,7 +163,7 @@ func (pc *PongClient) GetWaitingRooms() ([]*pong.WaitingRoom, error) {
 
 	res, err := pc.gc.GetWaitingRooms(ctx, &pong.WaitingRoomsRequest{})
 	if err != nil {
-		return nil, fmt.Errorf("error sending input: %w", err)
+		return nil, fmt.Errorf("error getting wr: %w", err)
 	}
 	go func() { pc.UpdatesCh <- res.Wr }()
 
@@ -175,7 +175,7 @@ func (pc *PongClient) GetWRPlayers() ([]*pong.Player, error) {
 
 	wr, err := pc.gc.GetWaitingRoom(ctx, &pong.WaitingRoomRequest{})
 	if err != nil {
-		return nil, fmt.Errorf("error sending input: %w", err)
+		return nil, fmt.Errorf("error getting wr players: %w", err)
 	}
 	return wr.Players, nil
 }
@@ -185,18 +185,19 @@ func (pc *PongClient) CreatewaitingRoom(ctx context.Context) (*pong.WaitingRoom,
 		HostId: pc.ID,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("error sending input: %w", err)
+		return nil, fmt.Errorf("error creating wr: %w", err)
 	}
 	return res.Wr, nil
 }
 
-func (pc *PongClient) JoinWaitingRoom(ctx context.Context, roomID string) (*pong.JoinWaitingRoomResponse, error) {
+func (pc *PongClient) JoinWaitingRoom(roomID string) (*pong.JoinWaitingRoomResponse, error) {
+	ctx := context.Background()
 	res, err := pc.gc.JoinWaitingRoom(ctx, &pong.JoinWaitingRoomRequest{
 		ClientId: pc.ID,
 		RoomId:   roomID,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("error sending input: %w", err)
+		return nil, fmt.Errorf("error joining wr: %w", err)
 	}
 	return res, nil
 }

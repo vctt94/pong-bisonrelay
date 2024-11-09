@@ -550,6 +550,9 @@ func (s *Server) JoinWaitingRoom(ctx context.Context, req *pong.JoinWaitingRoomR
 		return nil, fmt.Errorf("player not found: %s", req.ClientId)
 	}
 	wr := s.gameManager.GetWaitingRoom(req.RoomId)
+	if wr == nil {
+		return nil, fmt.Errorf("waiting room not found: %s", req.RoomId)
+	}
 	wr.AddPlayer(player)
 
 	pwr, err := wr.ToPongWaitingRoom()
@@ -557,14 +560,15 @@ func (s *Server) JoinWaitingRoom(ctx context.Context, req *pong.JoinWaitingRoomR
 		return nil, err
 	}
 
-	host := s.gameManager.playerSessions.GetPlayer(wr.hostID)
-	host.notifier.Send(&pong.NtfnStreamResponse{
-		NotificationType: pong.NotificationType_PLAYER_JOINED_WR,
-		Message:          fmt.Sprintf("new player joined your waiting room: %s", player.Nick),
-		PlayerId:         player.ID.String(),
-		RoomId:           wr.ID,
-		Wr:               pwr,
-	})
+	for _, p := range wr.players {
+		p.notifier.Send(&pong.NtfnStreamResponse{
+			NotificationType: pong.NotificationType_PLAYER_JOINED_WR,
+			Message:          fmt.Sprintf("new player joined waiting room: %s", player.Nick),
+			PlayerId:         player.ID.String(),
+			RoomId:           wr.ID,
+			Wr:               pwr,
+		})
+	}
 
 	return &pong.JoinWaitingRoomResponse{
 		Wr: pwr,

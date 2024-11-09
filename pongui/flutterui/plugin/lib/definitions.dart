@@ -105,7 +105,8 @@ class LocalWaitingRoom {
 
   const LocalWaitingRoom(this.id, this.host, this.betAmount);
 
-  factory LocalWaitingRoom.fromJson(Map<String, dynamic> json) => _$LocalWaitingRoomFromJson(json);
+  factory LocalWaitingRoom.fromJson(Map<String, dynamic> json) =>
+      _$LocalWaitingRoomFromJson(json);
   Map<String, dynamic> toJson() => _$LocalWaitingRoomToJson(this);
 }
 
@@ -405,6 +406,7 @@ abstract class PluginPlatform {
     var res = await asyncCall(CTInitClient, args);
     return LocalInfo.fromJson(res as Map<String, dynamic>);
   }
+
   Future<void> createLockFile(String rootDir) async =>
       await asyncCall(CTCreateLockFile, rootDir);
   Future<void> closeLockFile(String rootDir) async =>
@@ -412,6 +414,7 @@ abstract class PluginPlatform {
   Future<String> userNick(String pid) async {
     return await asyncCall(CTGetUserNick, pid);
   }
+
   Future<List<Player>> getWRPlayers() async {
     var res = await asyncCall(CTGetWRPlayers, "");
     if (res == null) {
@@ -419,16 +422,20 @@ abstract class PluginPlatform {
     }
     return (res as List).map<Player>((v) => Player.fromJson(v)).toList();
   }
+
   Future<List<LocalWaitingRoom>> getWaitingRooms() async {
     var res = await asyncCall(CTGetWaitingRooms, "");
-    // print(res);
     if (res == null) {
       return [];
     }
     return (res as List).map<LocalWaitingRoom>((v) {
-      print(v);  // Print each element in res
       return LocalWaitingRoom.fromJson(v);
     }).toList();
+  }
+
+  Future<LocalWaitingRoom> JoinWaitingRoom(id) async {
+    var res = await asyncCall(CTJoinWaitingRoom, id);
+    return LocalWaitingRoom.fromJson(res);
   }
 }
 
@@ -436,10 +443,11 @@ const int CTUnknown = 0x00;
 const int CTHello = 0x01;
 const int CTInitClient = 0x02;
 const int CTGetUserNick = 0x03;
+const int CTCreateLockFile = 0x04;
 const int CTGetWRPlayers = 0x05;
 const int CTGetWaitingRooms = 0x06;
-const int CTCreateLockFile = 0x04;
-const int CTCloseLockFile = 0x05;
+const int CTJoinWaitingRoom = 0x07;
+const int CTCloseLockFile = 0x60;
 
 const int notificationsStartID = 0x1000;
 const int notificationClientStopped = 0x1001;

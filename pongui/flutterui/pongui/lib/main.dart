@@ -27,7 +27,6 @@ void main(List<String> args) async {
     developer.log("Platform: ${Golib.majorPlatform}/${Golib.minorPlatform}");
     Golib.platformVersion
         .then((value) => developer.log("Platform Version: $value"));
-    // Pass args and initialize config
     Config cfg = await configFromArgs(args);
     runMainApp(cfg);
   } catch (exception) {
@@ -38,8 +37,6 @@ void main(List<String> args) async {
     } else if (exception == newConfigNeededException) {
       runNewConfigApp(args);
       return;
-    } else {
-      // runFatalErrorApp(exception);
     }
   }
 }
@@ -70,46 +67,62 @@ class _MyAppState extends State<MyApp> with WindowListener {
   String clientId = '';
   double betAmount = 0.0;
   Map<String, dynamic> gameState = {};
+  LocalWaitingRoom currentWR = const LocalWaitingRoom("", "", 0.0);
   late PongGame pongGame;
 
   @override
   void initState() {
     super.initState();
     initClient();
-    windowManager.setPreventClose(true);
     windowManager.addListener(this);
   }
 
   void _startListeningToNtfn(GrpcPongClient grpcClient, String clientId) {
-  // Start notification stream
-  grpcClient.startNtfnStreamRequest(clientId).listen((ntfn) {
-    developer.log("Notification Stream Response: $ntfn", level: 0);
+    grpcClient.startNtfnStreamRequest(clientId).listen((ntfn) {
+      developer.log("Notification Stream Response: $ntfn");
+        print(ntfn);
 
-    // Handle notifications based on NotificationType
-    switch (ntfn.notificationType) {
-      case NotificationType.ON_WR_CREATED:
-        setState(() {
-          waitingRooms.add(LocalWaitingRoom(
-            ntfn.wr.id, // Use appropriate fields from the notification
-            ntfn.wr.hostId,
-            ntfn.wr.betAmt,
-          ));
-        });
-        break;
+      switch (ntfn.notificationType) {
+        case NotificationType.ON_WR_CREATED:
+          setState(() {
+            waitingRooms.add(LocalWaitingRoom(
+              ntfn.wr.id,
+              ntfn.wr.hostId,
+              ntfn.wr.betAmt,
+            ));
+          });
+          break;
+        default:
+          developer.log("Unknown notification type: ${ntfn.notificationType}");
+      }
+    }, onError: (error) {
+      developer.log("Error in notification stream: $error");
+    });
+  }
 
-      default:
-        developer.log("Unknown notification type: ${ntfn.notificationType}");
+  void _toggleReady() {
+    if (currentWR.id == "") {
+      return;
     }
-  }, onError: (error) {
-    developer.log("Error in notification stream: $error");
-  });
-}
+    grpcClient?.startGameStreamRequest(clientId).listen((gameUpdate) {
+      var data = utf8.decode(gameUpdate.data);
+      var parsedData = json.decode(data) as Map<String, dynamic>;
+      setState(() {
+        gameState = parsedData;
+        gameStarted = true;
+        errorMessage = '';
+      });
+    }, onError: (error) {
+      developer.log("Error in notification stream: $error");
+    });
+    setState(() {
+      isReady = !isReady;
+    });
+  }
 
   Future<void> initClient() async {
     try {
-      // Load the configuration from the args.
       var cfg = widget.cfg;
-
       InitClient initArgs = InitClient(
         cfg.serverAddr,
         "",
@@ -136,12 +149,9 @@ class _MyAppState extends State<MyApp> with WindowListener {
         waitingRooms = rooms;
       });
       List<String> parts = cfg.serverAddr.split(":");
-      String ipAddress = parts[0]; // "127.0.0.1"
-      int port = int.parse(parts[1]); // 50051 as an integer
-      grpcClient = GrpcPongClient(
-        ipAddress,
-        port, // Assuming you have the port in the config
-      );
+      String ipAddress = parts[0];
+      int port = int.parse(parts[1]);
+      grpcClient = GrpcPongClient(ipAddress, port);
       pongGame = PongGame(clientId, grpcClient!);
 
       setState(() {
@@ -151,8 +161,7 @@ class _MyAppState extends State<MyApp> with WindowListener {
       });
       _startListeningToNtfn(grpcClient!, clientId);
     } catch (exception) {
-      print("**********************exception***********");
-      print(exception);
+      print("Exception: $exception");
     }
   }
 
@@ -163,8 +172,7 @@ class _MyAppState extends State<MyApp> with WindowListener {
       });
       grpcClient!.startGameStreamRequest(clientId).listen((response) {
         var data = utf8.decode(response.data);
-        var parsedData =
-            json.decode(data) as Map<String, dynamic>; // Decode the JSON
+        var parsedData = json.decode(data) as Map<String, dynamic>;
         setState(() {
           gameState = parsedData;
           gameStarted = true;
@@ -185,29 +193,25 @@ class _MyAppState extends State<MyApp> with WindowListener {
   void _retryGameStream() {
     setState(() {
       errorMessage = '';
-      // Retry logic here
     });
     _startGameStream();
+  }
+
+  void _handleJoinRoom(String id) async {
+    var wr = await Golib.JoinWaitingRoom(id);
+    setState(() {
+      currentWR = wr;
+    });
   }
 
   Future<void> _createWaitingRoom() async {
     try {
       if (grpcClient != null && clientId.isNotEmpty) {
-        // Send a request to create a waiting room
-        // final response = await Golib.createWaitingRoom(clientId);
+        isReady = true;
+      }
 
-        // setState(() {
-        //   waitingRooms.add(Player(
-        //     clientId,
-        //     nick,
-        //     betAmount,
-        //   ));
-          isReady = true; // Indicates the player is now in a waiting room
-        };
-
-        developer.log("Waiting room created for Client ID: $clientId");
-
-      } catch (error) {
+      developer.log("Waiting room created for Client ID: $clientId");
+    } catch (error) {
       developer.log("Error creating waiting room: $error");
       setState(() {
         errorMessage = "Failed to create waiting room. Please try again.";
@@ -217,6 +221,8 @@ class _MyAppState extends State<MyApp> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
+    final TextEditingController roomIdController = TextEditingController();
+
     return MaterialApp(
       title: 'Pong Game App',
       theme: ThemeData.dark().copyWith(
@@ -225,7 +231,21 @@ class _MyAppState extends State<MyApp> with WindowListener {
       ),
       home: Scaffold(
         appBar: AppBar(
-          title: Text('Pong Game'),
+          toolbarHeight: 80.0,
+          title: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Pong Game'),
+                Text(
+                  'Status: ${isReady ? "Ready" : "Not Ready"}\n'
+                  '${currentWR.id.isNotEmpty ? "Joined Room: ${currentWR.id}" : "No Room Joined"}',
+                  style: TextStyle(fontSize: 14, color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
           actions: [
             if (betAmount > 0)
               Padding(
@@ -235,6 +255,18 @@ class _MyAppState extends State<MyApp> with WindowListener {
                   child: Text('Create Waiting Room'),
                   style:
                       ElevatedButton.styleFrom(backgroundColor: Colors.amber),
+                ),
+              ),
+            if (currentWR.id.isNotEmpty)
+              if (!isReady)
+              Padding(
+                padding: const EdgeInsets.only(right: 10.0),
+                child: ElevatedButton(
+                  onPressed: _toggleReady,
+                  child: Text('Ready'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.greenAccent,
+                  ),
                 ),
               ),
           ],
@@ -300,33 +332,91 @@ class _MyAppState extends State<MyApp> with WindowListener {
                                       ),
                                       SizedBox(height: 20),
                                       Text(
-                                        'Waiting for another player...',
+                                        'Waiting for all players to get ready...',
                                         style: TextStyle(fontSize: 18),
                                       ),
+                                      if (currentWR.id.isNotEmpty)
+                                        Text(
+                                          'Joined Room: ${currentWR.id}',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            color: Colors.white70,
+                                          ),
+                                        ),
                                     ],
                                   )
                             : Padding(
                                 padding: const EdgeInsets.all(16.0),
-                                child: WaitingRoomList(waitingRooms),
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 10.0),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: TextField(
+                                                controller: roomIdController,
+                                                decoration: InputDecoration(
+                                                  labelText: 'Enter Room ID',
+                                                  border: OutlineInputBorder(),
+                                                ),
+                                              ),
+                                            ),
+                                            SizedBox(width: 10),
+                                            ElevatedButton(
+                                              onPressed: () {
+                                                _handleJoinRoom(
+                                                    roomIdController.text);
+                                              },
+                                              child: Text('Join Room'),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    Colors.blueAccent,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                            maxHeight: MediaQuery.of(context)
+                                                    .size
+                                                    .height -
+                                                200),
+                                        child: WaitingRoomList(
+                                            waitingRooms, _handleJoinRoom),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                   ),
                   Positioned(
-                    bottom: 10,
+                    bottom: 0,
                     left: 0,
                     right: 0,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          'Connected to Server: $serverAddr',
-                          style: TextStyle(fontSize: 16, color: Colors.white70),
-                        ),
-                        SizedBox(height: 5),
-                        Text(
-                          'Client ID: $clientId',
-                          style: TextStyle(fontSize: 16, color: Colors.white70),
-                        ),
-                      ],
+                    child: Container(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      color: Colors.black54,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Connected to Server: $serverAddr',
+                            style:
+                                TextStyle(fontSize: 16, color: Colors.white70),
+                          ),
+                          SizedBox(height: 5),
+                          Text(
+                            'Client ID: $clientId',
+                            style:
+                                TextStyle(fontSize: 16, color: Colors.white70),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],

@@ -3,8 +3,9 @@ import 'package:golib_plugin/definitions.dart';
 
 class WaitingRoomList extends StatelessWidget {
   final List<LocalWaitingRoom> waitingRooms;
+  final Function(String roomId) onJoinRoom;
 
-  const WaitingRoomList(this.waitingRooms);
+  const WaitingRoomList(this.waitingRooms, this.onJoinRoom);
 
   @override
   Widget build(BuildContext context) {
@@ -37,11 +38,11 @@ class WaitingRoomList extends StatelessWidget {
                         ),
                         trailing: ElevatedButton(
                           onPressed: () {
-                            // Join waiting room logic
+                            onJoinRoom(wr.id);
                           },
                           child: Text("Join"),
                           style: ElevatedButton.styleFrom(
-                            // primaryColor: Colors.green,
+                            backgroundColor: Colors.blueAccent,
                           ),
                         ),
                       ),
