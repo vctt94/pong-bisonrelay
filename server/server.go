@@ -411,13 +411,18 @@ func (s *Server) handleGameEnd(ctx context.Context, game *gameInstance, players 
 		s.log.Infof("Game ended in a draw.")
 	}
 
+	// should have a winner
+	if winner == nil {
+		s.log.Errorf("Failed to define winner")
+		return
+	}
 	totalBet := betAmt * 2
 	// Notify players of game outcome
 	for _, player := range players {
 		message := "Game ended in a draw."
-		if winner != nil && player.ID == *winner {
+		if player.ID == *winner {
 			message = fmt.Sprintf("Congratulations, you won and received: %.8f", totalBet)
-		} else if winner != nil {
+		} else {
 			message = fmt.Sprintf("Sorry, you lost and lose: %.8f", betAmt)
 		}
 		player.notifier.Send(&pong.NtfnStreamResponse{
