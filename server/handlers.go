@@ -185,9 +185,9 @@ func (s *Server) handleGameEnd(ctx context.Context, game *ponggame.GameInstance,
 	// Notify players of game outcome
 	for _, player := range players {
 		message := "Game ended in a draw."
-		if winner != nil && player.ID == winner {
+		if player.ID == winner {
 			message = fmt.Sprintf("Congratulations, you won and received: %.8f", totalBet)
-		} else if winner != nil {
+		} else {
 			message = fmt.Sprintf("Sorry, you lost and lose: %.8f", betAmt)
 		}
 		player.NotifierStream.Send(&pong.NtfnStreamResponse{
