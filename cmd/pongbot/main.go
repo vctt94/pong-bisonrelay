@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"encoding/hex"
-	"flag"
 	"fmt"
 	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/companyzero/bisonrelay/clientrpc/jsonrpc"
 	"github.com/companyzero/bisonrelay/clientrpc/types"
@@ -19,23 +19,17 @@ import (
 	"github.com/vctt94/pong-bisonrelay/server"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
-)
-
-var (
-	serverDir = flag.String("serverdir", "/home/pongbot/.pongserver", "Path to server dir")
-
-	flagURL = flag.String("url", "wss://127.0.0.1:7676/ws", "URL of the websocket endpoint")
-
-	flagServerCertPath  = flag.String("servercert", "/home/pongbot/.brclient/rpc.cert", "Path to rpc.cert file")
-	flagClientCertPath  = flag.String("clientcert", "/home/pongbot/.brclient/rpc-client.cert", "Path to rpc-client.cert file")
-	flagClientKeyPath   = flag.String("clientkey", "/home/pongbot/.brclient/rpc-client.key", "Path to rpc-client.key file")
-	debugStr            = flag.String("debug", "debug", "Enable debug mode")
-	debugGameManagerStr = flag.String("debuggamemanager", "debug", "Enable debug mode for game manager")
+	"google.golang.org/grpc/credentials"
 )
 
 func realMain() error {
-	debugLevel := server.GetDebugLevel(*debugStr)
-	debugGameManager := server.GetDebugLevel(*debugGameManagerStr)
+	cfg, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	debugLevel := server.GetDebugLevel(cfg.Debug)
+	debugGameManager := server.GetDebugLevel(cfg.Debug)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -53,66 +47,57 @@ func realMain() error {
 		cancel()
 	}()
 
+	// Create DataDir directory if not exists
+	if _, err := os.Stat(cfg.DataDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
+			return fmt.Errorf("failed to create data directory: %v", err)
+		}
+	}
+
 	g, gctx := errgroup.WithContext(ctx)
+
+	// Start gRPC server
+	// XXX Port can also come from config
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
 		return fmt.Errorf("failed to listen on port 50051: %v", err)
 	}
 
-	// Paths for the generated certificate and key in .pongserver directory
-	certPath := filepath.Join(*serverDir, "server.cert")
-	keyPath := filepath.Join(*serverDir, "server.key")
-
-	// Initialize the Pong plugin and GameServer
-
-	// Check if the TLS certificate and key exist; if not, generate them
-	if _, err := os.Stat(certPath); os.IsNotExist(err) || func() bool {
-		_, err := os.Stat(keyPath)
-		return os.IsNotExist(err)
-	}() {
-		// if err := gameSrv.GenerateNewTLSCertPair("Pong Server", time.Now().Add(365*24*time.Hour), []string{"localhost"}, certPath, keyPath); err != nil {
-		// 	return fmt.Errorf("failed to generate self-signed certificate: %v", err)
-		// }
-		// fmt.Println("Generated new self-signed certificate and key")
-	}
-
-	// Load the server certificate and key
-	// creds, err := credentials.NewServerTLSFromFile(certPath, keyPath)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to load TLS credentials: %v", err)
-	// }
-
+	// Initialize JSON-RPC client
 	c, err := jsonrpc.NewWSClient(
-		jsonrpc.WithWebsocketURL(*flagURL),
-		jsonrpc.WithServerTLSCertPath(*flagServerCertPath),
-		jsonrpc.WithClientTLSCert(*flagClientCertPath, *flagClientKeyPath),
+		jsonrpc.WithWebsocketURL(cfg.URL),
+		jsonrpc.WithServerTLSCertPath(cfg.ServerCertPath),
+		jsonrpc.WithClientTLSCert(cfg.ClientCertPath, cfg.ClientKeyPath),
 		jsonrpc.WithClientLog(log),
-		jsonrpc.WithClientBasicAuth("rpcuser", "rpcpass"),
+		jsonrpc.WithClientBasicAuth(cfg.RPCUser, cfg.RPCPass),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to create WS client: %v", err)
+		return fmt.Errorf("failed to create WS client: %w", err)
 	}
 	g.Go(func() error { return c.Run(gctx) })
 
+	// Chat and Payment clients
 	chat := types.NewChatServiceClient(c)
 	payment := types.NewPaymentsServiceClient(c)
+
+	// Retrieve public identity
 	req := &types.PublicIdentityReq{}
 	var publicIdentity types.PublicIdentity
-	err = chat.UserPublicIdentity(ctx, req, &publicIdentity)
-	if err != nil {
-		return fmt.Errorf("failed to get user public identity: %v", err)
+	if err := chat.UserPublicIdentity(ctx, req, &publicIdentity); err != nil {
+		return fmt.Errorf("failed to get public identity: %w", err)
 	}
 
 	clientID := hex.EncodeToString(publicIdentity.Identity[:])
 	var zkShortID zkidentity.ShortID
 	copy(zkShortID[:], clientID)
 
+	// Create Pong server
 	srv := server.NewServer(&zkShortID, server.ServerConfig{
 		DebugGameManagerLevel: debugGameManager,
 		Debug:                 debugLevel,
 		PaymentClient:         payment,
 		ChatClient:            chat,
-		ServerDir:             *serverDir,
+		ServerDir:             cfg.DataDir,
 		HTTPPort:              "8888",
 	})
 
@@ -121,17 +106,37 @@ func realMain() error {
 	g.Go(func() error { return srv.SendTipProgressLoop(gctx) })
 	g.Go(func() error { return srv.ReceiveTipLoop(gctx) })
 
-	s := grpc.NewServer()
-	pong.RegisterPongGameServer(s, srv)
+	// load tls cert
+	certPath := filepath.Join(cfg.DataDir, "server.cert")
+	keyPath := filepath.Join(cfg.DataDir, "server.key")
+	// Check if the TLS certificate and key exist; if not, generate them
+	if _, err := os.Stat(certPath); os.IsNotExist(err) || func() bool {
+		_, err := os.Stat(keyPath)
+		return os.IsNotExist(err)
+	}() {
+		if err := srv.GenerateNewTLSCertPair("Pong Server", time.Now().Add(365*24*time.Hour), []string{"localhost"}, certPath, keyPath); err != nil {
+			return fmt.Errorf("failed to generate self-signed certificate: %v", err)
+		}
+		fmt.Println("Generated new self-signed certificate and key")
+	}
+
+	// Load the server certificate and key
+	creds, err := credentials.NewServerTLSFromFile(certPath, keyPath)
+	if err != nil {
+		return fmt.Errorf("failed to load TLS credentials: %v", err)
+	}
+	grpcServer := grpc.NewServer(grpc.Creds(creds))
+
+	pong.RegisterPongGameServer(grpcServer, srv)
 
 	log.Infof("server listening at %v", lis.Addr())
 	go func() {
 		<-ctx.Done()
 		log.Info("shutting down gRPC server gracefully")
-		s.GracefulStop()
+		grpcServer.GracefulStop()
 	}()
 
-	if err := s.Serve(lis); err != nil {
+	if err := grpcServer.Serve(lis); err != nil {
 		return fmt.Errorf("failed to serve gRPC server: %v", err)
 	}
 
