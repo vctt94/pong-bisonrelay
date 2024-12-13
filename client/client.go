@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"sync"
 	"time"
 
@@ -15,12 +16,14 @@ import (
 
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 type UpdatedMsg struct{}
 
 type PongClientCfg struct {
 	ServerAddr    string      // Address of the Pong server
+	GRPCCertPath  string      // Cert to the grpc server
 	Log           slog.Logger // Application's logger
 	ChatClient    types.ChatServiceClient
 	PaymentClient types.PaymentsServiceClient
@@ -206,10 +209,17 @@ func NewPongClient(clientID string, cfg *PongClientCfg) (*PongClient, error) {
 	if cfg.Log == nil {
 		return nil, fmt.Errorf("client must have logger")
 	}
-	// Establish a gRPC connection to the server using the address in cfg
-	pongConn, err := grpc.Dial(cfg.ServerAddr, grpc.WithInsecure())
+
+	// Load the credentials from the certificate file
+	creds, err := credentials.NewClientTLSFromFile(cfg.GRPCCertPath, "")
 	if err != nil {
-		return nil, err
+		log.Fatalf("Failed to load credentials: %v", err)
+	}
+
+	// Dial the gRPC server with TLS credentials
+	pongConn, err := grpc.Dial(cfg.ServerAddr, grpc.WithTransportCredentials(creds))
+	if err != nil {
+		log.Fatalf("Failed to connect to server: %v", err)
 	}
 
 	ntfns := cfg.Notifications

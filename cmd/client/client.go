@@ -40,14 +40,15 @@ const (
 
 var (
 	// serverAddr = flag.String("server_addr", "104.131.180.29:50051", "The server address in the format of host:port")
-	serverAddr = flag.String("server_addr", "localhost:50051", "The server address in the format of host:port")
+	serverAddr = flag.String("server_addr", "", "The server address in the format of host:port")
 	// brdatadir          = flag.String("brdatadir", "", "Directory containing the certificates and keys")
-	flagURL            = flag.String("url", "wss://127.0.0.1:7676/ws", "URL of the websocket endpoint")
-	flagServerCertPath = flag.String("servercert", "/home/vctt/.brclient/rpc.cert", "Path to rpc.cert file")
-	flagClientCertPath = flag.String("clientcert", "/home/vctt/.brclient/rpc-client.cert", "Path to rpc-client.cert file")
-	flagClientKeyPath  = flag.String("clientkey", "/home/vctt/.brclient/rpc-client.key", "Path to rpc-client.key file")
-	rpcUser            = flag.String("rpcuser", "rpcuser", "RPC user for basic authentication")
-	rpcPass            = flag.String("rpcpass", "rpcpass", "RPC password for basic authentication")
+	flagURL            = flag.String("url", "", "URL of the websocket endpoint")
+	flagServerCertPath = flag.String("servercert", "", "Path to rpc.cert file")
+	flagClientCertPath = flag.String("clientcert", "", "Path to rpc-client.cert file")
+	flagClientKeyPath  = flag.String("clientkey", "", "Path to rpc-client.key file")
+	rpcUser            = flag.String("rpcuser", "", "RPC user for basic authentication")
+	rpcPass            = flag.String("rpcpass", "", "RPC password for basic authentication")
+	grpcServerCert     = flag.String("grpcservercert", "", "Path to grpc server.cert file")
 )
 
 type appstate struct {
@@ -454,6 +455,37 @@ func (m *appstate) View() string {
 
 func realMain() error {
 	flag.Parse()
+	cfg, err := loadConfig()
+	if err != nil {
+		fmt.Println("Error loading configuration:", err)
+		os.Exit(1)
+	}
+
+	// Apply overrides from flags
+	if *flagURL != "" {
+		cfg.RPCURL = *flagURL
+	}
+	if *flagServerCertPath != "" {
+		cfg.ServerCertPath = *flagServerCertPath
+	}
+	if *flagClientCertPath != "" {
+		cfg.ClientCertPath = *flagClientCertPath
+	}
+	if *flagClientKeyPath != "" {
+		cfg.ClientKeyPath = *flagClientKeyPath
+	}
+	if *rpcUser != "" {
+		cfg.RPCUser = *rpcUser
+	}
+	if *rpcPass != "" {
+		cfg.RPCPass = *rpcPass
+	}
+	if *serverAddr != "" {
+		cfg.ServerAddr = *serverAddr
+	}
+	if *grpcServerCert != "" {
+		cfg.GRPCServerCert = *grpcServerCert
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -467,11 +499,11 @@ func realMain() error {
 	log.SetLevel(slog.LevelInfo)
 
 	c, err := jsonrpc.NewWSClient(
-		jsonrpc.WithWebsocketURL(*flagURL),
-		jsonrpc.WithServerTLSCertPath(*flagServerCertPath),
-		jsonrpc.WithClientTLSCert(*flagClientCertPath, *flagClientKeyPath),
+		jsonrpc.WithWebsocketURL(cfg.RPCURL),
+		jsonrpc.WithServerTLSCertPath(cfg.ServerCertPath),
+		jsonrpc.WithClientTLSCert(cfg.ClientCertPath, cfg.ClientKeyPath),
 		jsonrpc.WithClientLog(log),
-		jsonrpc.WithClientBasicAuth(*rpcUser, *rpcPass),
+		jsonrpc.WithClientBasicAuth(cfg.RPCUser, cfg.RPCPass),
 	)
 	if err != nil {
 		return err
@@ -565,10 +597,11 @@ func realMain() error {
 	}))
 
 	pc, err := client.NewPongClient(clientID, &client.PongClientCfg{
-		ServerAddr:    *serverAddr,
+		ServerAddr:    cfg.ServerAddr,
 		ChatClient:    chat,
 		Notifications: ntfns,
 		Log:           log,
+		GRPCCertPath:  cfg.GRPCServerCert,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create pong client: %v", err)
