@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vctt94/pong-bisonrelay/botlib"
 	"github.com/vctt94/pong-bisonrelay/client"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 	"golang.org/x/sync/errgroup"
@@ -455,7 +456,7 @@ func (m *appstate) View() string {
 
 func realMain() error {
 	flag.Parse()
-	cfg, err := loadConfig()
+	cfg, err := botlib.LoadClientConfig()
 	if err != nil {
 		fmt.Println("Error loading configuration:", err)
 		os.Exit(1)

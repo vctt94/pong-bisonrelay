@@ -1,4 +1,4 @@
-package main
+package botlib
 
 import (
 	"bufio"
@@ -6,9 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
-	"os/user"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -17,9 +15,9 @@ var (
 	defaultBRClientDir = AppDataDir("brclient", false)
 )
 
-type config struct {
+type BotConfig struct {
 	DataDir        string
-	URL            string
+	RPCURL         string
 	ServerCertPath string
 	ClientCertPath string
 	ClientKeyPath  string
@@ -28,10 +26,10 @@ type config struct {
 	Debug          string
 }
 
-func writeConfigFile(cfg *config, configPath string) error {
+func writeConfigFile(cfg *BotConfig, configPath string) error {
 	configData := fmt.Sprintf(
 		`datadir=%s
-url=%s
+rpcurl=%s
 servercertpath=%s
 clientcertpath=%s
 clientkeypath=%s
@@ -40,7 +38,7 @@ rpcpass=%s
 debug=%s
 `,
 		cfg.DataDir,
-		cfg.URL,
+		cfg.RPCURL,
 		cfg.ServerCertPath,
 		cfg.ClientCertPath,
 		cfg.ClientKeyPath,
@@ -61,7 +59,7 @@ func GenerateRandomString(length int) (string, error) {
 	return hex.EncodeToString(bytes)[:length], nil
 }
 
-func parseConfigFile(configPath string) (*config, error) {
+func parseConfigFile(configPath string) (*BotConfig, error) {
 	const funcName = "parseConfigFile"
 
 	file, err := os.Open(configPath)
@@ -70,7 +68,7 @@ func parseConfigFile(configPath string) (*config, error) {
 	}
 	defer file.Close()
 
-	cfg := &config{}
+	cfg := &BotConfig{}
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -92,8 +90,8 @@ func parseConfigFile(configPath string) (*config, error) {
 			cfg.DataDir = value
 		case "debug":
 			cfg.Debug = value
-		case "url":
-			cfg.URL = value
+		case "rpcurl":
+			cfg.RPCURL = value
 		case "servercertpath":
 			cfg.ServerCertPath = value
 		case "clientcertpath":
@@ -116,7 +114,7 @@ func parseConfigFile(configPath string) (*config, error) {
 	return cfg, nil
 }
 
-func loadConfig() (*config, error) {
+func LoadBotConfig() (*BotConfig, error) {
 	const funcName = "loadConfig"
 
 	// Path to the configuration directory and file
@@ -142,11 +140,11 @@ func loadConfig() (*config, error) {
 			return nil, fmt.Errorf("%s: failed to generate rpcpass: %w", funcName, err)
 		}
 
-		defaultConfig := config{
+		defaultConfig := BotConfig{
 			DataDir: configDir,
 			Debug:   "debug",
 
-			URL:            "wss://127.0.0.1:7676/ws",
+			RPCURL:         "wss://127.0.0.1:7676/ws",
 			ServerCertPath: filepath.Join(defaultBRClientDir, "rpc.cert"),
 			ClientCertPath: filepath.Join(defaultBRClientDir, "rpc-client.cert"),
 			ClientKeyPath:  filepath.Join(defaultBRClientDir, "rpc-client.key"),
@@ -168,64 +166,10 @@ func loadConfig() (*config, error) {
 	}
 
 	// Clean and expand paths
-	cfg.DataDir = cleanAndExpandPath(cfg.DataDir)
-	cfg.ServerCertPath = cleanAndExpandPath(cfg.ServerCertPath)
-	cfg.ClientCertPath = cleanAndExpandPath(cfg.ClientCertPath)
-	cfg.ClientKeyPath = cleanAndExpandPath(cfg.ClientKeyPath)
+	cfg.DataDir = CleanAndExpandPath(cfg.DataDir)
+	cfg.ServerCertPath = CleanAndExpandPath(cfg.ServerCertPath)
+	cfg.ClientCertPath = CleanAndExpandPath(cfg.ClientCertPath)
+	cfg.ClientKeyPath = CleanAndExpandPath(cfg.ClientKeyPath)
 
 	return cfg, nil
-}
-
-// cleanAndExpandPath expands environment variables and leading ~ in the
-// passed path, cleans the result, and returns it.
-func cleanAndExpandPath(path string) string {
-	// Nothing to do when no path is given.
-	if path == "" {
-		return path
-	}
-
-	// NOTE: The os.ExpandEnv doesn't work with Windows cmd.exe-style
-	// %VARIABLE%, but the variables can still be expanded via POSIX-style
-	// $VARIABLE.
-	path = os.ExpandEnv(path)
-
-	if !strings.HasPrefix(path, "~") {
-		return filepath.Clean(path)
-	}
-
-	// Expand initial ~ to the current user's home directory, or ~otheruser
-	// to otheruser's home directory.  On Windows, both forward and backward
-	// slashes can be used.
-	path = path[1:]
-
-	var pathSeparators string
-	if runtime.GOOS == "windows" {
-		pathSeparators = string(os.PathSeparator) + "/"
-	} else {
-		pathSeparators = string(os.PathSeparator)
-	}
-
-	userName := ""
-	if i := strings.IndexAny(path, pathSeparators); i != -1 {
-		userName = path[:i]
-		path = path[i:]
-	}
-
-	homeDir := ""
-	var u *user.User
-	var err error
-	if userName == "" {
-		u, err = user.Current()
-	} else {
-		u, err = user.Lookup(userName)
-	}
-	if err == nil {
-		homeDir = u.HomeDir
-	}
-	// Fallback to CWD if user lookup fails or user has no home directory.
-	if homeDir == "" {
-		homeDir = "."
-	}
-
-	return filepath.Join(homeDir, path)
 }
