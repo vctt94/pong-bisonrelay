@@ -2,7 +2,7 @@
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
-package server
+package botlib
 
 // newTLSCertPair returns a new PEM-encoded x.509 certificate pair based on a
 import (
@@ -76,7 +76,7 @@ func generateSelfSignedCert(organization string, validUntil time.Time, extraHost
 }
 
 // GenerateNewTLSCertPair generates a new TLS certificate and key pair and saves them to the specified paths.
-func (s *Server) GenerateNewTLSCertPair(organization string, validUntil time.Time, extraHosts []string, certPath, keyPath string) error {
+func generateNewTLSCertPair(organization string, validUntil time.Time, extraHosts []string, certPath, keyPath string) error {
 	// Generate the certificate and key
 	cert, key, err := generateSelfSignedCert(organization, validUntil, extraHosts)
 	if err != nil {
@@ -99,5 +99,15 @@ func (s *Server) GenerateNewTLSCertPair(organization string, validUntil time.Tim
 	}
 
 	fmt.Printf("New TLS certificate and key pair generated and saved to %s and %s\n", certPath, keyPath)
+	return nil
+}
+
+func EnsureTLSCert(certPath, keyPath string, host string) error {
+	if _, err := os.Stat(certPath); os.IsNotExist(err) || func() bool {
+		_, err := os.Stat(keyPath)
+		return os.IsNotExist(err)
+	}() {
+		return generateNewTLSCertPair("Pong Server", time.Now().Add(365*24*time.Hour), []string{host}, certPath, keyPath)
+	}
 	return nil
 }
