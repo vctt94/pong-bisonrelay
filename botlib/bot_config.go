@@ -18,6 +18,8 @@ var (
 type BotConfig struct {
 	DataDir        string
 	RPCURL         string
+	GRPCHost       string
+	GRPCPort       string
 	ServerCertPath string
 	ClientCertPath string
 	ClientKeyPath  string
@@ -30,6 +32,8 @@ func writeConfigFile(cfg *BotConfig, configPath string) error {
 	configData := fmt.Sprintf(
 		`datadir=%s
 rpcurl=%s
+grpchost=%s
+grpcport=%s
 servercertpath=%s
 clientcertpath=%s
 clientkeypath=%s
@@ -39,6 +43,8 @@ debug=%s
 `,
 		cfg.DataDir,
 		cfg.RPCURL,
+		cfg.GRPCHost,
+		cfg.GRPCPort,
 		cfg.ServerCertPath,
 		cfg.ClientCertPath,
 		cfg.ClientKeyPath,
@@ -92,6 +98,10 @@ func parseConfigFile(configPath string) (*BotConfig, error) {
 			cfg.Debug = value
 		case "rpcurl":
 			cfg.RPCURL = value
+		case "grpchost":
+			cfg.GRPCHost = value
+		case "grpcport":
+			cfg.GRPCPort = value
 		case "servercertpath":
 			cfg.ServerCertPath = value
 		case "clientcertpath":
@@ -144,6 +154,8 @@ func LoadBotConfig() (*BotConfig, error) {
 			DataDir: configDir,
 			Debug:   "debug",
 
+			GRPCHost:       "localhost",
+			GRPCPort:       "50051",
 			RPCURL:         "wss://127.0.0.1:7676/ws",
 			ServerCertPath: filepath.Join(defaultBRClientDir, "rpc.cert"),
 			ClientCertPath: filepath.Join(defaultBRClientDir, "rpc-client.cert"),

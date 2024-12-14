@@ -42,9 +42,7 @@ func realMain() error {
 
 	g, gctx := errgroup.WithContext(ctx)
 
-	// Start gRPC server
-	// XXX Port can also come from config
-	lis, err := net.Listen("tcp", ":50051")
+	lis, err := net.Listen("tcp", ":"+cfg.GRPCPort)
 	if err != nil {
 		return fmt.Errorf("failed to listen on gRPC port: %v", err)
 	}
@@ -83,7 +81,7 @@ func realMain() error {
 
 	certPath := filepath.Join(cfg.DataDir, "server.cert")
 	keyPath := filepath.Join(cfg.DataDir, "server.key")
-	if err := botlib.EnsureTLSCert(certPath, keyPath, "localhost"); err != nil {
+	if err := botlib.EnsureTLSCert(certPath, keyPath, cfg.GRPCHost); err != nil {
 		return fmt.Errorf("failed to ensure TLS cert: %w", err)
 	}
 
