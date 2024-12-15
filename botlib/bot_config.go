@@ -160,7 +160,7 @@ func LoadBotConfig() (*BotConfig, error) {
 		}
 
 		defaultConfig := BotConfig{
-			DataDir:        configDir,
+			DataDir:        defaultHomeDir,
 			IsF2P:          false,
 			MinBetAmt:      0.00000001,
 			Debug:          "debug",

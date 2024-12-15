@@ -198,7 +198,6 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Lock()
 		m.gameState = &gameUpdate
 		m.Unlock()
-		// fmt.Printf("game update: %+v\n", gameUpdate)
 
 		return m, m.waitForMsg()
 

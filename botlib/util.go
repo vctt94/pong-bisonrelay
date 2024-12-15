@@ -10,7 +10,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/companyzero/bisonrelay/clientrpc/jsonrpc"
 	"github.com/decred/slog"
 )
 
@@ -22,16 +21,6 @@ func SetupSignalHandler(cancel context.CancelFunc, log slog.Logger) {
 		log.Infof("Received shutdown signal")
 		cancel()
 	}()
-}
-
-func NewJSONRPCClient(cfg *BotConfig, log slog.Logger) (*jsonrpc.WSClient, error) {
-	return jsonrpc.NewWSClient(
-		jsonrpc.WithWebsocketURL(cfg.RPCURL),
-		jsonrpc.WithServerTLSCertPath(cfg.ServerCertPath),
-		jsonrpc.WithClientTLSCert(cfg.ClientCertPath, cfg.ClientKeyPath),
-		jsonrpc.WithClientLog(log),
-		jsonrpc.WithClientBasicAuth(cfg.RPCUser, cfg.RPCPass),
-	)
 }
 
 // cleanAndExpandPath expands environment variables and leading ~ in the

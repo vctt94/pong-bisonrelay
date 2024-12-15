@@ -65,7 +65,7 @@ func NewServer(id *zkidentity.ShortID, cfg ServerConfig) *Server {
 	dbPath := filepath.Join(cfg.ServerDir, "server.db")
 	db, err := serverdb.NewBoltDB(dbPath)
 	if err != nil {
-		fmt.Printf("Failed to open database: %v\n", err)
+		log.Errorf("Failed to open database: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -343,10 +343,8 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 	if hostPlayer == nil {
 		return nil, fmt.Errorf("player not found: %s", req.HostId)
 	}
-	if !(s.isF2P) {
-		if req.BetAmt <= 0 {
-			return nil, fmt.Errorf("bet needs to be higher than 0: %.8f", req.BetAmt)
-		}
+	if s.isF2P && req.BetAmt < s.minBetAmt {
+		return nil, fmt.Errorf("bet needs to be higher than 0: %.8f", s.minBetAmt)
 	}
 
 	wr, err := ponggame.NewWaitingRoom(hostPlayer, req.BetAmt)
@@ -358,7 +356,6 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 	s.Unlock()
 	s.log.Debugf("waiting room created. waiting room count: %d", len(s.gameManager.WaitingRooms))
 
-	fmt.Printf("waitingroom: %+v\n\n", wr)
 	// Signal that a new waiting room has been created
 	select {
 	case s.waitingRoomCreated <- struct{}{}:
