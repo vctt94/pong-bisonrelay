@@ -75,6 +75,8 @@ func NewServer(id *zkidentity.ShortID, cfg ServerConfig) *Server {
 		db:                 db,
 		paymentClient:      cfg.PaymentClient,
 		chatClient:         cfg.ChatClient,
+		isF2P:              cfg.IsF2P,
+		minBetAmt:          cfg.MinBetAmt,
 		waitingRoomCreated: make(chan struct{}, 1),
 		users:              make(map[*zkidentity.ShortID]*ponggame.Player),
 		gameManager: &ponggame.GameManager{
@@ -306,10 +308,17 @@ func (s *Server) JoinWaitingRoom(ctx context.Context, req *pong.JoinWaitingRoomR
 	if player == nil {
 		return nil, fmt.Errorf("player not found: %s", req.ClientId)
 	}
+
 	wr := s.gameManager.GetWaitingRoom(req.RoomId)
 	if wr == nil {
 		return nil, fmt.Errorf("waiting room not found: %s", req.RoomId)
 	}
+
+	// Check if BetAmt matches
+	if player.BetAmt != wr.BetAmount {
+		return nil, fmt.Errorf("bet amount mismatch. Room Bet: %.8f, Player Bet: %.8f", wr.BetAmount, player.BetAmt)
+	}
+
 	wr.AddPlayer(player)
 
 	pwr, err := wr.Marshal()
@@ -319,7 +328,7 @@ func (s *Server) JoinWaitingRoom(ctx context.Context, req *pong.JoinWaitingRoomR
 	for _, p := range wr.Players {
 		p.NotifierStream.Send(&pong.NtfnStreamResponse{
 			NotificationType: pong.NotificationType_PLAYER_JOINED_WR,
-			Message:          fmt.Sprintf("new player joined waiting room: %s", player.Nick),
+			Message:          fmt.Sprintf("New player joined Waiting Room: %s", player.Nick),
 			PlayerId:         player.ID.String(),
 			RoomId:           wr.ID,
 			Wr:               pwr,
@@ -339,24 +348,34 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 	}
 
 	hostPlayer := s.gameManager.PlayerSessions.Sessions[hostID]
-	s.log.Debugf("creating waiting room. Host id: %s", hostID)
+	s.log.Debugf("creating waiting room. Host ID: %s", hostID)
 	if hostPlayer == nil {
 		return nil, fmt.Errorf("player not found: %s", req.HostId)
 	}
-	if s.isF2P && req.BetAmt < s.minBetAmt {
-		return nil, fmt.Errorf("bet needs to be higher than 0: %.8f", s.minBetAmt)
+	if !s.isF2P && req.BetAmt == 0 {
+		return nil, fmt.Errorf("bet needs to be higher than 0")
+	}
+	if !s.isF2P && req.BetAmt < s.minBetAmt {
+		return nil, fmt.Errorf("bet needs to be higher than %.8f", s.minBetAmt)
+	}
+
+	// Check if a Waiting Room with the same Host ID already exists
+	s.gameManager.Lock()
+	defer s.gameManager.Unlock()
+	for _, room := range s.gameManager.WaitingRooms {
+		if *room.HostID == hostID {
+			return nil, fmt.Errorf("A Waiting Room already exists for Host ID: %s", hostID)
+		}
 	}
 
 	wr, err := ponggame.NewWaitingRoom(hostPlayer, req.BetAmt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create waiting roomt: %v", err)
+		return nil, fmt.Errorf("failed to create waiting room: %v", err)
 	}
-	s.Lock()
 	s.gameManager.WaitingRooms = append(s.gameManager.WaitingRooms, wr)
-	s.Unlock()
-	s.log.Debugf("waiting room created. waiting room count: %d", len(s.gameManager.WaitingRooms))
+	s.log.Debugf("waiting room created. Total rooms: %d", len(s.gameManager.WaitingRooms))
 
-	// Signal that a new waiting room has been created
+	// Signal that a new Waiting Room has been created
 	select {
 	case s.waitingRoomCreated <- struct{}{}:
 	default:
