@@ -5,6 +5,7 @@ BINDIR=$(mktemp -d)
 build_protoc_gen_go() {
     mkdir -p $BINDIR
     export GOBIN=$BINDIR
+    go install github.com/golang/protobuf/protoc-gen-go
 }
 
 generate() {

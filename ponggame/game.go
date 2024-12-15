@@ -1,4 +1,4 @@
-package server
+package ponggame
 
 import (
 	"context"
@@ -7,49 +7,48 @@ import (
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/decred/slog"
 	"github.com/ndabAP/ping-pong/engine"
-	canvas "github.com/vctt94/pong-bisonrelay/pong"
 )
 
 const maxScore = 3
 
-type gameInstance struct {
+type GameInstance struct {
 	sync.Mutex
-	id          string
-	engine      *canvas.CanvasEngine
-	framesch    chan []byte
-	inputch     chan []byte
+	Id          string
+	engine      *CanvasEngine
+	Framesch    chan []byte
+	Inputch     chan []byte
 	roundResult chan int32
-	players     []*Player
+	Players     []*Player
 	cleanedUp   bool
-	running     bool
+	Running     bool
 	ctx         context.Context
 	cancel      context.CancelFunc
-	winner      *zkidentity.ShortID
+	Winner      *zkidentity.ShortID
 	// betAmt sum of total bets
 	betAmt float64
 
 	log slog.Logger
 }
 
-type gameManager struct {
+type GameManager struct {
 	sync.RWMutex
 
 	ID             *zkidentity.ShortID
-	games          map[string]*gameInstance
-	waitingRooms   []*WaitingRoom
-	playerSessions *PlayerSessions
+	Games          map[string]*GameInstance
+	WaitingRooms   []*WaitingRoom
+	PlayerSessions *PlayerSessions
 
-	debug slog.Level
-	log   slog.Logger
+	Debug slog.Level
+	Log   slog.Logger
 }
 
-func (g *gameManager) GetWaitingRoomFromPlayer(playerID zkidentity.ShortID) *WaitingRoom {
+func (g *GameManager) GetWaitingRoomFromPlayer(playerID zkidentity.ShortID) *WaitingRoom {
 	g.RLock()
 	defer g.RUnlock()
 
-	for _, room := range g.waitingRooms {
-		for _, p := range room.players {
-			if p.ID == playerID {
+	for _, room := range g.WaitingRooms {
+		for _, p := range room.Players {
+			if *p.ID == playerID {
 				return room
 			}
 		}
@@ -57,11 +56,11 @@ func (g *gameManager) GetWaitingRoomFromPlayer(playerID zkidentity.ShortID) *Wai
 	return nil
 }
 
-func (g *gameManager) GetWaitingRoom(roomID string) *WaitingRoom {
+func (g *GameManager) GetWaitingRoom(roomID string) *WaitingRoom {
 	g.RLock()
 	defer g.RUnlock()
 
-	for _, room := range g.waitingRooms {
+	for _, room := range g.WaitingRooms {
 		if room.ID == roomID {
 			return room
 		}
@@ -69,24 +68,24 @@ func (g *gameManager) GetWaitingRoom(roomID string) *WaitingRoom {
 	return nil
 }
 
-func (gm *gameManager) RemoveWaitingRoom(roomID string) {
+func (gm *GameManager) RemoveWaitingRoom(roomID string) {
 	gm.Lock()
 	defer gm.Unlock()
-	for i, room := range gm.waitingRooms {
+	for i, room := range gm.WaitingRooms {
 		if room.ID == roomID {
 			// Remove the room by appending the elements before and after it
-			gm.waitingRooms = append(gm.waitingRooms[:i], gm.waitingRooms[i+1:]...)
+			gm.WaitingRooms = append(gm.WaitingRooms[:i], gm.WaitingRooms[i+1:]...)
 			break
 		}
 	}
 }
 
-func (gm *gameManager) getPlayerGame(clientID zkidentity.ShortID) *gameInstance {
+func (gm *GameManager) GetPlayerGame(clientID zkidentity.ShortID) *GameInstance {
 	gm.Lock()
 	defer gm.Unlock()
-	for _, game := range gm.games {
-		for _, player := range game.players {
-			if player.ID == clientID {
+	for _, game := range gm.Games {
+		for _, player := range game.Players {
+			if *player.ID == clientID {
 				return game
 			}
 		}
@@ -95,21 +94,21 @@ func (gm *gameManager) getPlayerGame(clientID zkidentity.ShortID) *gameInstance 
 	return nil
 }
 
-func (s *gameManager) startGame(ctx context.Context, players []*Player) (*gameInstance, error) {
+func (s *GameManager) StartGame(ctx context.Context, players []*Player) (*GameInstance, error) {
 	s.Lock()
 	defer s.Unlock()
-	gameID, err := generateRandomID()
+	gameID, err := GenerateRandomString(16)
 	if err != nil {
 		return nil, err
 	}
 
 	newGameInstance := s.startNewGame(ctx, players, gameID)
-	s.games[gameID] = newGameInstance
+	s.Games[gameID] = newGameInstance
 
 	return newGameInstance, nil
 }
 
-func (s *gameManager) startNewGame(ctx context.Context, players []*Player, id string) *gameInstance {
+func (s *GameManager) startNewGame(ctx context.Context, players []*Player, id string) *GameInstance {
 	game := engine.NewGame(
 		80, 40,
 		engine.NewPlayer(1, 5),
@@ -117,11 +116,11 @@ func (s *gameManager) startNewGame(ctx context.Context, players []*Player, id st
 		engine.NewBall(1, 1),
 	)
 
-	players[0].playerNumber = 1
-	players[1].playerNumber = 2
+	players[0].PlayerNumber = 1
+	players[1].PlayerNumber = 2
 
-	canvasEngine := canvas.New(game)
-	canvasEngine.SetDebug(s.debug).SetFPS(*fps)
+	canvasEngine := New(game)
+	canvasEngine.SetDebug(s.Debug).SetFPS(DEFAULT_FPS)
 
 	framesch := make(chan []byte, 100)
 	inputch := make(chan []byte, 10)
@@ -129,25 +128,25 @@ func (s *gameManager) startNewGame(ctx context.Context, players []*Player, id st
 	instanceCtx, cancel := context.WithCancel(ctx)
 	// sum of all bets
 	betAmt := players[0].BetAmt + players[1].BetAmt
-	instance := &gameInstance{
-		id:          id,
+	instance := &GameInstance{
+		Id:          id,
 		engine:      canvasEngine,
-		framesch:    framesch,
-		inputch:     inputch,
+		Framesch:    framesch,
+		Inputch:     inputch,
 		roundResult: roundResult,
-		running:     true,
+		Running:     true,
 		ctx:         instanceCtx,
 		cancel:      cancel,
-		players:     players,
+		Players:     players,
 		betAmt:      betAmt,
-		log:         s.log,
+		log:         s.Log,
 	}
 
 	return instance
 }
 
-func (g *gameInstance) Run() {
-	g.running = true
+func (g *GameInstance) Run() {
+	g.Running = true
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -156,14 +155,14 @@ func (g *gameInstance) Run() {
 		}()
 
 		// Run a new round only if the game is still running
-		if g.running {
-			g.engine.NewRound(g.ctx, g.framesch, g.inputch, g.roundResult)
+		if g.Running {
+			g.engine.NewRound(g.ctx, g.Framesch, g.Inputch, g.roundResult)
 		}
 	}()
 
 	go func() {
 		for winnerNumber := range g.roundResult {
-			if !g.running {
+			if !g.Running {
 				break
 			}
 
@@ -176,36 +175,36 @@ func (g *gameInstance) Run() {
 				g.Cleanup()
 				break
 			} else {
-				g.engine.NewRound(g.ctx, g.framesch, g.inputch, g.roundResult)
+				g.engine.NewRound(g.ctx, g.Framesch, g.Inputch, g.roundResult)
 			}
 		}
 	}()
 }
 
-func (g *gameInstance) handleRoundResult(winner int32) {
+func (g *GameInstance) handleRoundResult(winner int32) {
 	// update player score
-	for _, player := range g.players {
-		if player.playerNumber == winner {
-			player.score++
+	for _, player := range g.Players {
+		if player.PlayerNumber == winner {
+			player.Score++
 		}
 	}
 }
 
-func (g *gameInstance) Cleanup() {
+func (g *GameInstance) Cleanup() {
 	g.cleanedUp = true
 	g.cancel()
-	close(g.framesch)
-	close(g.inputch)
+	close(g.Framesch)
+	close(g.Inputch)
 	close(g.roundResult)
 }
 
-func (g *gameInstance) shouldEndGame() bool {
-	for _, player := range g.players {
+func (g *GameInstance) shouldEndGame() bool {
+	for _, player := range g.Players {
 		// Check if any player has reached the max score
-		if player.score >= maxScore {
+		if player.Score >= maxScore {
 			g.log.Debugf("Game ending: Player %s reached the maximum score of %d", player.ID, maxScore)
-			g.winner = &player.ID
-			g.running = false
+			g.Winner = player.ID
+			g.Running = false
 			return true
 		}
 	}
@@ -221,7 +220,7 @@ func (g *gameInstance) shouldEndGame() bool {
 }
 
 // isTimeout checks if the game duration has exceeded a set limit
-func (g *gameInstance) isTimeout() bool {
+func (g *GameInstance) isTimeout() bool {
 	// For example, a simple time limit check
 	// const maxGameDuration = 10 * time.Minute
 	// return time.Since(g.startTime) >= maxGameDuration

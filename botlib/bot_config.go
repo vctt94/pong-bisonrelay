@@ -2,12 +2,12 @@ package botlib
 
 import (
 	"bufio"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/vctt94/pong-bisonrelay/ponggame"
 )
 
 var (
@@ -54,15 +54,6 @@ debug=%s
 	)
 
 	return os.WriteFile(configPath, []byte(configData), 0644)
-}
-
-// GenerateRandomString generates a random string of the specified length.
-func GenerateRandomString(length int) (string, error) {
-	bytes := make([]byte, length)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("failed to generate random string: %w", err)
-	}
-	return hex.EncodeToString(bytes)[:length], nil
 }
 
 func parseConfigFile(configPath string) (*BotConfig, error) {
@@ -140,12 +131,12 @@ func LoadBotConfig() (*BotConfig, error) {
 
 	// If the config file does not exist, create it with default values
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		rpcUser, err := GenerateRandomString(8)
+		rpcUser, err := ponggame.GenerateRandomString(8)
 		if err != nil {
 			return nil, fmt.Errorf("%s: failed to generate rpcuser: %w", funcName, err)
 		}
 
-		rpcPass, err := GenerateRandomString(8)
+		rpcPass, err := ponggame.GenerateRandomString(8)
 		if err != nil {
 			return nil, fmt.Errorf("%s: failed to generate rpcpass: %w", funcName, err)
 		}

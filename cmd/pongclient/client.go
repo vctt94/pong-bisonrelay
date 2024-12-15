@@ -556,7 +556,7 @@ func realMain() error {
 		for i, p := range as.players {
 			if p.Uid == playerID {
 				as.Lock()
-				as.players[i].BetAmount = betAmt
+				as.players[i].BetAmt = betAmt
 				as.Unlock()
 
 				break

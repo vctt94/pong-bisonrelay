@@ -89,7 +89,10 @@ message WaitingRoomResponse {
 message Player {
   string uid = 1;
   string nick = 2;
-  double betAmount = 3;
+  double bet_amt = 3;
+  int32 number = 4;
+  int32 score = 5;
+  bool ready = 6;
 }
 
 // SignalReadyRequest contains information about the client signaling readiness
@@ -102,9 +105,9 @@ message GameUpdateBytes {
 }
 
 message PlayerInput {
-  string playerId = 1;
+  string player_id = 1;
   string input = 2; // e.g., "ArrowUp", "ArrowDown"
-  int32 playerNumber = 3; // player 1 or player 2.
+  int32 player_number = 3; // player 1 or player 2.
 }
 
 message GameUpdate {

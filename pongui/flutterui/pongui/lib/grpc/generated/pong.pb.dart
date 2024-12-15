@@ -725,7 +725,10 @@ class Player extends $pb.GeneratedMessage {
   factory Player({
     $core.String? uid,
     $core.String? nick,
-    $core.double? betAmount,
+    $core.double? betAmt,
+    $core.int? number,
+    $core.int? score,
+    $core.bool? ready,
   }) {
     final $result = create();
     if (uid != null) {
@@ -734,8 +737,17 @@ class Player extends $pb.GeneratedMessage {
     if (nick != null) {
       $result.nick = nick;
     }
-    if (betAmount != null) {
-      $result.betAmount = betAmount;
+    if (betAmt != null) {
+      $result.betAmt = betAmt;
+    }
+    if (number != null) {
+      $result.number = number;
+    }
+    if (score != null) {
+      $result.score = score;
+    }
+    if (ready != null) {
+      $result.ready = ready;
     }
     return $result;
   }
@@ -746,7 +758,10 @@ class Player extends $pb.GeneratedMessage {
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'Player', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
     ..aOS(1, _omitFieldNames ? '' : 'uid')
     ..aOS(2, _omitFieldNames ? '' : 'nick')
-    ..a<$core.double>(3, _omitFieldNames ? '' : 'betAmount', $pb.PbFieldType.OD, protoName: 'betAmount')
+    ..a<$core.double>(3, _omitFieldNames ? '' : 'betAmt', $pb.PbFieldType.OD)
+    ..a<$core.int>(4, _omitFieldNames ? '' : 'number', $pb.PbFieldType.O3)
+    ..a<$core.int>(5, _omitFieldNames ? '' : 'score', $pb.PbFieldType.O3)
+    ..aOB(6, _omitFieldNames ? '' : 'ready')
     ..hasRequiredFields = false
   ;
 
@@ -790,13 +805,40 @@ class Player extends $pb.GeneratedMessage {
   void clearNick() => clearField(2);
 
   @$pb.TagNumber(3)
-  $core.double get betAmount => $_getN(2);
+  $core.double get betAmt => $_getN(2);
   @$pb.TagNumber(3)
-  set betAmount($core.double v) { $_setDouble(2, v); }
+  set betAmt($core.double v) { $_setDouble(2, v); }
   @$pb.TagNumber(3)
-  $core.bool hasBetAmount() => $_has(2);
+  $core.bool hasBetAmt() => $_has(2);
   @$pb.TagNumber(3)
-  void clearBetAmount() => clearField(3);
+  void clearBetAmt() => clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.int get number => $_getIZ(3);
+  @$pb.TagNumber(4)
+  set number($core.int v) { $_setSignedInt32(3, v); }
+  @$pb.TagNumber(4)
+  $core.bool hasNumber() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearNumber() => clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.int get score => $_getIZ(4);
+  @$pb.TagNumber(5)
+  set score($core.int v) { $_setSignedInt32(4, v); }
+  @$pb.TagNumber(5)
+  $core.bool hasScore() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearScore() => clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.bool get ready => $_getBF(5);
+  @$pb.TagNumber(6)
+  set ready($core.bool v) { $_setBool(5, v); }
+  @$pb.TagNumber(6)
+  $core.bool hasReady() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearReady() => clearField(6);
 }
 
 /// SignalReadyRequest contains information about the client signaling readiness
@@ -923,9 +965,9 @@ class PlayerInput extends $pb.GeneratedMessage {
   factory PlayerInput.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
 
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'PlayerInput', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
-    ..aOS(1, _omitFieldNames ? '' : 'playerId', protoName: 'playerId')
+    ..aOS(1, _omitFieldNames ? '' : 'playerId')
     ..aOS(2, _omitFieldNames ? '' : 'input')
-    ..a<$core.int>(3, _omitFieldNames ? '' : 'playerNumber', $pb.PbFieldType.O3, protoName: 'playerNumber')
+    ..a<$core.int>(3, _omitFieldNames ? '' : 'playerNumber', $pb.PbFieldType.O3)
     ..hasRequiredFields = false
   ;
 
