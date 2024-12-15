@@ -17,9 +17,12 @@ var (
 
 type BotConfig struct {
 	DataDir        string
+	IsF2P          bool
+	MinBetAmt      float64
 	RPCURL         string
 	GRPCHost       string
 	GRPCPort       string
+	HttpPort       string
 	ServerCertPath string
 	ClientCertPath string
 	ClientKeyPath  string
@@ -28,12 +31,16 @@ type BotConfig struct {
 	Debug          string
 }
 
+// Write the configuration to a file.
 func writeConfigFile(cfg *BotConfig, configPath string) error {
 	configData := fmt.Sprintf(
 		`datadir=%s
+isf2p=%t
+minbetamt=%0.8f
 rpcurl=%s
 grpchost=%s
 grpcport=%s
+httpport=%s
 servercertpath=%s
 clientcertpath=%s
 clientkeypath=%s
@@ -42,9 +49,12 @@ rpcpass=%s
 debug=%s
 `,
 		cfg.DataDir,
+		cfg.IsF2P,
+		cfg.MinBetAmt,
 		cfg.RPCURL,
 		cfg.GRPCHost,
 		cfg.GRPCPort,
+		cfg.HttpPort,
 		cfg.ServerCertPath,
 		cfg.ClientCertPath,
 		cfg.ClientKeyPath,
@@ -56,6 +66,7 @@ debug=%s
 	return os.WriteFile(configPath, []byte(configData), 0644)
 }
 
+// Parse an existing configuration file.
 func parseConfigFile(configPath string) (*BotConfig, error) {
 	const funcName = "parseConfigFile"
 
@@ -79,7 +90,7 @@ func parseConfigFile(configPath string) (*BotConfig, error) {
 			return nil, fmt.Errorf("%s: invalid line in config file: %s", funcName, line)
 		}
 
-		key := strings.ToLower(strings.TrimSpace(parts[0])) // Convert key to lowercase
+		key := strings.ToLower(strings.TrimSpace(parts[0]))
 		value := strings.TrimSpace(parts[1])
 
 		switch key {
@@ -87,12 +98,18 @@ func parseConfigFile(configPath string) (*BotConfig, error) {
 			cfg.DataDir = value
 		case "debug":
 			cfg.Debug = value
+		case "isf2p":
+			cfg.IsF2P = (value == "true")
+		case "minbetamt":
+			fmt.Sscanf(value, "%f", &cfg.MinBetAmt)
 		case "rpcurl":
 			cfg.RPCURL = value
 		case "grpchost":
 			cfg.GRPCHost = value
 		case "grpcport":
 			cfg.GRPCPort = value
+		case "httpport":
+			cfg.HttpPort = value
 		case "servercertpath":
 			cfg.ServerCertPath = value
 		case "clientcertpath":
@@ -115,6 +132,7 @@ func parseConfigFile(configPath string) (*BotConfig, error) {
 	return cfg, nil
 }
 
+// Load the bot configuration, ensuring defaults are set if the config file is missing.
 func LoadBotConfig() (*BotConfig, error) {
 	const funcName = "loadConfig"
 
@@ -142,11 +160,13 @@ func LoadBotConfig() (*BotConfig, error) {
 		}
 
 		defaultConfig := BotConfig{
-			DataDir: configDir,
-			Debug:   "debug",
-
+			DataDir:        configDir,
+			IsF2P:          false,
+			MinBetAmt:      0.00000001,
+			Debug:          "debug",
 			GRPCHost:       "localhost",
 			GRPCPort:       "50051",
+			HttpPort:       "8888",
 			RPCURL:         "wss://127.0.0.1:7676/ws",
 			ServerCertPath: filepath.Join(defaultBRClientDir, "rpc.cert"),
 			ClientCertPath: filepath.Join(defaultBRClientDir, "rpc-client.cert"),

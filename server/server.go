@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -23,14 +22,11 @@ const (
 	version = "v0.0.0"
 )
 
-var (
-	flagDCRAmount = flag.Float64("dcramount", 0.00000001, "Amount of DCR to tip the winner")
-	flagIsF2p     = flag.Bool("isf2p", true, "allow f2p games")
-)
-
 type ServerConfig struct {
 	ServerDir string
 
+	MinBetAmt             float64
+	IsF2P                 bool
 	Debug                 slog.Level
 	DebugGameManagerLevel slog.Level
 	PaymentClient         types.PaymentsServiceClient
@@ -44,6 +40,8 @@ type Server struct {
 
 	debug              slog.Level
 	log                slog.Logger
+	isF2P              bool
+	minBetAmt          float64
 	waitingRoomCreated chan struct{}
 
 	paymentClient types.PaymentsServiceClient
@@ -109,6 +107,7 @@ func NewServer(id *zkidentity.ShortID, cfg ServerConfig) *Server {
 
 	return s
 }
+
 func (s *Server) StartGameStream(req *pong.StartGameStreamRequest, stream pong.PongGame_StartGameStreamServer) error {
 	ctx := stream.Context()
 	var clientID zkidentity.ShortID
@@ -116,16 +115,14 @@ func (s *Server) StartGameStream(req *pong.StartGameStreamRequest, stream pong.P
 
 	s.log.Debugf("Client %s called StartGameStream", req.ClientId)
 
-	// Create a request object for GameManager
 	gameStreamReq := &ponggame.StartGameStreamRequest{
 		ClientID: clientID,
 		Stream:   stream,
-		MinBet:   *flagDCRAmount,
-		IsF2P:    *flagIsF2p,
+		MinBet:   s.minBetAmt,
+		IsF2P:    s.isF2P,
 		Log:      s.log,
 	}
 
-	// Delegate to GameManager
 	_, err := s.gameManager.StartGameStream(gameStreamReq)
 	if err != nil {
 		return err
@@ -346,7 +343,7 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 	if hostPlayer == nil {
 		return nil, fmt.Errorf("player not found: %s", req.HostId)
 	}
-	if !(*flagIsF2p) {
+	if !(s.isF2P) {
 		if req.BetAmt <= 0 {
 			return nil, fmt.Errorf("bet needs to be higher than 0: %.8f", req.BetAmt)
 		}

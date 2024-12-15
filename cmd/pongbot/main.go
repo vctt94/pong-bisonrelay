@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -19,10 +20,66 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+var (
+	flagDataDir        = flag.String("datadir", "", "Directory for server data (certificates, keys, etc.)")
+	flagIsF2P          = flag.Bool("isf2p", false, "Enable free-to-play mode")
+	flagMinBetAmt      = flag.Float64("minbetamt", 0, "Minimum bet amount")
+	flagRPCURL         = flag.String("rpcurl", "", "URL of the RPC server")
+	flagGRPCHost       = flag.String("grpchost", "", "Host for gRPC server")
+	flagGRPCPort       = flag.String("grpcport", "", "Port for gRPC server")
+	flagHttpPort       = flag.String("httpport", "", "Port for HTTP server")
+	flagServerCertPath = flag.String("servercert", "", "Path to server certificate")
+	flagClientCertPath = flag.String("clientcert", "", "Path to client certificate")
+	flagClientKeyPath  = flag.String("clientkey", "", "Path to client key")
+	flagRPCUser        = flag.String("rpcuser", "", "RPC user")
+	flagRPCPass        = flag.String("rpcpass", "", "RPC password")
+	flagDebug          = flag.String("debug", "", "Debug level")
+)
+
 func realMain() error {
 	cfg, err := botlib.LoadBotConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
+	}
+	// Apply overrides from flags
+	if *flagDataDir != "" {
+		cfg.DataDir = botlib.CleanAndExpandPath(*flagDataDir)
+	}
+	if *flagIsF2P {
+		cfg.IsF2P = *flagIsF2P
+	}
+	if *flagMinBetAmt != 0 {
+		cfg.MinBetAmt = *flagMinBetAmt
+	}
+	if *flagRPCURL != "" {
+		cfg.RPCURL = *flagRPCURL
+	}
+	if *flagGRPCHost != "" {
+		cfg.GRPCHost = *flagGRPCHost
+	}
+	if *flagGRPCPort != "" {
+		cfg.GRPCPort = *flagGRPCPort
+	}
+	if *flagHttpPort != "" {
+		cfg.HttpPort = *flagHttpPort
+	}
+	if *flagServerCertPath != "" {
+		cfg.ServerCertPath = botlib.CleanAndExpandPath(*flagServerCertPath)
+	}
+	if *flagClientCertPath != "" {
+		cfg.ClientCertPath = botlib.CleanAndExpandPath(*flagClientCertPath)
+	}
+	if *flagClientKeyPath != "" {
+		cfg.ClientKeyPath = botlib.CleanAndExpandPath(*flagClientKeyPath)
+	}
+	if *flagRPCUser != "" {
+		cfg.RPCUser = *flagRPCUser
+	}
+	if *flagRPCPass != "" {
+		cfg.RPCPass = *flagRPCPass
+	}
+	if *flagDebug != "" {
+		cfg.Debug = *flagDebug
 	}
 	debugLevel := server.GetDebugLevel(cfg.Debug)
 	debugGameManager := server.GetDebugLevel(cfg.Debug)
@@ -72,7 +129,9 @@ func realMain() error {
 		PaymentClient:         payment,
 		ChatClient:            chat,
 		ServerDir:             cfg.DataDir,
-		HTTPPort:              "8888",
+		IsF2P:                 cfg.IsF2P,
+		MinBetAmt:             cfg.MinBetAmt,
+		HTTPPort:              cfg.HttpPort,
 	})
 
 	g.Go(func() error { return srv.Run(gctx) })
