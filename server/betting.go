@@ -112,13 +112,13 @@ func (s *Server) ReceiveTipLoop(ctx context.Context) error {
 				break
 			}
 
-			s.log.Debugf("Received tip from '%s' amount %d", hex.EncodeToString(tip.Uid), tip.AmountMatoms)
+			s.log.Debugf("Received tip from %s amount %d", hex.EncodeToString(tip.Uid), tip.AmountMatoms)
 
-			player := s.gameManager.playerSessions.GetPlayer(zkidentity.ShortID(tip.Uid))
+			player := s.gameManager.PlayerSessions.GetPlayer(zkidentity.ShortID(tip.Uid))
 			if player != nil {
 				player.BetAmt += float64(tip.AmountMatoms) / 1e11 // Add the tip amount to existing betAmt
-				if player.notifier != nil {
-					player.notifier.Send(&pong.NtfnStreamResponse{
+				if player.NotifierStream != nil {
+					player.NotifierStream.Send(&pong.NtfnStreamResponse{
 						NotificationType: pong.NotificationType_BET_AMOUNT_UPDATE,
 						BetAmt:           player.BetAmt,
 						PlayerId:         player.ID.String(),

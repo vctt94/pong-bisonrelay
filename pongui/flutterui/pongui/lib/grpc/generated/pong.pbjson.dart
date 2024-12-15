@@ -195,14 +195,18 @@ const Player$json = {
   '2': [
     {'1': 'uid', '3': 1, '4': 1, '5': 9, '10': 'uid'},
     {'1': 'nick', '3': 2, '4': 1, '5': 9, '10': 'nick'},
-    {'1': 'betAmount', '3': 3, '4': 1, '5': 1, '10': 'betAmount'},
+    {'1': 'bet_amt', '3': 3, '4': 1, '5': 1, '10': 'betAmt'},
+    {'1': 'number', '3': 4, '4': 1, '5': 5, '10': 'number'},
+    {'1': 'score', '3': 5, '4': 1, '5': 5, '10': 'score'},
+    {'1': 'ready', '3': 6, '4': 1, '5': 8, '10': 'ready'},
   ],
 };
 
 /// Descriptor for `Player`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List playerDescriptor = $convert.base64Decode(
-    'CgZQbGF5ZXISEAoDdWlkGAEgASgJUgN1aWQSEgoEbmljaxgCIAEoCVIEbmljaxIcCgliZXRBbW'
-    '91bnQYAyABKAFSCWJldEFtb3VudA==');
+    'CgZQbGF5ZXISEAoDdWlkGAEgASgJUgN1aWQSEgoEbmljaxgCIAEoCVIEbmljaxIXCgdiZXRfYW'
+    '10GAMgASgBUgZiZXRBbXQSFgoGbnVtYmVyGAQgASgFUgZudW1iZXISFAoFc2NvcmUYBSABKAVS'
+    'BXNjb3JlEhQKBXJlYWR5GAYgASgIUgVyZWFkeQ==');
 
 @$core.Deprecated('Use startGameStreamRequestDescriptor instead')
 const StartGameStreamRequest$json = {
@@ -232,16 +236,16 @@ final $typed_data.Uint8List gameUpdateBytesDescriptor = $convert.base64Decode(
 const PlayerInput$json = {
   '1': 'PlayerInput',
   '2': [
-    {'1': 'playerId', '3': 1, '4': 1, '5': 9, '10': 'playerId'},
+    {'1': 'player_id', '3': 1, '4': 1, '5': 9, '10': 'playerId'},
     {'1': 'input', '3': 2, '4': 1, '5': 9, '10': 'input'},
-    {'1': 'playerNumber', '3': 3, '4': 1, '5': 5, '10': 'playerNumber'},
+    {'1': 'player_number', '3': 3, '4': 1, '5': 5, '10': 'playerNumber'},
   ],
 };
 
 /// Descriptor for `PlayerInput`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List playerInputDescriptor = $convert.base64Decode(
-    'CgtQbGF5ZXJJbnB1dBIaCghwbGF5ZXJJZBgBIAEoCVIIcGxheWVySWQSFAoFaW5wdXQYAiABKA'
-    'lSBWlucHV0EiIKDHBsYXllck51bWJlchgDIAEoBVIMcGxheWVyTnVtYmVy');
+    'CgtQbGF5ZXJJbnB1dBIbCglwbGF5ZXJfaWQYASABKAlSCHBsYXllcklkEhQKBWlucHV0GAIgAS'
+    'gJUgVpbnB1dBIjCg1wbGF5ZXJfbnVtYmVyGAMgASgFUgxwbGF5ZXJOdW1iZXI=');
 
 @$core.Deprecated('Use gameUpdateDescriptor instead')
 const GameUpdate$json = {

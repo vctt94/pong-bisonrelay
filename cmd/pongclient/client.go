@@ -126,7 +126,10 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "c":
 			// Switch to create room mode if player has a bet
 			if m.betAmount > 0 || isF2p {
-				m.createRoom()
+				err := m.createRoom()
+				if err != nil {
+					m.log.Errorf("Error creating room: %v", err)
+				}
 				return m, nil
 			} else {
 				m.notification = "Bet amount must be > 0 to create a room."
@@ -195,7 +198,6 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Lock()
 		m.gameState = &gameUpdate
 		m.Unlock()
-		// fmt.Printf("game update: %+v\n", gameUpdate)
 
 		return m, m.waitForMsg()
 
@@ -556,7 +558,7 @@ func realMain() error {
 		for i, p := range as.players {
 			if p.Uid == playerID {
 				as.Lock()
-				as.players[i].BetAmount = betAmt
+				as.players[i].BetAmt = betAmt
 				as.Unlock()
 
 				break

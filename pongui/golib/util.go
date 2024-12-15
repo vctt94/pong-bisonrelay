@@ -277,7 +277,7 @@ func receiveTipLoop(ctx context.Context, payment types.PaymentsServiceClient, lo
 				break
 			}
 
-			log.Debugf("Received tip from '%s' amount %d", hex.EncodeToString(tip.Uid), tip.AmountMatoms)
+			log.Debugf("Received tip from %s amount %d", hex.EncodeToString(tip.Uid), tip.AmountMatoms)
 			dcrAmount := float64(tip.AmountMatoms) / 1e11
 
 			fmt.Printf("<- %v %.8f\n", hex.EncodeToString(tip.Uid), dcrAmount)

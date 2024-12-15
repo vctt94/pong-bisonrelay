@@ -1,4 +1,4 @@
-package canvas
+package ponggame
 
 import (
 	"context"
@@ -13,29 +13,6 @@ import (
 
 	"github.com/ndabAP/ping-pong/engine"
 )
-
-// CanvasEngine is a ping-pong engine for browsers with Canvas support
-type CanvasEngine struct {
-	// Static
-	FPS, TPS float64
-
-	Game engine.Game
-
-	// State
-	P1Score, P2Score int
-
-	BallX, BallY       float64
-	P1X, P1Y, P2X, P2Y float64
-
-	P1YVelocity, P2YVelocity     float64
-	BallXVelocity, BallYVelocity float64
-
-	// Error of the current tick
-	Err error
-
-	// Engine debug state
-	log slog.Logger
-}
 
 // New returns a new Canvas engine for browsers with Canvas support
 func New(g engine.Game) *CanvasEngine {
