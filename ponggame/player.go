@@ -8,18 +8,6 @@ import (
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 )
 
-type Player struct {
-	ID *zkidentity.ShortID
-
-	Nick           string
-	BetAmt         float64
-	PlayerNumber   int32 // 1 for player 1, 2 for player 2
-	Score          int
-	GameStream     pong.PongGame_StartGameStreamServer
-	NotifierStream pong.PongGame_StartNtfnStreamServer
-	Ready          bool
-}
-
 func (p *Player) Marshal() (*pong.Player, error) {
 	if p == nil {
 		return nil, fmt.Errorf("player is nil")

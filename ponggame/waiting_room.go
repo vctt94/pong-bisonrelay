@@ -2,22 +2,11 @@ package ponggame
 
 import (
 	"context"
-	"sync"
+	"fmt"
 
-	"github.com/companyzero/bisonrelay/client/clientintf"
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 )
-
-type WaitingRoom struct {
-	sync.RWMutex
-	Ctx       context.Context
-	Cancel    context.CancelFunc
-	ID        string
-	HostID    *clientintf.UserID
-	Players   []*Player
-	BetAmount float64
-}
 
 // Marshal converts a WaitingRoom struct to a WaitingRoomProto.
 func (wr *WaitingRoom) Marshal() (*pong.WaitingRoom, error) {
@@ -123,14 +112,26 @@ func (wr *WaitingRoom) RemovePlayer(clientID *zkidentity.ShortID) {
 	}
 }
 
-func (wr *WaitingRoom) getWaitingRoom() *WaitingRoom {
-	wr.RLock()
-	defer wr.RUnlock()
-	return wr
-}
-
 func (wr *WaitingRoom) length() int {
 	wr.RLock()
 	defer wr.RUnlock()
 	return len(wr.Players)
+}
+
+// NewWaitingRoom creates and initializes a new waiting room.
+func NewWaitingRoom(hostPlayer *Player, betAmount float64) (*WaitingRoom, error) {
+	id, err := GenerateRandomString(16)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate waiting room ID: %w", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	return &WaitingRoom{
+		Ctx:       ctx,
+		Cancel:    cancel,
+		ID:        id,
+		HostID:    hostPlayer.ID,
+		BetAmount: betAmount,
+		Players:   []*Player{hostPlayer},
+	}, nil
 }

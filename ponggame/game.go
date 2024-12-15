@@ -2,44 +2,128 @@ package ponggame
 
 import (
 	"context"
-	"sync"
+	"encoding/json"
+	"fmt"
 
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/decred/slog"
 	"github.com/ndabAP/ping-pong/engine"
+	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 )
 
 const maxScore = 3
 
-type GameInstance struct {
-	sync.Mutex
-	Id          string
-	engine      *CanvasEngine
-	Framesch    chan []byte
-	Inputch     chan []byte
-	roundResult chan int32
-	Players     []*Player
-	cleanedUp   bool
-	Running     bool
-	ctx         context.Context
-	cancel      context.CancelFunc
-	Winner      *zkidentity.ShortID
-	// betAmt sum of total bets
-	betAmt float64
-
-	log slog.Logger
+// SetupPlayerSession sets up a player session and assigns the notifier stream.
+func (gm *GameManager) SetupPlayerSession(clientID zkidentity.ShortID, stream pong.PongGame_StartNtfnStreamServer) *Player {
+	player := gm.PlayerSessions.GetOrCreateSession(clientID)
+	player.NotifierStream = stream
+	return player
 }
 
-type GameManager struct {
-	sync.RWMutex
+func (gm *GameManager) StartGameStream(req *StartGameStreamRequest) (*Player, error) {
+	player := gm.PlayerSessions.GetPlayer(req.ClientID)
+	if player == nil {
+		return nil, fmt.Errorf("player not found for client ID %s", req.ClientID)
+	}
+	if player.NotifierStream == nil {
+		return nil, fmt.Errorf("player notifier nil %s", req.ClientID)
+	}
 
-	ID             *zkidentity.ShortID
-	Games          map[string]*GameInstance
-	WaitingRooms   []*WaitingRoom
-	PlayerSessions *PlayerSessions
+	if !req.IsF2P && player.BetAmt < req.MinBet {
+		player.NotifierStream.Send(&pong.NtfnStreamResponse{
+			NotificationType: pong.NotificationType_MESSAGE,
+			Message:          fmt.Sprintf("player needs to place bet higher or equal to: %.8f", req.MinBet),
+		})
+		return nil, fmt.Errorf("player needs to place bet higher or equal to: %.8f DCR", req.MinBet)
+	}
 
-	Debug slog.Level
-	Log   slog.Logger
+	player.GameStream = req.Stream
+	player.Ready = true
+
+	req.Log.Debugf("Player %s is now ready for the game", req.ClientID)
+	return player, nil
+}
+
+// HandleWaitingRoomDisconnection handles player disconnection from a waiting room.
+func (gm *GameManager) HandleWaitingRoomDisconnection(clientID zkidentity.ShortID, log slog.Logger) {
+	waitingRoom := gm.GetWaitingRoomFromPlayer(clientID)
+	if waitingRoom == nil {
+		return
+	}
+
+	remainingPlayers := GetRemainingPlayersInWaitingRoom(waitingRoom, clientID)
+	for _, player := range remainingPlayers {
+		if player.NotifierStream != nil {
+			player.NotifierStream.Send(&pong.NtfnStreamResponse{
+				NotificationType: pong.NotificationType_OPPONENT_DISCONNECTED,
+				Message:          "Opponent left the waiting room.",
+				Started:          false,
+			})
+		}
+	}
+
+	log.Debugf("Player %s disconnected; removing waiting room %s", clientID, waitingRoom.ID)
+	waitingRoom.Cancel()
+	gm.RemoveWaitingRoom(waitingRoom.ID)
+}
+
+// HandleGameDisconnection handles player disconnection from an active game.
+func (gm *GameManager) HandleGameDisconnection(clientID zkidentity.ShortID, log slog.Logger) {
+	game := gm.GetPlayerGame(clientID)
+	if game == nil {
+		return
+	}
+
+	remainingPlayer := GetRemainingPlayerInGame(game, clientID)
+	if remainingPlayer != nil && remainingPlayer.NotifierStream != nil {
+		remainingPlayer.NotifierStream.Send(&pong.NtfnStreamResponse{
+			NotificationType: pong.NotificationType_OPPONENT_DISCONNECTED,
+			Message:          "Opponent disconnected. Game over.",
+			Started:          false,
+		})
+	}
+
+	log.Debugf("Player %s disconnected; cleaning up game", clientID)
+	for gameID, g := range gm.Games {
+		if g == game {
+			delete(gm.Games, gameID)
+			log.Debugf("Game %s cleaned up", gameID)
+			break
+		}
+	}
+}
+
+func (gm *GameManager) HandlePlayerInput(clientID zkidentity.ShortID, req *pong.PlayerInput) (*pong.GameUpdate, error) {
+	player := gm.PlayerSessions.GetPlayer(clientID)
+	if player == nil {
+		return nil, fmt.Errorf("player: %s not found", clientID)
+	}
+	if player.PlayerNumber != 1 && player.PlayerNumber != 2 {
+		return nil, fmt.Errorf("player number incorrect, it must be 1 or 2; it is: %d", player.PlayerNumber)
+	}
+
+	game := gm.GetPlayerGame(clientID)
+	if game == nil {
+		return nil, fmt.Errorf("game instance not found for client ID %s", clientID)
+	}
+
+	req.PlayerNumber = player.PlayerNumber
+	inputBytes, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize input: %w", err)
+	}
+
+	game.Lock()
+	defer game.Unlock()
+
+	if !game.Running {
+		return nil, fmt.Errorf("game has ended for client ID %s", clientID)
+	}
+
+	// Send inputBytes to game.inputch
+	game.Inputch <- inputBytes
+
+	return &pong.GameUpdate{}, nil
 }
 
 func (g *GameManager) GetWaitingRoomFromPlayer(playerID zkidentity.ShortID) *WaitingRoom {
