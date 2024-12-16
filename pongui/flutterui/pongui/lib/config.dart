@@ -5,10 +5,12 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 
 const APPNAME = "pongui";
+const BRUIGNAME = "bruig";
 String mainConfigFilename = "";
 
 class Config {
   late final String serverAddr;
+  late final String grpcCertPath;
   late final String rpcCertPath;
   late final String rpcClientCertPath;
   late final String rpcClientKeyPath;
@@ -19,9 +21,10 @@ class Config {
   late final bool wantsLogNtfns;
 
   Config();
-  
+
   Config.filled({
     this.serverAddr = "",
+    this.grpcCertPath = "",
     this.rpcCertPath = "",
     this.rpcClientCertPath = "",
     this.rpcClientKeyPath = "",
@@ -39,6 +42,7 @@ class Config {
         val != "" ? f.set(section, opt, val) : null;
 
     set("default", "server", serverAddr);
+    set("default", "grpcCertPath", grpcCertPath);
     set("clientrpc", "rpccertpath", rpcCertPath);
     set("log", "debuglevel", debugLevel);
     set("clientrpc", "rpcwebsocketurl", rpcWebsocketURL);
@@ -60,6 +64,7 @@ class Config {
 
     return Config.filled(
       serverAddr: f.get("default", "server") ?? "localhost:443",
+      grpcCertPath: f.get("default", "grpccertpath") ?? "",
       rpcCertPath: f.get("clientrpc", "rpccertpath") ?? "",
       rpcClientCertPath: f.get("clientrpc", "rpcclientcertpath") ?? "",
       rpcClientKeyPath: f.get("clientrpc", "rpcclientkeypath") ?? "",
@@ -79,7 +84,8 @@ Future<String> defaultAppDataDir() async {
     if (home != null && home != "") {
       return path.join(home, ".$APPNAME");
     }
-  } else if (Platform.isWindows && Platform.environment.containsKey("LOCALAPPDATA")) {
+  } else if (Platform.isWindows &&
+      Platform.environment.containsKey("LOCALAPPDATA")) {
     return path.join(Platform.environment["LOCALAPPDATA"]!, APPNAME);
   } else if (Platform.isMacOS) {
     final baseDir = (await getApplicationSupportDirectory()).parent.path;
@@ -90,15 +96,33 @@ Future<String> defaultAppDataDir() async {
   return dir.path;
 }
 
+// Function to get the default app data directory based on the platform
+Future<String> defaultAppDataBRUIGDir() async {
+  if (Platform.isLinux) {
+    final home = Platform.environment["HOME"];
+    if (home != null && home != "") {
+      return path.join(home, ".$BRUIGNAME");
+    }
+  } else if (Platform.isWindows &&
+      Platform.environment.containsKey("LOCALAPPDATA")) {
+    return path.join(Platform.environment["LOCALAPPDATA"]!, BRUIGNAME);
+  } else if (Platform.isMacOS) {
+    final baseDir = (await getApplicationSupportDirectory()).parent.path;
+    return path.join(baseDir, BRUIGNAME);
+  }
+
+  final dir = await getApplicationSupportDirectory();
+  return dir.path;
+}
+
 final usageException = Exception("Usage Displayed");
 final newConfigNeededException = Exception("Config needed");
-
 
 Future<Config> loadConfig(String filepath) async {
   var f = ini.Config.fromStrings(File(filepath).readAsLinesSync());
   var appDataDir = await defaultAppDataDir();
   var iniAppData = f.get("default", "root");
-  
+
   // If the app data directory is defined in the config, use it
   if (iniAppData != null && iniAppData != "") {
     appDataDir = cleanAndExpandPath(iniAppData);
@@ -119,16 +143,16 @@ Future<Config> loadConfig(String filepath) async {
 
   // Creating and populating the Config instance with relevant fields
   var c = Config.filled(
-    serverAddr: f.get("default", "server") ?? "localhost:50051",
-    debugLevel: f.get("log", "debuglevel") ?? "info",
-    rpcWebsocketURL: f.get("clientrpc", "rpcwebsocketurl") ?? "",
-    rpcCertPath: getPath("clientrpc", "rpccertpath", ""),
-    rpcClientCertPath: getPath("clientrpc", "rpcclientcertpath", ""),
-    rpcClientKeyPath: getPath("clientrpc", "rpcclientkeypath", ""),
-    rpcUser: f.get("clientrpc", "rpcuser") ?? "",
-    rpcPass: f.get("clientrpc", "rpcpass") ?? "",
-    wantsLogNtfns: getBool("clientrpc", "wantsLogNtfns")
-  );
+      serverAddr: f.get("default", "server") ?? "localhost:50051",
+      grpcCertPath: f.get("default", "grpccertpath") ?? "",
+      debugLevel: f.get("log", "debuglevel") ?? "info",
+      rpcWebsocketURL: f.get("clientrpc", "rpcwebsocketurl") ?? "",
+      rpcCertPath: getPath("clientrpc", "rpccertpath", ""),
+      rpcClientCertPath: getPath("clientrpc", "rpcclientcertpath", ""),
+      rpcClientKeyPath: getPath("clientrpc", "rpcclientkeypath", ""),
+      rpcUser: f.get("clientrpc", "rpcuser") ?? "",
+      rpcPass: f.get("clientrpc", "rpcpass") ?? "",
+      wantsLogNtfns: getBool("clientrpc", "wantsLogNtfns"));
 
   return c;
 }

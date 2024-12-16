@@ -80,7 +80,6 @@ class _MyAppState extends State<MyApp> with WindowListener {
   void _startListeningToNtfn(GrpcPongClient grpcClient, String clientId) {
     grpcClient.startNtfnStreamRequest(clientId).listen((ntfn) {
       developer.log("Notification Stream Response: $ntfn");
-        print(ntfn);
 
       switch (ntfn.notificationType) {
         case NotificationType.ON_WR_CREATED:
@@ -125,6 +124,7 @@ class _MyAppState extends State<MyApp> with WindowListener {
       var cfg = widget.cfg;
       InitClient initArgs = InitClient(
         cfg.serverAddr,
+        cfg.grpcCertPath,
         "",
         "",
         "debug",
@@ -259,16 +259,16 @@ class _MyAppState extends State<MyApp> with WindowListener {
               ),
             if (currentWR.id.isNotEmpty)
               if (!isReady)
-              Padding(
-                padding: const EdgeInsets.only(right: 10.0),
-                child: ElevatedButton(
-                  onPressed: _toggleReady,
-                  child: Text('Ready'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.greenAccent,
+                Padding(
+                  padding: const EdgeInsets.only(right: 10.0),
+                  child: ElevatedButton(
+                    onPressed: _toggleReady,
+                    child: Text('Ready'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.greenAccent,
+                    ),
                   ),
                 ),
-              ),
           ],
         ),
         drawer: Drawer(
