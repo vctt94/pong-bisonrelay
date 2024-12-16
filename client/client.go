@@ -39,6 +39,8 @@ type PongClient struct {
 	sync.RWMutex
 	ID string
 
+	IsReady bool
+
 	betAmt       float64
 	playerNumber int32
 	cfg          *PongClientCfg
@@ -56,6 +58,7 @@ type PongClient struct {
 	notifier  pong.PongGame_StartNtfnStreamClient
 	UpdatesCh chan tea.Msg
 	GameCh    chan *pong.GameUpdateBytes
+	ErrorsCh  chan error
 }
 
 func (pc *PongClient) StartNotifier(ctx context.Context) error {
@@ -77,11 +80,11 @@ func (pc *PongClient) StartNotifier(ctx context.Context) error {
 			default:
 				ntfn, err := pc.notifier.Recv()
 				if errors.Is(err, io.EOF) {
-					pc.log.Infof("ntfn stream closed")
+					pc.ErrorsCh <- fmt.Errorf("notification stream closed")
 					return
 				}
 				if err != nil {
-					pc.log.Errorf("err: %v", err)
+					pc.ErrorsCh <- fmt.Errorf("notifier stream error: %v", err) // Send error
 					return
 				}
 
@@ -104,6 +107,11 @@ func (pc *PongClient) StartNotifier(ctx context.Context) error {
 					if ntfn.BetAmt > 0 {
 						pc.betAmt = ntfn.BetAmt
 						pc.ntfns.notifyBetAmtChanged(ntfn.PlayerId, ntfn.BetAmt, time.Now())
+					}
+				case pong.NotificationType_ON_PLAYER_READY:
+					if ntfn.PlayerId == pc.ID {
+						pc.IsReady = true
+						pc.UpdatesCh <- true
 					}
 				default:
 					pc.log.Warnf("Unknown notification type: %d", ntfn.NotificationType)
@@ -134,14 +142,13 @@ func (pc *PongClient) SignalReady() error {
 		for {
 			update, err := pc.stream.Recv()
 			if err != nil {
-				pc.log.Errorf("stream receive error: %v", err)
+				pc.ErrorsCh <- fmt.Errorf("game stream error: %v", err) // Send error
 				if errors.Is(err, io.EOF) {
 					break
 				}
-
 				return
 			}
-			// game stream update
+			// Forward updates to UpdatesCh
 			go func() { pc.UpdatesCh <- update }()
 		}
 	}()
@@ -239,6 +246,7 @@ func NewPongClient(clientID string, cfg *PongClientCfg) (*PongClient, error) {
 		chat:      cfg.ChatClient,
 		payment:   cfg.PaymentClient,
 		UpdatesCh: make(chan tea.Msg),
+		ErrorsCh:  make(chan error),
 		log:       cfg.Log,
 
 		ntfns: ntfns,

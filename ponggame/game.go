@@ -28,17 +28,20 @@ func (gm *GameManager) StartGameStream(req *StartGameStreamRequest) (*Player, er
 	if player.NotifierStream == nil {
 		return nil, fmt.Errorf("player notifier nil %s", req.ClientID)
 	}
-
+	if player.GameStream != nil {
+		return nil, fmt.Errorf("game stream is already set for id %s", req.ClientID)
+	}
 	if !req.IsF2P && player.BetAmt < req.MinBet {
-		player.NotifierStream.Send(&pong.NtfnStreamResponse{
-			NotificationType: pong.NotificationType_MESSAGE,
-			Message:          fmt.Sprintf("player needs to place bet higher or equal to: %.8f", req.MinBet),
-		})
 		return nil, fmt.Errorf("player needs to place bet higher or equal to: %.8f DCR", req.MinBet)
 	}
 
 	player.GameStream = req.Stream
 	player.Ready = true
+	player.NotifierStream.Send(&pong.NtfnStreamResponse{
+		NotificationType: pong.NotificationType_ON_PLAYER_READY,
+		Message:          "player ready",
+		PlayerId:         player.ID.String(),
+	})
 
 	req.Log.Debugf("Player %s is now ready for the game", req.ClientID)
 	return player, nil
