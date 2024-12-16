@@ -9,6 +9,7 @@ import (
 
 type initClient struct {
 	ServerAddr     string `json:"server_addr"`
+	GRPCCertPath   string `json:"grpc_cert_path"`
 	DBRoot         string `json:"dbroot"`
 	DownloadsDir   string `json:"downloads_dir"`
 	LogFile        string `json:"log_file"`
@@ -53,7 +54,7 @@ func playerFromServer(p *pong.Player) (*player, error) {
 	return &player{
 		UID:    id,
 		Nick:   p.Nick,
-		BetAmt: p.BetAmount,
+		BetAmt: p.BetAmt,
 	}, nil
 }
 

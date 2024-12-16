@@ -18,6 +18,8 @@ part 'definitions.g.dart';
 class InitClient {
   @JsonKey(name: 'server_addr')
   final String serverAddr;
+  @JsonKey(name: 'grpc_cert_path')
+  final String grpcCertPath;
   @JsonKey(name: 'log_file')
   final String logFile;
   @JsonKey(name: "msgs_root")
@@ -43,6 +45,7 @@ class InitClient {
 
   InitClient(
     this.serverAddr,
+    this.grpcCertPath,
     this.logFile,
     this.msgsRoot,
     this.debugLevel,

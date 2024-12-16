@@ -1,70 +1,113 @@
 import 'dart:io';
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:ini/ini.dart' as ini;
 import 'package:path/path.dart' as path;
 import 'package:pongui/config.dart';
 
 class NewConfigModel extends ChangeNotifier {
-  String rpcUser = '';
-  String rpcPass = '';
+  String rpcUser = 'defaultuser';
+  String rpcPass = 'defaultpass';
+  String serverAddr = 'localhost:50051';
+  String grpcCertPath = '';
+  String rpcCertPath = '';
+  String rpcClientCertPath = '';
+  String rpcClientKeyPath = '';
+  String rpcWebsocketURL = 'wss://127.0.0.1:7676/ws';
+  String debugLevel = 'info';
+  bool wantsLogNtfns = false;
+
   final List<String> appArgs;
-  NewConfigModel(this.appArgs);
+
+  NewConfigModel(this.appArgs) {
+    // Assign default file paths based on app data directory
+    _initializeDefaults();
+  }
+
+  factory NewConfigModel.fromConfig(Config config) {
+    return NewConfigModel([])
+      ..rpcUser = config.rpcUser
+      ..rpcPass = config.rpcPass
+      ..serverAddr = config.serverAddr
+      ..grpcCertPath = config.grpcCertPath
+      ..rpcCertPath = config.rpcCertPath
+      ..rpcClientCertPath = config.rpcClientCertPath
+      ..rpcClientKeyPath = config.rpcClientKeyPath
+      ..rpcWebsocketURL = config.rpcWebsocketURL
+      ..debugLevel = config.debugLevel
+      ..wantsLogNtfns = config.wantsLogNtfns;
+  }
+
+  Future<void> _initializeDefaults() async {
+    var brDataDir = await defaultAppDataBRUIGDir();
+    var appDataDir = await defaultAppDataDir();
+
+    // Set default paths for certificates and keys
+    rpcCertPath =
+        rpcCertPath.isEmpty ? path.join(brDataDir, 'rpc.cert') : rpcCertPath;
+    rpcClientCertPath = rpcClientCertPath.isEmpty
+        ? path.join(brDataDir, 'rpc-client.cert')
+        : rpcClientCertPath;
+    rpcClientKeyPath = rpcClientKeyPath.isEmpty
+        ? path.join(brDataDir, 'rpc-client.key')
+        : rpcClientKeyPath;
+    grpcCertPath = grpcCertPath.isEmpty
+        ? path.join(appDataDir, 'server.cert')
+        : grpcCertPath;
+
+    // Notify listeners of any changes
+    notifyListeners();
+  }
 
   // Get the application data directory path
   Future<String> appDataDir() async =>
       path.dirname(await configFileName(appArgs));
 
-  // Generate a new config file with the provided rpcUser and rpcPass
-  Future<Config> generateConfig() async {
-    var dataDir = await appDataDir();
-
-    // XXX Needs fixing
-    // Create a new config object with relevant fields
-    var cfg = Config.filled(
-      serverAddr: 'localhost:50051', // Example, adjust if needed
-      // rpcCertPath: path.join(dataDir, 'cert.pem'),  // Example
-      // rpcClientKeyPath: path.join(dataDir, 'key.pem'),    // Example
-      rpcUser: rpcUser,
-      rpcPass: rpcPass,
-      debugLevel: "info",
-      // rpcAuthMode: "basic",
-    );
-
-    // Save the new config to file
-    await cfg.saveNewConfig(await getConfigFilePath());
-    return cfg;
-  }
-
-  // Save config to a file
+// Save current configuration values to a file
   Future<void> saveConfig(String configFilePath) async {
     ini.Config config;
 
-    // Check if the config file exists and load it, otherwise create a new one
-    if (File(configFilePath).existsSync()) {
-      config = ini.Config.fromStrings(File(configFilePath).readAsLinesSync());
+    // Check if the config file exists; otherwise, create a new one
+    final configFile = File(configFilePath);
+    if (configFile.existsSync()) {
+      config = ini.Config.fromStrings(await configFile.readAsLines());
     } else {
+      // Create a new config instance
       config = ini.Config();
+      // Ensure required sections exist in the new config
     }
-
+    print('Existing sections: ${config.sections().join(', ')}');
     // Ensure the 'clientrpc' section exists
+
     if (!config.hasSection('clientrpc')) {
       config.addSection('clientrpc');
     }
+    if (!config.hasSection('log')) {
+      config.addSection('log');
+    }
 
-    // Set rpcuser and rpcpass in the 'clientrpc' section
+    // Set the configuration values
+    config.set('default', 'server', serverAddr);
+    config.set('default', 'grpccertpath', grpcCertPath);
+
     config.set('clientrpc', 'rpcuser', rpcUser);
     config.set('clientrpc', 'rpcpass', rpcPass);
+    config.set('clientrpc', 'rpcwebsocketurl', rpcWebsocketURL);
+    config.set('clientrpc', 'rpccertpath', rpcCertPath);
+    config.set('clientrpc', 'rpcclientcertpath', rpcClientCertPath);
+    config.set('clientrpc', 'rpcclientkeypath', rpcClientKeyPath);
+    config.set('clientrpc', 'wantsLogNtfns', wantsLogNtfns ? '1' : '0');
 
-    // Ensure the directory for the config file exists
+    config.set('log', 'debuglevel', debugLevel);
+
+    // Ensure the config directory exists
     final configFileDir = path.dirname(configFilePath);
     final directory = Directory(configFileDir);
-
     if (!directory.existsSync()) {
-      await directory.create(recursive: true); // Create the directory if it doesn't exist
+      await directory.create(recursive: true);
     }
 
     // Write the updated config to the file
-    await File(configFilePath).writeAsString(config.toString());
+    await configFile.writeAsString(config.toString());
   }
 
   // Get the path to the config file
