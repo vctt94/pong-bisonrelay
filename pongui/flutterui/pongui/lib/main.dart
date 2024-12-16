@@ -12,6 +12,8 @@ import 'package:pongui/components/waiting_rooms.dart';
 import 'package:pongui/config.dart';
 import 'package:pongui/grpc/generated/pong.pbgrpc.dart';
 import 'package:pongui/grpc/grpc_client.dart';
+import 'package:pongui/models/newconfig.dart';
+import 'package:pongui/screens/home.dart';
 import 'package:pongui/screens/newconfig.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -21,7 +23,7 @@ void main(List<String> args) async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-      windowManager.ensureInitialized();
+      await windowManager.ensureInitialized();
     }
 
     developer.log("Platform: ${Golib.majorPlatform}/${Golib.minorPlatform}");
@@ -55,7 +57,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WindowListener {
-  Config? config;
+  late Config config;
   List<LocalWaitingRoom> waitingRooms = [];
   String serverAddr = '';
   bool isLoading = true;
@@ -97,6 +99,10 @@ class _MyAppState extends State<MyApp> with WindowListener {
     }, onError: (error) {
       developer.log("Error in notification stream: $error");
     });
+  }
+
+  Future<void> _onConfigSaved() async {
+    runMainApp(config);
   }
 
   void _toggleReady() {
@@ -229,199 +235,34 @@ class _MyAppState extends State<MyApp> with WindowListener {
         scaffoldBackgroundColor: const Color.fromARGB(255, 25, 23, 44),
         primaryColor: Colors.blueAccent,
       ),
-      home: Scaffold(
-        appBar: AppBar(
-          toolbarHeight: 80.0,
-          title: Container(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Pong Game'),
-                Text(
-                  'Status: ${isReady ? "Ready" : "Not Ready"}\n'
-                  '${currentWR.id.isNotEmpty ? "Joined Room: ${currentWR.id}" : "No Room Joined"}',
-                  style: TextStyle(fontSize: 14, color: Colors.white70),
-                ),
-              ],
+      // Define routes for navigation
+      routes: {
+        '/': (context) => HomeScreen(
+              isReady: isReady,
+              isLoading: isLoading,
+              gameStarted: gameStarted,
+              errorMessage: errorMessage,
+              pongGame: pongGame,
+              gameState: gameState,
+              currentWR: currentWR,
+              betAmount: betAmount,
+              waitingRooms: waitingRooms,
+              roomIdController: roomIdController,
+              serverAddr: serverAddr,
+              clientId: clientId,
+              createWaitingRoom: _createWaitingRoom,
+              toggleReady: _toggleReady,
+              retryGameStream: _retryGameStream,
+              handleJoinRoom: _handleJoinRoom,
             ),
-          ),
-          actions: [
-            if (betAmount > 0)
-              Padding(
-                padding: const EdgeInsets.only(right: 10.0),
-                child: ElevatedButton(
-                  onPressed: _createWaitingRoom,
-                  child: Text('Create Waiting Room'),
-                  style:
-                      ElevatedButton.styleFrom(backgroundColor: Colors.amber),
-                ),
-              ),
-            if (currentWR.id.isNotEmpty)
-              if (!isReady)
-                Padding(
-                  padding: const EdgeInsets.only(right: 10.0),
-                  child: ElevatedButton(
-                    onPressed: _toggleReady,
-                    child: Text('Ready'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.greenAccent,
-                    ),
-                  ),
-                ),
-          ],
-        ),
-        drawer: Drawer(
-          child: ListView(
-            padding: EdgeInsets.zero,
-            children: <Widget>[
-              DrawerHeader(
-                decoration: BoxDecoration(color: Colors.blueAccent),
-                child: Text(
-                  'Game Menu',
-                  style: TextStyle(color: Colors.white, fontSize: 24),
-                ),
-              ),
-              ListTile(
-                leading: Icon(Icons.home),
-                title: Text('Home'),
-                onTap: () => Navigator.pop(context),
-              ),
-              ListTile(
-                leading: Icon(Icons.leaderboard),
-                title: Text('Leaderboard'),
-                onTap: () => Navigator.pop(context),
-              ),
-              ListTile(
-                leading: Icon(Icons.settings),
-                title: Text('Settings'),
-                onTap: () => Navigator.pop(context),
-              ),
-            ],
-          ),
-        ),
-        body: isLoading
-            ? Center(child: CircularProgressIndicator())
-            : Stack(
-                children: [
-                  Center(
-                    child: errorMessage.isNotEmpty
-                        ? AlertDialog(
-                            title: Text('Connection Error'),
-                            content: Text(errorMessage),
-                            actions: [
-                              TextButton(
-                                onPressed: _retryGameStream,
-                                child: Text('Retry'),
-                              ),
-                            ],
-                          )
-                        : isReady
-                            ? gameStarted
-                                ? pongGame.buildWidget(
-                                    gameState,
-                                    FocusNode(),
-                                  )
-                                : Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.sports_tennis,
-                                        size: 100,
-                                        color: Colors.blueAccent,
-                                      ),
-                                      SizedBox(height: 20),
-                                      Text(
-                                        'Waiting for all players to get ready...',
-                                        style: TextStyle(fontSize: 18),
-                                      ),
-                                      if (currentWR.id.isNotEmpty)
-                                        Text(
-                                          'Joined Room: ${currentWR.id}',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            color: Colors.white70,
-                                          ),
-                                        ),
-                                    ],
-                                  )
-                            : Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: SingleChildScrollView(
-                                  child: Column(
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 10.0),
-                                        child: Row(
-                                          children: [
-                                            Expanded(
-                                              child: TextField(
-                                                controller: roomIdController,
-                                                decoration: InputDecoration(
-                                                  labelText: 'Enter Room ID',
-                                                  border: OutlineInputBorder(),
-                                                ),
-                                              ),
-                                            ),
-                                            SizedBox(width: 10),
-                                            ElevatedButton(
-                                              onPressed: () {
-                                                _handleJoinRoom(
-                                                    roomIdController.text);
-                                              },
-                                              child: Text('Join Room'),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor:
-                                                    Colors.blueAccent,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      ConstrainedBox(
-                                        constraints: BoxConstraints(
-                                            maxHeight: MediaQuery.of(context)
-                                                    .size
-                                                    .height -
-                                                200),
-                                        child: WaitingRoomList(
-                                            waitingRooms, _handleJoinRoom),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      color: Colors.black54,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Connected to Server: $serverAddr',
-                            style:
-                                TextStyle(fontSize: 16, color: Colors.white70),
-                          ),
-                          SizedBox(height: 5),
-                          Text(
-                            'Client ID: $clientId',
-                            style:
-                                TextStyle(fontSize: 16, color: Colors.white70),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-      ),
+        // '/leaderboard': (context) => LeaderboardScreen(),
+        '/settings': (context) => NewConfigScreen(
+              newConfig: NewConfigModel.fromConfig(config),
+              onConfigSaved: _onConfigSaved,
+            ),
+      },
+      // Initial route is '/'
+      initialRoute: '/',
     );
   }
 }

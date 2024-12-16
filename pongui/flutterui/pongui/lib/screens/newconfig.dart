@@ -234,8 +234,11 @@ Future<void> runNewConfigApp(List<String> args) async {
       home: NewConfigScreen(
         newConfig: newConfig,
         onConfigSaved: () async {
-          // Navigator.pushReplacementNamed(context, '/home');
-          print("config saved");
+          // Load the updated configuration
+          Config cfg = await configFromArgs(args);
+
+          // Navigate back to the main app
+          runMainApp(cfg);
         },
       ),
     ),
