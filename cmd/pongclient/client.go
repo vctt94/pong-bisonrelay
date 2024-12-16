@@ -55,7 +55,6 @@ var (
 type appstate struct {
 	sync.Mutex
 	mode              appMode
-	isReady           bool
 	gameState         *pong.GameUpdate
 	ctx               context.Context
 	err               error
@@ -93,6 +92,17 @@ func (m *appstate) listenForUpdates() tea.Cmd {
 	}
 }
 
+func (m *appstate) listenForErrors() tea.Cmd {
+	return func() tea.Msg {
+		go func() {
+			for err := range m.pc.ErrorsCh {
+				m.msgCh <- fmt.Sprintf("Error: %v", err)
+			}
+		}()
+		return nil
+	}
+}
+
 func (m *appstate) Init() tea.Cmd {
 	m.msgCh = make(chan tea.Msg)
 
@@ -101,6 +111,7 @@ func (m *appstate) Init() tea.Cmd {
 
 	return tea.Batch(
 		m.listenForUpdates(),
+		m.listenForErrors(),
 		tea.EnterAltScreen, // Optional: Use the alternate screen buffer
 	)
 }
@@ -128,7 +139,7 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.betAmount > 0 || isF2p {
 				err := m.createRoom()
 				if err != nil {
-					m.log.Errorf("Error creating room: %v", err)
+					m.notification = fmt.Sprintf("Error creating room: %v", err)
 				}
 				return m, nil
 			} else {
@@ -166,7 +177,7 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				selectedRoom := m.waitingRooms[m.selectedRoomIndex]
 				err := m.joinRoom(selectedRoom.Id)
 				if err != nil {
-					m.log.Errorf("Error joining room: %v", err)
+					m.notification = fmt.Sprintf("Error joining room: %v", err)
 				}
 			}
 			return m, nil
@@ -182,7 +193,11 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.Type == tea.KeySpace {
 			m.mode = gameMode
-			m.makeClientReady()
+			err := m.makeClientReady()
+			if err != nil {
+				m.notification = fmt.Sprintf("Error signaling readiness: %v", err)
+				return m, nil
+			}
 			return m, nil
 		}
 		if msg.Type == tea.KeyEsc {
@@ -200,6 +215,11 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Unlock()
 
 		return m, m.waitForMsg()
+	case string:
+		if strings.HasPrefix(msg, "Error:") {
+			m.notification = msg
+			return m, nil
+		}
 
 	}
 	return m, m.waitForMsg()
@@ -214,7 +234,6 @@ func (m *appstate) waitForMsg() tea.Cmd {
 func (m *appstate) listWaitingRooms() error {
 	wr, err := m.pc.GetWaitingRooms()
 	if err != nil {
-		m.log.Errorf("Error fetching waiting rooms: %v", err)
 		return err
 	}
 	m.waitingRooms = wr
@@ -235,7 +254,6 @@ func (m *appstate) joinRoom(roomID string) error {
 	// Send request to join the specified room
 	res, err := m.pc.JoinWaitingRoom(roomID)
 	if err != nil {
-		m.log.Errorf("Error joining room %s: %v", roomID, err)
 		return err
 	}
 
@@ -245,14 +263,8 @@ func (m *appstate) joinRoom(roomID string) error {
 	return nil
 }
 
-func (m *appstate) makeClientReady() tea.Cmd {
-	m.log.Debugf("Client signaling readiness")
-	m.isReady = true
-	err := m.pc.SignalReady()
-	if err != nil {
-		m.log.Errorf("Error signaling readiness: %v", err)
-	}
-	return nil
+func (m *appstate) makeClientReady() error {
+	return m.pc.SignalReady()
 }
 
 func (m *appstate) handleGameInput(msg tea.KeyMsg) tea.Cmd {
@@ -268,6 +280,7 @@ func (m *appstate) handleGameInput(msg tea.KeyMsg) tea.Cmd {
 			err := m.pc.SendInput(input)
 			if err != nil {
 				m.log.Debugf("Error sending game input: %v", err)
+				return err
 			}
 		}
 		return nil
@@ -290,7 +303,7 @@ func (m *appstate) View() string {
 
 		b.WriteString(fmt.Sprintf("👤 Player ID: %s\n", m.pc.ID))
 		b.WriteString(fmt.Sprintf("💵 Bet Amount: %.8f\n", m.betAmount))
-		b.WriteString(fmt.Sprintf("✅ Status Ready: %t\n", m.isReady))
+		b.WriteString(fmt.Sprintf("✅ Status Ready: %t\n", m.pc.IsReady))
 
 		// Display the current room or show a placeholder if not in a room
 		if m.currentWR != nil {

@@ -27,6 +27,7 @@ enum NotificationType {
   BET_AMOUNT_UPDATE = 5;
   PLAYER_JOINED_WR = 6;
   ON_WR_CREATED = 7;
+  ON_PLAYER_READY = 8;
 }
 
 message StartNtfnStreamRequest {
