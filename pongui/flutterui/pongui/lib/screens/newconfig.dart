@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:pongui/components/shared_layout.dart';
 import 'package:pongui/config.dart';
-import 'package:pongui/main.dart';
 import 'package:pongui/models/newconfig.dart';
 
 class NewConfigScreen extends StatefulWidget {
@@ -102,11 +102,9 @@ class _NewConfigScreenState extends State<NewConfigScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('New RPC Configuration'),
-      ),
-      body: Padding(
+    return SharedLayout(
+      title: "Settings Screen",
+      child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Form(
           key: _formKey,
@@ -223,24 +221,4 @@ class _NewConfigScreenState extends State<NewConfigScreen> {
       ),
     );
   }
-}
-
-Future<void> runNewConfigApp(List<String> args) async {
-  final newConfig = NewConfigModel(args);
-
-  runApp(
-    MaterialApp(
-      title: 'New RPC Configuration',
-      home: NewConfigScreen(
-        newConfig: newConfig,
-        onConfigSaved: () async {
-          // Load the updated configuration
-          Config cfg = await configFromArgs(args);
-
-          // Navigate back to the main app
-          runMainApp(cfg);
-        },
-      ),
-    ),
-  );
 }
