@@ -57,10 +57,6 @@ class HomeScreen extends StatelessWidget {
               onPressed: pongModel.toggleReady,
               child: Text(pongModel.isReady ? "Cancel Ready" : "Ready"),
             ),
-            ElevatedButton(
-              onPressed: pongModel.startGameStream,
-              child: const Text("Start Game"),
-            ),
             Expanded(
               child: ListView.builder(
                 itemCount: pongModel.waitingRooms.length,

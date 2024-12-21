@@ -8,10 +8,12 @@ import 'package:pongui/components/pong_game.dart';
 import 'package:pongui/config.dart';
 import 'package:pongui/grpc/generated/pong.pbgrpc.dart';
 import 'package:pongui/grpc/grpc_client.dart';
+import 'package:pongui/models/notifications.dart';
 
 class PongModel extends ChangeNotifier {
   late GrpcPongClient grpcClient;
   late PongGame pongGame;
+  final NotificationModel notificationModel;
 
   String clientId = '';
   String nick = '';
@@ -22,12 +24,16 @@ class PongModel extends ChangeNotifier {
   LocalWaitingRoom currentWR = const LocalWaitingRoom("", "", 0.0);
   Map<String, dynamic> gameState = {};
 
-  PongModel(Config cfg) {
+  PongModel(Config cfg, this.notificationModel) {
     _initPongClient(cfg);
   }
 
   Future<void> _initPongClient(Config cfg) async {
+
     try {
+      if (clientId.isNotEmpty) {
+        return;
+      }
       InitClient initArgs = InitClient(
         cfg.serverAddr,
         cfg.grpcCertPath,
@@ -68,8 +74,6 @@ class PongModel extends ChangeNotifier {
 
   void startListeningToNtfn(GrpcPongClient grpcClient, String clientId) {
     grpcClient.startNtfnStreamRequest(clientId).listen((ntfn) {
-      print(ntfn);
-
       developer.log("Notification Stream Response: $ntfn");
 
       switch (ntfn.notificationType) {
@@ -79,52 +83,55 @@ class PongModel extends ChangeNotifier {
             ntfn.wr.hostId,
             ntfn.wr.betAmt,
           ));
+          notificationModel.showNotification(
+            "Waiting room created by ${ntfn.wr.hostId}",
+          );
           notifyListeners();
           break;
         case NotificationType.GAME_START:
-          // Handle game start notification
           gameStarted = true;
-          gameState = {
-            'gameId': ntfn.gameId,
-            'message': ntfn.message,
-            'started': ntfn.started,
-          };
-          errorMessage = ''; // Clear any previous errors
-          print("Game Started: ${ntfn.message}");
-          notifyListeners(); // Notify UI to update
+          notificationModel.showNotification(
+            "Game started with ID: ${ntfn.gameId}",
+          );
+          notifyListeners();
           break;
+
+        case NotificationType.PLAYER_JOINED_WR:
+          if (ntfn.playerId == clientId) {
+            currentWR = LocalWaitingRoom(ntfn.wr.id, ntfn.wr.hostId, ntfn.wr.betAmt);
+          }
+          notificationModel.showNotification("A new player joined the waiting room");
+          break;
+
+        case NotificationType.GAME_END:
+          notificationModel.showNotification(ntfn.message);
+          resetGameState();
+          break;
+
         default:
           developer.log("Unknown notification type: ${ntfn.notificationType}");
       }
     }, onError: (error) {
-      errorMessage = "Error: ${error.message}";
-      print(errorMessage);
+      errorMessage = "Error in notification stream: ${error.message}";
+      developer.log("Error: $error");
+      print("Error: $error");
       notifyListeners();
-      print("ERROR: $error");
-      developer.log("Error in notification stream: $error");
     });
   }
 
-  void startGameStream() {
-    grpcClient.startGameStreamRequest(clientId).listen((response) {
-      print(response.data);
-      var data = utf8.decode(response.data);
-      gameState = json.decode(data);
-      gameStarted = true;
-      errorMessage = '';
-      notifyListeners();
-    }, onError: (error) {
-      errorMessage = "Error: ${error.message}";
-      gameStarted = false;
-      notifyListeners();
-    });
+    void resetGameState() {
+    isReady = false;
+    waitingRooms.removeWhere((room) => room.id == currentWR.id);
+    currentWR = const LocalWaitingRoom("", "", 0.0);
+    gameStarted = false;
+    notifyListeners();
   }
+
 
   Future<void> joinWaitingRoom(String id) async {
     try {
-      currentWR = await Golib.JoinWaitingRoom(id);
-      print("Successfully joined: $currentWR");
-      errorMessage = ''; // Clear any previous error messages
+      await Golib.JoinWaitingRoom(id);
+      errorMessage = '';
       notifyListeners();
     } catch (e) {
       errorMessage = "Error joining waiting room: $e";
@@ -134,8 +141,11 @@ class PongModel extends ChangeNotifier {
   }
 
   void toggleReady() {
-    if (currentWR.id == "") {
-      return;
+  if (currentWR.id.isEmpty) {
+      var error = "Need to get into a waiting room to get ready.";
+      errorMessage = error;
+      notifyListeners();
+      throw Exception(error);
     }
     grpcClient.startGameStreamRequest(clientId).listen((gameUpdate) {
       var data = utf8.decode(gameUpdate.data);
@@ -143,8 +153,12 @@ class PongModel extends ChangeNotifier {
       gameStarted = true;
       gameState = parsedData;
       errorMessage = '';
+      notifyListeners();
     }, onError: (error) {
-      developer.log("Error in notification stream: $error");
+      developer.log("Error in game stream: $error");
+      errorMessage = "Error in game stream: ${error.message}";
+      print("Error: $error");
+      notifyListeners();
     });
     isReady = !isReady;
     notifyListeners();

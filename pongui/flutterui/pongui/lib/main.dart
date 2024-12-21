@@ -4,7 +4,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:golib_plugin/golib_plugin.dart';
+import 'package:pongui/components/notification_bar.dart';
 import 'package:pongui/models/newconfig.dart';
+import 'package:pongui/models/notifications.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -61,7 +63,16 @@ Future<void> runMainApp(Config cfg) async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (context) => PongModel(cfg)),
+        ChangeNotifierProvider(create: (context) => NotificationModel()),
+        ChangeNotifierProxyProvider<NotificationModel, PongModel>(
+          create: (context) => PongModel(cfg, context.read<NotificationModel>()),
+          update: (context, notificationModel, previous) {
+            if (previous == null || previous.notificationModel != notificationModel) {
+              return PongModel(cfg, notificationModel);
+            }
+            return previous;
+          },
+        ),
       ],
       child: MyApp(cfg),
     ),
@@ -81,6 +92,17 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color.fromARGB(255, 25, 23, 44),
         primaryColor: Colors.blueAccent,
       ),
+      builder: (context, child) {
+        return Stack(
+          children: [
+            child!, // The main content of the app
+            Align(
+              alignment: Alignment.topCenter,
+              child: NotificationBar(),
+            ),
+          ],
+        );
+      },
       routes: {
         '/': (context) => const HomeScreen(),
         '/settings': (context) => NewConfigScreen(

@@ -59,21 +59,6 @@ class _NewConfigScreenState extends State<NewConfigScreen> {
     _wantsLogNtfns = widget.newConfig.wantsLogNtfns;
   }
 
-  @override
-  void dispose() {
-    // Dispose all controllers
-    _serverAddrController.dispose();
-    _grpcCertPathController.dispose();
-    _rpcCertPathController.dispose();
-    _rpcClientCertPathController.dispose();
-    _rpcClientKeyPathController.dispose();
-    _rpcWebsocketURLController.dispose();
-    _debugLevelController.dispose();
-    _userController.dispose();
-    _passController.dispose();
-    super.dispose();
-  }
-
   Future<void> _saveConfig() async {
     if (_formKey.currentState!.validate()) {
       // Update the config model
