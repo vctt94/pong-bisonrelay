@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:pongui/models/pong.dart';
 
 class SharedLayout extends StatelessWidget {
   final String title;
@@ -12,6 +14,8 @@ class SharedLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pongModel = Provider.of<PongModel>(context);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
@@ -50,7 +54,43 @@ class SharedLayout extends StatelessWidget {
           ],
         ),
       ),
-      body: child,
+      body: Column(
+        children: [
+          Expanded(child: child),
+          // Footer Section
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade900,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      pongModel.isConnected ? Icons.cloud_done : Icons.cloud_off,
+                      color: pongModel.isConnected ? Colors.green : Colors.red,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      pongModel.isConnected ? "Connected" : "Disconnected",
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: pongModel.isConnected ? Colors.green : Colors.red,
+                          ),
+                    ),
+                  ],
+                ),
+                Text(
+                  "Client ID: ${pongModel.clientId}",
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

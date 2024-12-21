@@ -19,6 +19,8 @@ class PongModel extends ChangeNotifier {
   String nick = '';
   bool isReady = false;
   bool gameStarted = false;
+  bool isConnected = false;
+  double betAmt = 0;
   String errorMessage = '';
   List<LocalWaitingRoom> waitingRooms = [];
   LocalWaitingRoom currentWR = const LocalWaitingRoom("", "", 0.0);
@@ -29,7 +31,6 @@ class PongModel extends ChangeNotifier {
   }
 
   Future<void> _initPongClient(Config cfg) async {
-
     try {
       if (clientId.isNotEmpty) {
         return;
@@ -65,10 +66,13 @@ class PongModel extends ChangeNotifier {
       print("Connecting to gRPC server: $ipAddress:$port");
       pongGame = PongGame(clientId, grpcClient);
 
+      isConnected = true;
       startListeningToNtfn(grpcClient, clientId);
       notifyListeners();
     } catch (exception) {
       print("Exception: $exception");
+      isConnected = false;
+      notifyListeners();
     }
   }
 
@@ -76,7 +80,17 @@ class PongModel extends ChangeNotifier {
     grpcClient.startNtfnStreamRequest(clientId).listen((ntfn) {
       developer.log("Notification Stream Response: $ntfn");
 
+      isConnected = true;
+      notifyListeners();
+
       switch (ntfn.notificationType) {
+        case NotificationType.BET_AMOUNT_UPDATE:
+        if (ntfn.playerId == clientId) {
+          betAmt = ntfn.betAmt;
+          notificationModel.showNotification(
+            "Bet Amount Updated: ${ntfn.betAmt}",
+          );
+        }
         case NotificationType.ON_WR_CREATED:
           waitingRooms.add(LocalWaitingRoom(
             ntfn.wr.id,
@@ -115,18 +129,18 @@ class PongModel extends ChangeNotifier {
       errorMessage = "Error in notification stream: ${error.message}";
       developer.log("Error: $error");
       print("Error: $error");
+      isConnected = false;
       notifyListeners();
     });
   }
 
-    void resetGameState() {
+  void resetGameState() {
     isReady = false;
     waitingRooms.removeWhere((room) => room.id == currentWR.id);
     currentWR = const LocalWaitingRoom("", "", 0.0);
     gameStarted = false;
     notifyListeners();
   }
-
 
   Future<void> joinWaitingRoom(String id) async {
     try {
@@ -141,7 +155,7 @@ class PongModel extends ChangeNotifier {
   }
 
   void toggleReady() {
-  if (currentWR.id.isEmpty) {
+    if (currentWR.id.isEmpty) {
       var error = "Need to get into a waiting room to get ready.";
       errorMessage = error;
       notifyListeners();
@@ -158,6 +172,7 @@ class PongModel extends ChangeNotifier {
       developer.log("Error in game stream: $error");
       errorMessage = "Error in game stream: ${error.message}";
       print("Error: $error");
+      isConnected = false;
       notifyListeners();
     });
     isReady = !isReady;
