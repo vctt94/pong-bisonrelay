@@ -99,11 +99,21 @@ class HomeScreen extends StatelessWidget {
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                   ] else ...[
-                    FilledButton(
-                      onPressed: pongModel.toggleReady,
-                      child: Text(
-                        pongModel.isReady ? "Cancel Ready" : "Ready",
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        FilledButton(
+                          onPressed: pongModel.toggleReady,
+                          child: Text(
+                            pongModel.isReady ? "Cancel Ready" : "Ready",
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        FilledButton(
+                          onPressed: pongModel.createWaitingRoom,
+                          child: const Text("Create Waiting Room"),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     const Text(
@@ -111,26 +121,33 @@ class HomeScreen extends StatelessWidget {
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                     Expanded(
-                      child: ListView.builder(
-                        itemCount: pongModel.waitingRooms.length,
-                        itemBuilder: (context, index) {
-                          final room = pongModel.waitingRooms[index];
-                          return Card(
-                            margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: ListTile(
-                              title: Text("Room: ${room.id}"),
-                              subtitle: Text("Bet: ${room.betAmount}"),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.add),
-                                onPressed: () => pongModel.joinWaitingRoom(room.id),
+                      child: pongModel.waitingRooms.isEmpty
+                          ? const Center(
+                              child: Text(
+                                "No waiting rooms available.",
+                                style: TextStyle(fontSize: 16, color: Colors.grey),
                               ),
+                            )
+                          : ListView.builder(
+                              itemCount: pongModel.waitingRooms.length,
+                              itemBuilder: (context, index) {
+                                final room = pongModel.waitingRooms[index];
+                                return Card(
+                                  margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: ListTile(
+                                    title: Text("Room: ${room.id}"),
+                                    subtitle: Text("Bet: ${room.betAmt}"),
+                                    trailing: IconButton(
+                                      icon: const Icon(Icons.add),
+                                      onPressed: () => pongModel.joinWaitingRoom(room.id),
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
-                          );
-                        },
-                      ),
                     ),
                   ],
                 ],

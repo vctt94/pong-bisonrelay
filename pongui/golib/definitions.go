@@ -27,6 +27,11 @@ type initClient struct {
 	RPCPass           string `json:"rpc_pass"`
 }
 
+type createWaitingRoom struct {
+	ClientID string  `json:"client_id"`
+	BetAmt   float64 `json:"bet_amt"`
+}
+
 type localInfo struct {
 	ID   clientintf.UserID `json:"id"`
 	Nick string            `json:"nick"`

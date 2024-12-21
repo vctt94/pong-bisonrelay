@@ -25,6 +25,7 @@ const (
 	CTGetWRPlayers                  = 0x05
 	CTGetWaitingRooms               = 0x06
 	CTJoinWaitingRoom               = 0x07
+	CTCreateWaitingRoom             = 0x08
 	CTCreateLockFile                = 0x60
 	CTCloseLockFile                 = 0x61
 	CTGetRunState                   = 0x83

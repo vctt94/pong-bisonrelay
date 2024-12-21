@@ -80,7 +80,7 @@ Map<String, dynamic> _$LocalWaitingRoomToJson(LocalWaitingRoom instance) =>
     <String, dynamic>{
       'id': instance.id,
       'host_id': instance.host,
-      'bet_amt': instance.betAmount,
+      'bet_amt': instance.betAmt,
     };
 
 LocalInfo _$LocalInfoFromJson(Map<String, dynamic> json) => LocalInfo(
@@ -227,6 +227,20 @@ Map<String, dynamic> _$RedeemedInviteFundsToJson(
     <String, dynamic>{
       'txid': instance.txid,
       'total': instance.total,
+    };
+
+CreateWaitingRoomArgs _$CreateWaitingRoomArgsFromJson(
+        Map<String, dynamic> json) =>
+    CreateWaitingRoomArgs(
+      json['client_id'] as String,
+      (json['bet_amt'] as num).toDouble(),
+    );
+
+Map<String, dynamic> _$CreateWaitingRoomArgsToJson(
+        CreateWaitingRoomArgs instance) =>
+    <String, dynamic>{
+      'client_id': instance.clientId,
+      'bet_amt': instance.betAmt,
     };
 
 RunState _$RunStateFromJson(Map<String, dynamic> json) => RunState(

@@ -41,7 +41,7 @@ type PongClient struct {
 
 	IsReady bool
 
-	betAmt       float64
+	BetAmt       float64
 	playerNumber int32
 	cfg          *PongClientCfg
 	conn         *grpc.ClientConn
@@ -104,8 +104,8 @@ func (pc *PongClient) StartNotifier(ctx context.Context) error {
 					pc.log.Infof("%s", ntfn.Message)
 				case pong.NotificationType_OPPONENT_DISCONNECTED:
 				case pong.NotificationType_BET_AMOUNT_UPDATE:
-					if ntfn.BetAmt > 0 {
-						pc.betAmt = ntfn.BetAmt
+					if ntfn.PlayerId == pc.ID {
+						pc.BetAmt = ntfn.BetAmt
 						pc.ntfns.notifyBetAmtChanged(ntfn.PlayerId, ntfn.BetAmt, time.Now())
 					}
 				case pong.NotificationType_ON_PLAYER_READY:
@@ -192,10 +192,11 @@ func (pc *PongClient) GetWRPlayers() ([]*pong.Player, error) {
 	return wr.Players, nil
 }
 
-func (pc *PongClient) CreatewaitingRoom(ctx context.Context) (*pong.WaitingRoom, error) {
+func (pc *PongClient) CreatewaitingRoom(clientId string, betAmt float64) (*pong.WaitingRoom, error) {
+	ctx := context.Background()
 	res, err := pc.gc.CreateWaitingRoom(ctx, &pong.CreateWaitingRoomRequest{
-		HostId: pc.ID,
-		BetAmt: pc.betAmt,
+		HostId: clientId,
+		BetAmt: betAmt,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error creating wr: %w", err)

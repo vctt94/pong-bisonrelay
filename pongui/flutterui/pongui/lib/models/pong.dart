@@ -85,12 +85,12 @@ class PongModel extends ChangeNotifier {
 
       switch (ntfn.notificationType) {
         case NotificationType.BET_AMOUNT_UPDATE:
-        if (ntfn.playerId == clientId) {
-          betAmt = ntfn.betAmt;
-          notificationModel.showNotification(
-            "Bet Amount Updated: ${ntfn.betAmt}",
-          );
-        }
+          if (ntfn.playerId == clientId) {
+            betAmt = ntfn.betAmt;
+            notificationModel.showNotification(
+              "Bet Amount Updated: ${ntfn.betAmt}",
+            );
+          }
         case NotificationType.ON_WR_CREATED:
           waitingRooms.add(LocalWaitingRoom(
             ntfn.wr.id,
@@ -112,9 +112,11 @@ class PongModel extends ChangeNotifier {
 
         case NotificationType.PLAYER_JOINED_WR:
           if (ntfn.playerId == clientId) {
-            currentWR = LocalWaitingRoom(ntfn.wr.id, ntfn.wr.hostId, ntfn.wr.betAmt);
+            currentWR =
+                LocalWaitingRoom(ntfn.wr.id, ntfn.wr.hostId, ntfn.wr.betAmt);
           }
-          notificationModel.showNotification("A new player joined the waiting room");
+          notificationModel
+              .showNotification("A new player joined the waiting room");
           break;
 
         case NotificationType.GAME_END:
@@ -139,7 +141,37 @@ class PongModel extends ChangeNotifier {
     waitingRooms.removeWhere((room) => room.id == currentWR.id);
     currentWR = const LocalWaitingRoom("", "", 0.0);
     gameStarted = false;
+    betAmt = 0;
     notifyListeners();
+  }
+
+  Future<void> createWaitingRoom() async {
+    try {
+      if (betAmt <= 0) {
+        errorMessage = "bet amount needs to be higher than 0";
+        notifyListeners();
+        return;
+      }
+
+      CreateWaitingRoomArgs createRoomArgs =
+          CreateWaitingRoomArgs(clientId, betAmt);
+
+      developer.log("CreateWaitingRoom args: $createRoomArgs");
+      var roomInfo = await Golib.CreateWaitingRoom(createRoomArgs);
+
+      // Update the model state
+      currentWR = LocalWaitingRoom(roomInfo.id, clientId, roomInfo.betAmt);
+      errorMessage = '';
+      notifyListeners();
+
+      notificationModel.showNotification(
+        "Waiting room created with Bet Amount: ${roomInfo.betAmt}",
+      );
+    } catch (e) {
+      errorMessage = "Error creating waiting room: $e";
+      developer.log("Error creating waiting room: $e");
+      notifyListeners();
+    }
   }
 
   Future<void> joinWaitingRoom(String id) async {
