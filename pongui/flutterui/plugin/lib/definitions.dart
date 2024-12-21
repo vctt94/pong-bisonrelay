@@ -18,6 +18,8 @@ part 'definitions.g.dart';
 class InitClient {
   @JsonKey(name: 'server_addr')
   final String serverAddr;
+  @JsonKey(name: 'grpc_cert_path')
+  final String grpcCertPath;
   @JsonKey(name: 'log_file')
   final String logFile;
   @JsonKey(name: "msgs_root")
@@ -43,6 +45,7 @@ class InitClient {
 
   InitClient(
     this.serverAddr,
+    this.grpcCertPath,
     this.logFile,
     this.msgsRoot,
     this.debugLevel,
@@ -433,9 +436,19 @@ abstract class PluginPlatform {
     }).toList();
   }
 
-  Future<LocalWaitingRoom> JoinWaitingRoom(id) async {
-    var res = await asyncCall(CTJoinWaitingRoom, id);
-    return LocalWaitingRoom.fromJson(res);
+  Future<LocalWaitingRoom> JoinWaitingRoom(String id) async {
+    try {
+      final response = await asyncCall(CTJoinWaitingRoom, id);
+
+      if (response is Map<String, dynamic>) {
+        return LocalWaitingRoom.fromJson(response);
+      } else {
+        throw Exception("Invalid response format: $response");
+      }
+    } catch (err) {
+      print("Error joining waiting room: $err");
+      throw Exception("Failed to join waiting room: $err");
+    }
   }
 }
 

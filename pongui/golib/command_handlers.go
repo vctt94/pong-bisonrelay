@@ -130,9 +130,10 @@ func handleInitClient(handle uint32, args initClient) (*localInfo, error) {
 	}
 	logBknd.notify = args.WantsLogNtfns
 	pc, err := client.NewPongClient(localInfo.ID.String(), &client.PongClientCfg{
-		ServerAddr: args.ServerAddr,
-		ChatClient: chat,
-		Log:        logBknd.logger("client"),
+		ServerAddr:   args.ServerAddr,
+		ChatClient:   chat,
+		Log:          logBknd.logger("client"),
+		GRPCCertPath: args.GRPCCertPath,
 	})
 	if err != nil {
 		cancel()
