@@ -49,25 +49,28 @@ func (gm *GameManager) StartGameStream(req *StartGameStreamRequest) (*Player, er
 
 // HandleWaitingRoomDisconnection handles player disconnection from a waiting room.
 func (gm *GameManager) HandleWaitingRoomDisconnection(clientID zkidentity.ShortID, log slog.Logger) {
-	waitingRoom := gm.GetWaitingRoomFromPlayer(clientID)
-	if waitingRoom == nil {
+	wr := gm.GetWaitingRoomFromPlayer(clientID)
+	if wr == nil {
 		return
 	}
 
-	remainingPlayers := GetRemainingPlayersInWaitingRoom(waitingRoom, clientID)
-	for _, player := range remainingPlayers {
-		if player.NotifierStream != nil {
-			player.NotifierStream.Send(&pong.NtfnStreamResponse{
-				NotificationType: pong.NotificationType_OPPONENT_DISCONNECTED,
-				Message:          "Opponent left the waiting room.",
-				Started:          false,
-			})
+	// if host disconnected, remove wr
+	if clientID == *wr.HostID {
+		remainingPlayers := GetRemainingPlayersInWaitingRoom(wr, clientID)
+		for _, player := range remainingPlayers {
+			if player.NotifierStream != nil {
+				player.NotifierStream.Send(&pong.NtfnStreamResponse{
+					NotificationType: pong.NotificationType_OPPONENT_DISCONNECTED,
+					Message:          "Opponent left the waiting room.",
+					Started:          false,
+				})
+			}
 		}
-	}
 
-	log.Debugf("Player %s disconnected; removing waiting room %s", clientID, waitingRoom.ID)
-	waitingRoom.Cancel()
-	gm.RemoveWaitingRoom(waitingRoom.ID)
+		log.Debugf("Player %s disconnected; removing waiting room %s", clientID, wr.ID)
+		wr.Cancel()
+		gm.RemoveWaitingRoom(wr.ID)
+	}
 }
 
 // HandleGameDisconnection handles player disconnection from an active game.
@@ -158,10 +161,21 @@ func (g *GameManager) GetWaitingRoom(roomID string) *WaitingRoom {
 func (gm *GameManager) RemoveWaitingRoom(roomID string) {
 	gm.Lock()
 	defer gm.Unlock()
+
 	for i, room := range gm.WaitingRooms {
 		if room.ID == roomID {
+
+			if gm.OnWaitingRoomRemoved != nil {
+				pongwr, err := room.Marshal()
+				if err != nil {
+					gm.Log.Errorf("Failed to Marshal waiting room %v", err)
+				}
+				gm.OnWaitingRoomRemoved(pongwr)
+			}
 			// Remove the room by appending the elements before and after it
 			gm.WaitingRooms = append(gm.WaitingRooms[:i], gm.WaitingRooms[i+1:]...)
+			gm.Log.Debugf("Waiting room %s removed successfully", roomID)
+
 			break
 		}
 	}

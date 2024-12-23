@@ -88,12 +88,13 @@ func NewServer(id *zkidentity.ShortID, cfg ServerConfig) *Server {
 			Log:            logGM,
 		},
 	}
+	s.gameManager.OnWaitingRoomRemoved = s.handleWaitingRoomRemoved
 
 	if cfg.HTTPPort != "" {
 		// Set up HTTP server for db calls
 		mux := http.NewServeMux()
-		mux.HandleFunc("/fetchTipsByClientID", s.FetchTipsByClientIDHandler)
-		mux.HandleFunc("/fetchAllUnprocessedTips", s.FetchAllUnprocessedTipsHandler)
+		mux.HandleFunc("/fetchTipsByClientID", s.handleFetchTipsByClientIDHandler)
+		mux.HandleFunc("/fetchAllUnprocessedTips", s.handleFetchAllUnprocessedTipsHandler)
 		s.httpServer = &http.Server{
 			Addr:    fmt.Sprintf(":%s", cfg.HTTPPort),
 			Handler: mux,
@@ -152,7 +153,7 @@ func (s *Server) handleDisconnect(clientID zkidentity.ShortID) {
 	// Handle unprocessed tips
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := s.ReturnUnprocessedTips(ctx, clientID, s.paymentClient, s.log); err != nil {
+	if err := s.handleReturnUnprocessedTips(ctx, clientID, s.paymentClient, s.log); err != nil {
 		s.log.Errorf("Error returning unprocessed tips for client %s: %v", clientID.String(), err)
 	}
 }
@@ -176,7 +177,7 @@ func (s *Server) StartNtfnStream(req *pong.StartNtfnStreamRequest, stream pong.P
 	s.Unlock()
 
 	// Fetch unprocessed tips
-	totalDcrAmount, _, err := s.FetchTotalUnprocessedTips(ctx, clientID)
+	totalDcrAmount, _, err := s.handleFetchTotalUnprocessedTips(ctx, clientID)
 	if err != nil {
 		s.log.Errorf("Failed to fetch unprocessed tips for client %s: %v", clientID, err)
 		return err
@@ -209,7 +210,7 @@ func (s *Server) SendInput(ctx context.Context, req *pong.PlayerInput) (*pong.Ga
 }
 
 func (s *Server) ManageWaitingRoom(ctx context.Context, wr *ponggame.WaitingRoom) error {
-	defer s.gameManager.RemoveWaitingRoom(wr.ID) // Ensure waiting room removal
+	defer s.gameManager.RemoveWaitingRoom(wr.ID)
 
 	for {
 		select {

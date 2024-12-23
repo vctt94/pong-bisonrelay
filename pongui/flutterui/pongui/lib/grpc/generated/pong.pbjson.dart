@@ -26,6 +26,7 @@ const NotificationType$json = {
     {'1': 'PLAYER_JOINED_WR', '2': 6},
     {'1': 'ON_WR_CREATED', '2': 7},
     {'1': 'ON_PLAYER_READY', '2': 8},
+    {'1': 'ON_WR_REMOVED', '2': 9},
   ],
 };
 
@@ -34,7 +35,7 @@ final $typed_data.Uint8List notificationTypeDescriptor = $convert.base64Decode(
     'ChBOb3RpZmljYXRpb25UeXBlEgsKB1VOS05PV04QABILCgdNRVNTQUdFEAESDgoKR0FNRV9TVE'
     'FSVBACEgwKCEdBTUVfRU5EEAMSGQoVT1BQT05FTlRfRElTQ09OTkVDVEVEEAQSFQoRQkVUX0FN'
     'T1VOVF9VUERBVEUQBRIUChBQTEFZRVJfSk9JTkVEX1dSEAYSEQoNT05fV1JfQ1JFQVRFRBAHEh'
-    'MKD09OX1BMQVlFUl9SRUFEWRAI');
+    'MKD09OX1BMQVlFUl9SRUFEWRAIEhEKDU9OX1dSX1JFTU9WRUQQCQ==');
 
 @$core.Deprecated('Use startNtfnStreamRequestDescriptor instead')
 const StartNtfnStreamRequest$json = {

@@ -16,8 +16,8 @@ import (
 	"github.com/vctt94/pong-bisonrelay/server/serverdb"
 )
 
-// FetchTipsByClientIDHandler fetches tips for a specific client ID.
-func (s *Server) FetchTipsByClientIDHandler(w http.ResponseWriter, r *http.Request) {
+// handleFetchTipsByClientIDHandler fetches tips for a specific client ID.
+func (s *Server) handleFetchTipsByClientIDHandler(w http.ResponseWriter, r *http.Request) {
 	clientIDStr := r.URL.Query().Get("clientID")
 	if clientIDStr == "" {
 		http.Error(w, "clientID parameter is required", http.StatusBadRequest)
@@ -40,8 +40,8 @@ func (s *Server) FetchTipsByClientIDHandler(w http.ResponseWriter, r *http.Reque
 	json.NewEncoder(w).Encode(tips)
 }
 
-// FetchAllUnprocessedTipsHandler fetches all unprocessed tips for all clients.
-func (s *Server) FetchAllUnprocessedTipsHandler(w http.ResponseWriter, r *http.Request) {
+// handleFetchAllUnprocessedTipsHandler fetches all unprocessed tips for all clients.
+func (s *Server) handleFetchAllUnprocessedTipsHandler(w http.ResponseWriter, r *http.Request) {
 	tips, err := s.db.FetchUnprocessedTips(context.Background())
 	if err != nil {
 		http.Error(w, fmt.Sprintf("error fetching unprocessed tips: %v", err), http.StatusInternalServerError)
@@ -61,7 +61,7 @@ func (s *Server) FetchAllUnprocessedTipsHandler(w http.ResponseWriter, r *http.R
 	}
 }
 
-func (s *Server) ReturnUnprocessedTips(ctx context.Context, clientID zkidentity.ShortID, paymentClient types.PaymentsServiceClient, log slog.Logger) error {
+func (s *Server) handleReturnUnprocessedTips(ctx context.Context, clientID zkidentity.ShortID, paymentClient types.PaymentsServiceClient, log slog.Logger) error {
 	tips, err := s.db.FetchReceivedTipsByUID(ctx, clientID, serverdb.StatusUnprocessed)
 	if err != nil {
 		log.Errorf("Failed to fetch unprocessed tips for client %s: %v", clientID.String(), err)
@@ -100,7 +100,7 @@ func (s *Server) ReturnUnprocessedTips(ctx context.Context, clientID zkidentity.
 	return nil
 }
 
-func (s *Server) FetchTotalUnprocessedTips(ctx context.Context, clientID zkidentity.ShortID) (float64, []serverdb.ReceivedTipWrapper, error) {
+func (s *Server) handleFetchTotalUnprocessedTips(ctx context.Context, clientID zkidentity.ShortID) (float64, []serverdb.ReceivedTipWrapper, error) {
 	// Fetch unprocessed tips from the database
 	tips, err := s.db.FetchReceivedTipsByUID(ctx, clientID, serverdb.StatusUnprocessed)
 	if err != nil {
@@ -225,5 +225,18 @@ func (s *Server) handleGameEnd(ctx context.Context, game *ponggame.GameInstance,
 				}
 			}
 		}
+	}
+}
+
+func (s *Server) handleWaitingRoomRemoved(wr *pong.WaitingRoom) {
+	s.log.Infof("Waiting room %s removed", wr.Id)
+
+	// Notify all users about the waiting room removal
+	for _, user := range s.users {
+		user.NotifierStream.Send(&pong.NtfnStreamResponse{
+			NotificationType: pong.NotificationType_ON_WR_REMOVED,
+			Message:          fmt.Sprintf("Waiting room %s was removed", wr.Id),
+			RoomId:           wr.Id,
+		})
 	}
 }

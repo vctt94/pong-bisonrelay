@@ -62,6 +62,9 @@ type GameManager struct {
 
 	Debug slog.Level
 	Log   slog.Logger
+
+	// Callback for waiting room removal notifications
+	OnWaitingRoomRemoved func(*pong.WaitingRoom)
 }
 
 // CanvasEngine is a ping-pong engine for browsers with Canvas support

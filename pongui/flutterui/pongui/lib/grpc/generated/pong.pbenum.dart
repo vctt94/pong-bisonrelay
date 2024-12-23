@@ -24,6 +24,7 @@ class NotificationType extends $pb.ProtobufEnum {
   static const NotificationType PLAYER_JOINED_WR = NotificationType._(6, _omitEnumNames ? '' : 'PLAYER_JOINED_WR');
   static const NotificationType ON_WR_CREATED = NotificationType._(7, _omitEnumNames ? '' : 'ON_WR_CREATED');
   static const NotificationType ON_PLAYER_READY = NotificationType._(8, _omitEnumNames ? '' : 'ON_PLAYER_READY');
+  static const NotificationType ON_WR_REMOVED = NotificationType._(9, _omitEnumNames ? '' : 'ON_WR_REMOVED');
 
   static const $core.List<NotificationType> values = <NotificationType> [
     UNKNOWN,
@@ -35,6 +36,7 @@ class NotificationType extends $pb.ProtobufEnum {
     PLAYER_JOINED_WR,
     ON_WR_CREATED,
     ON_PLAYER_READY,
+    ON_WR_REMOVED,
   ];
 
   static final $core.Map<$core.int, NotificationType> _byValue = $pb.ProtobufEnum.initByValue(values);
