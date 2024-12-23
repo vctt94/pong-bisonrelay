@@ -105,8 +105,12 @@ class LocalWaitingRoom {
   final String host;
   @JsonKey(name: 'bet_amt')
   final double betAmt;
+  @JsonKey(name: 'players', defaultValue: [])
+  final List<Player>? players;
 
-  const LocalWaitingRoom(this.id, this.host, this.betAmt);
+  const LocalWaitingRoom(this.id, this.host, this.betAmt, {
+    this.players,
+  });
 
   factory LocalWaitingRoom.fromJson(Map<String, dynamic> json) =>
       _$LocalWaitingRoomFromJson(json);
