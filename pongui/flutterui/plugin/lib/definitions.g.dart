@@ -8,6 +8,7 @@ part of 'definitions.dart';
 
 InitClient _$InitClientFromJson(Map<String, dynamic> json) => InitClient(
       json['server_addr'] as String,
+      json['grpc_cert_path'] as String,
       json['log_file'] as String,
       json['msgs_root'] as String,
       json['debug_level'] as String,
@@ -23,6 +24,7 @@ InitClient _$InitClientFromJson(Map<String, dynamic> json) => InitClient(
 Map<String, dynamic> _$InitClientToJson(InitClient instance) =>
     <String, dynamic>{
       'server_addr': instance.serverAddr,
+      'grpc_cert_path': instance.grpcCertPath,
       'log_file': instance.logFile,
       'msgs_root': instance.msgsRoot,
       'debug_level': instance.debugLevel,
@@ -78,7 +80,7 @@ Map<String, dynamic> _$LocalWaitingRoomToJson(LocalWaitingRoom instance) =>
     <String, dynamic>{
       'id': instance.id,
       'host_id': instance.host,
-      'bet_amt': instance.betAmount,
+      'bet_amt': instance.betAmt,
     };
 
 LocalInfo _$LocalInfoFromJson(Map<String, dynamic> json) => LocalInfo(
@@ -225,6 +227,20 @@ Map<String, dynamic> _$RedeemedInviteFundsToJson(
     <String, dynamic>{
       'txid': instance.txid,
       'total': instance.total,
+    };
+
+CreateWaitingRoomArgs _$CreateWaitingRoomArgsFromJson(
+        Map<String, dynamic> json) =>
+    CreateWaitingRoomArgs(
+      json['client_id'] as String,
+      (json['bet_amt'] as num).toDouble(),
+    );
+
+Map<String, dynamic> _$CreateWaitingRoomArgsToJson(
+        CreateWaitingRoomArgs instance) =>
+    <String, dynamic>{
+      'client_id': instance.clientId,
+      'bet_amt': instance.betAmt,
     };
 
 RunState _$RunStateFromJson(Map<String, dynamic> json) => RunState(

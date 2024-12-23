@@ -18,6 +18,8 @@ part 'definitions.g.dart';
 class InitClient {
   @JsonKey(name: 'server_addr')
   final String serverAddr;
+  @JsonKey(name: 'grpc_cert_path')
+  final String grpcCertPath;
   @JsonKey(name: 'log_file')
   final String logFile;
   @JsonKey(name: "msgs_root")
@@ -43,6 +45,7 @@ class InitClient {
 
   InitClient(
     this.serverAddr,
+    this.grpcCertPath,
     this.logFile,
     this.msgsRoot,
     this.debugLevel,
@@ -101,9 +104,9 @@ class LocalWaitingRoom {
   @JsonKey(name: 'host_id')
   final String host;
   @JsonKey(name: 'bet_amt')
-  final double betAmount;
+  final double betAmt;
 
-  const LocalWaitingRoom(this.id, this.host, this.betAmount);
+  const LocalWaitingRoom(this.id, this.host, this.betAmt);
 
   factory LocalWaitingRoom.fromJson(Map<String, dynamic> json) =>
       _$LocalWaitingRoomFromJson(json);
@@ -252,31 +255,19 @@ class RedeemedInviteFunds {
       _$RedeemedInviteFundsFromJson(json);
 }
 
-enum OnboardStage {
-  @JsonValue("fetching_invite")
-  stageFetchingInvite,
-  @JsonValue("invite_unpaid")
-  stageInviteUnpaid,
-  @JsonValue("invite_no_funds")
-  stageInviteNoFunds,
-  @JsonValue("invite_fetch_timeout")
-  stageInviteFetchTimeout,
-  @JsonValue("redeeming_funds")
-  stageRedeemingFunds,
-  @JsonValue("waiting_out_mined")
-  stageWaitingOutMined,
-  @JsonValue("waiting_funds_confirm")
-  stageWaitingFundsConfirm,
-  @JsonValue("opening_outbound")
-  stageOpeningOutbound,
-  @JsonValue("waiting_out_confirm")
-  stageWaitingOutConfirm,
-  @JsonValue("opening_inbound")
-  stageOpeningInbound,
-  @JsonValue("initial_kx")
-  stageInitialKX,
-  @JsonValue("done")
-  stageOnboardDone,
+@JsonSerializable()
+class CreateWaitingRoomArgs {
+  @JsonKey(name: 'client_id')
+  final String clientId;
+  @JsonKey(name: 'bet_amt')
+  final double betAmt;
+
+  CreateWaitingRoomArgs(this.clientId, this.betAmt);
+
+  Map<String, dynamic> toJson() => _$CreateWaitingRoomArgsToJson(this);
+
+  factory CreateWaitingRoomArgs.fromJson(Map<String, dynamic> json) =>
+      _$CreateWaitingRoomArgsFromJson(json);
 }
 
 @JsonSerializable()
@@ -433,9 +424,34 @@ abstract class PluginPlatform {
     }).toList();
   }
 
-  Future<LocalWaitingRoom> JoinWaitingRoom(id) async {
-    var res = await asyncCall(CTJoinWaitingRoom, id);
-    return LocalWaitingRoom.fromJson(res);
+  Future<LocalWaitingRoom> JoinWaitingRoom(String id) async {
+    try {
+      final response = await asyncCall(CTJoinWaitingRoom, id);
+
+      if (response is Map<String, dynamic>) {
+        return LocalWaitingRoom.fromJson(response);
+      } else {
+        throw Exception("Invalid response format: $response");
+      }
+    } catch (err) {
+      print("Error joining waiting room: $err");
+      throw Exception("Failed to join waiting room: $err");
+    }
+  }
+
+  Future<LocalWaitingRoom> CreateWaitingRoom(CreateWaitingRoomArgs args) async {
+    try {
+      final response = await asyncCall(CTCreateWaitingRoom, args);
+
+      if (response is Map<String, dynamic>) {
+        return LocalWaitingRoom.fromJson(response);
+      } else {
+        throw Exception("Invalid response format: $response");
+      }
+    } catch (err) {
+      print("Error joining waiting room: $err");
+      throw Exception("Failed to join waiting room: $err");
+    }
   }
 }
 
@@ -447,6 +463,7 @@ const int CTCreateLockFile = 0x04;
 const int CTGetWRPlayers = 0x05;
 const int CTGetWaitingRooms = 0x06;
 const int CTJoinWaitingRoom = 0x07;
+const int CTCreateWaitingRoom = 0x08;
 const int CTCloseLockFile = 0x60;
 
 const int notificationsStartID = 0x1000;

@@ -9,6 +9,7 @@ import (
 
 type initClient struct {
 	ServerAddr     string `json:"server_addr"`
+	GRPCCertPath   string `json:"grpc_cert_path"`
 	DBRoot         string `json:"dbroot"`
 	DownloadsDir   string `json:"downloads_dir"`
 	LogFile        string `json:"log_file"`
@@ -24,6 +25,11 @@ type initClient struct {
 	RPCCLientKeyPath  string `json:"rpc_client_key_path"`
 	RPCUser           string `json:"rpc_user"`
 	RPCPass           string `json:"rpc_pass"`
+}
+
+type createWaitingRoom struct {
+	ClientID string  `json:"client_id"`
+	BetAmt   float64 `json:"bet_amt"`
 }
 
 type localInfo struct {
@@ -53,7 +59,7 @@ func playerFromServer(p *pong.Player) (*player, error) {
 	return &player{
 		UID:    id,
 		Nick:   p.Nick,
-		BetAmt: p.BetAmount,
+		BetAmt: p.BetAmt,
 	}, nil
 }
 

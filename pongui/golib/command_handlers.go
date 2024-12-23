@@ -3,6 +3,7 @@ package golib
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -130,9 +131,10 @@ func handleInitClient(handle uint32, args initClient) (*localInfo, error) {
 	}
 	logBknd.notify = args.WantsLogNtfns
 	pc, err := client.NewPongClient(localInfo.ID.String(), &client.PongClientCfg{
-		ServerAddr: args.ServerAddr,
-		ChatClient: chat,
-		Log:        logBknd.logger("client"),
+		ServerAddr:   args.ServerAddr,
+		ChatClient:   chat,
+		Log:          logBknd.logger("client"),
+		GRPCCertPath: args.GRPCCertPath,
 	})
 	if err != nil {
 		cancel()
@@ -235,6 +237,26 @@ func handleClientCmd(cc *clientCtx, cmd *cmd) (interface{}, error) {
 			ID:     res.Wr.Id,
 			HostID: res.Wr.HostId,
 			BetAmt: res.Wr.BetAmt,
+		}, nil
+
+	case CTCreateWaitingRoom:
+		args := cmd.Payload
+
+		var req createWaitingRoom
+		err := json.Unmarshal(args, &req)
+		if err != nil {
+			return nil, fmt.Errorf("invalid create waiting room payload: %v", err)
+		}
+
+		res, err := cc.c.CreatewaitingRoom(req.ClientID, req.BetAmt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create waiting room: %v", err)
+		}
+
+		return &waitingRoom{
+			ID:     res.Id,
+			HostID: res.HostId,
+			BetAmt: res.BetAmt,
 		}, nil
 
 	case CTStopClient:
