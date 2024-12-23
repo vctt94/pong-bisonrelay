@@ -93,9 +93,9 @@ class HomeScreen extends StatelessWidget {
                       "Waiting for players...",
                       style: TextStyle(fontSize: 16),
                     ),
-                    if (pongModel.currentWR.id.isNotEmpty)
+                    if (pongModel.currentWR != null)
                       Text(
-                        "Room: ${pongModel.currentWR.id}",
+                        "Room: ${pongModel.currentWR?.id}",
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                   ] else ...[

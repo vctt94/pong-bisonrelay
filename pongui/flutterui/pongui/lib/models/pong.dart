@@ -23,7 +23,7 @@ class PongModel extends ChangeNotifier {
   double betAmt = 0;
   String errorMessage = '';
   List<LocalWaitingRoom> waitingRooms = [];
-  LocalWaitingRoom currentWR = const LocalWaitingRoom("", "", 0.0);
+  LocalWaitingRoom? currentWR;
   Map<String, dynamic> gameState = {};
 
   PongModel(Config cfg, this.notificationModel) {
@@ -71,6 +71,7 @@ class PongModel extends ChangeNotifier {
       notifyListeners();
     } catch (exception) {
       print("Exception: $exception");
+      // XXX this is not correct, need to check if error is eof
       isConnected = false;
       notifyListeners();
     }
@@ -91,6 +92,8 @@ class PongModel extends ChangeNotifier {
               "Bet Amount Updated: ${ntfn.betAmt}",
             );
           }
+          break;
+
         case NotificationType.ON_WR_CREATED:
           waitingRooms.add(LocalWaitingRoom(
             ntfn.wr.id,
@@ -102,6 +105,7 @@ class PongModel extends ChangeNotifier {
           );
           notifyListeners();
           break;
+
         case NotificationType.GAME_START:
           gameStarted = true;
           notificationModel.showNotification(
@@ -124,6 +128,16 @@ class PongModel extends ChangeNotifier {
           resetGameState();
           break;
 
+        case NotificationType.ON_WR_REMOVED:
+          // Handle the waiting room removal
+          waitingRooms.removeWhere((room) => room.id == ntfn.roomId);
+          currentWR = null;
+          notificationModel.showNotification(
+            "Waiting room removed: ${ntfn.roomId}",
+          );
+          notifyListeners();
+          break;
+
         default:
           developer.log("Unknown notification type: ${ntfn.notificationType}");
       }
@@ -131,6 +145,7 @@ class PongModel extends ChangeNotifier {
       errorMessage = "Error in notification stream: ${error.message}";
       developer.log("Error: $error");
       print("Error: $error");
+      // XXX this is not correct, need to check if error is eof
       isConnected = false;
       notifyListeners();
     });
@@ -138,7 +153,6 @@ class PongModel extends ChangeNotifier {
 
   void resetGameState() {
     isReady = false;
-    waitingRooms.removeWhere((room) => room.id == currentWR.id);
     currentWR = const LocalWaitingRoom("", "", 0.0);
     gameStarted = false;
     betAmt = 0;
@@ -187,7 +201,7 @@ class PongModel extends ChangeNotifier {
   }
 
   void toggleReady() {
-    if (currentWR.id.isEmpty) {
+    if (currentWR == null) {
       var error = "Need to get into a waiting room to get ready.";
       errorMessage = error;
       notifyListeners();
@@ -204,7 +218,6 @@ class PongModel extends ChangeNotifier {
       developer.log("Error in game stream: $error");
       errorMessage = "Error in game stream: ${error.message}";
       print("Error: $error");
-      isConnected = false;
       notifyListeners();
     });
     isReady = !isReady;
