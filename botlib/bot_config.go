@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/vctt94/pong-bisonrelay/ponggame"
 )
 
 var (
@@ -149,12 +147,12 @@ func LoadBotConfig() (*BotConfig, error) {
 
 	// If the config file does not exist, create it with default values
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		rpcUser, err := ponggame.GenerateRandomString(8)
+		rpcUser, err := GenerateRandomString(8)
 		if err != nil {
 			return nil, fmt.Errorf("%s: failed to generate rpcuser: %w", funcName, err)
 		}
 
-		rpcPass, err := ponggame.GenerateRandomString(8)
+		rpcPass, err := GenerateRandomString(8)
 		if err != nil {
 			return nil, fmt.Errorf("%s: failed to generate rpcpass: %w", funcName, err)
 		}

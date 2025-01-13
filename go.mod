@@ -14,12 +14,12 @@ require (
 	github.com/ndabAP/ping-pong v0.0.0-20231119080825-15ed4850b548
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58
 	github.com/prometheus/procfs v0.12.0
+	github.com/stretchr/testify v1.10.0
 	go.etcd.io/bbolt v1.3.8
 	golang.org/x/mobile v0.0.0-20240604190613-2782386b8afd
 	golang.org/x/sync v0.8.0
 	google.golang.org/grpc v1.62.0
 	google.golang.org/protobuf v1.33.0
-	gopkg.in/yaml.v2 v2.4.0
 )
 
 replace github.com/companyzero/bisonrelay => github.com/vctt94/bisonrelay v0.0.0-20241105192107-e02453230ee8
@@ -133,7 +133,7 @@ require (
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/soheilhy/cmux v0.1.5 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/stretchr/testify v1.8.4 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20220101234140-673ab2c3ae75 // indirect
 	github.com/vaughan0/go-ini v0.0.0-20130923145212-a98ad7ee00ec // indirect
@@ -172,6 +172,7 @@ require (
 	gopkg.in/macaroon-bakery.v2 v2.3.0 // indirect
 	gopkg.in/macaroon.v2 v2.1.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.3.0 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
