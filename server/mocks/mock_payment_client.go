@@ -13,6 +13,8 @@ import (
 // interface using testify's mock package.
 type MockPaymentClient struct {
 	mock.Mock
+	ReceivedTips []*types.ReceivedTip
+	CurrentIndex int
 }
 
 // ----- TipStream mock ----- //
@@ -21,12 +23,18 @@ type MockTipStreamClient struct {
 	// For each Recv() call, you’ll return the next ReceivedTip in this slice
 	ReceivedTips []*types.ReceivedTip
 	CurrentIndex int
+	ErrorAfter   int   // Return an error after this many Recv() calls
+	RecvError    error // The error to return after ErrorAfter Recv() calls
+
 	// You can embed a mock.Mock if you want to track calls:
 	mock.Mock
 }
 
 // Recv implements types.PaymentsService_TipStreamClient.Recv(*ReceivedTip) error
 func (m *MockTipStreamClient) Recv(tip *types.ReceivedTip) error {
+	if m.ErrorAfter > 0 && m.CurrentIndex >= m.ErrorAfter {
+		return m.RecvError
+	}
 	if m.CurrentIndex >= len(m.ReceivedTips) {
 		return io.EOF
 	}
@@ -75,9 +83,14 @@ type MockTipProgressClient struct {
 	mock.Mock
 	Events       []types.TipProgressEvent
 	CurrentIndex int
+	ErrorAfter   int   // Return an error after this many Recv() calls
+	RecvError    error // The error to return after ErrorAfter Recv() calls
 }
 
 func (m *MockTipProgressClient) Recv(tip *types.TipProgressEvent) error {
+	if m.ErrorAfter > 0 && m.CurrentIndex >= m.ErrorAfter {
+		return m.RecvError
+	}
 	if m.CurrentIndex >= len(m.Events) {
 		return io.EOF
 	}

@@ -25,8 +25,9 @@ func setupTestServer(t *testing.T) *Server {
 	// Remove the TipStream On(...) from here:
 	// mockPaymentClient.On("TipStream", ...).Return(...)
 
+	tempDir := t.TempDir()
 	cfg := ServerConfig{
-		ServerDir:     "/tmp",
+		ServerDir:     tempDir,
 		MinBetAmt:     0.1,
 		PaymentClient: mockPaymentClient,
 		ChatClient:    &mocks.MockChatClient{},
