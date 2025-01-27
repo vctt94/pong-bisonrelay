@@ -74,6 +74,10 @@ LocalWaitingRoom _$LocalWaitingRoomFromJson(Map<String, dynamic> json) =>
       json['id'] as String,
       json['host_id'] as String,
       (json['bet_amt'] as num).toDouble(),
+      players: (json['players'] as List<dynamic>?)
+              ?.map((e) => Player.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
     );
 
 Map<String, dynamic> _$LocalWaitingRoomToJson(LocalWaitingRoom instance) =>
@@ -81,6 +85,7 @@ Map<String, dynamic> _$LocalWaitingRoomToJson(LocalWaitingRoom instance) =>
       'id': instance.id,
       'host_id': instance.host,
       'bet_amt': instance.betAmt,
+      'players': instance.players,
     };
 
 LocalInfo _$LocalInfoFromJson(Map<String, dynamic> json) => LocalInfo(
