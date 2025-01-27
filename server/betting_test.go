@@ -399,3 +399,196 @@ func TestSendTipProgressLoop_StreamError(t *testing.T) {
 	mockPayClient.AssertExpectations(t)
 	mockDB.AssertExpectations(t)
 }
+
+func TestSendTipProgressLoop_DBError(t *testing.T) {
+	srv := setupTestServer(t)
+
+	mockPayClient := srv.paymentClient.(*mocks.MockPaymentClient)
+	mockDB := &mocks.MockDB{}
+	srv.db = mockDB
+
+	uid := zkidentity.ShortID{}
+	uid.FromString("0123456789abcdef0123456789abcde10123456789abcdef0123456789abcde1")
+
+	progressStream := &mocks.MockTipProgressClient{
+		Events: []types.TipProgressEvent{
+			{Uid: uid[:], AmountMatoms: 100000, SequenceId: 1, Completed: true},
+		},
+	}
+
+	mockPayClient.On("TipProgress", mock.Anything, mock.Anything).Return(progressStream, nil).Once()
+
+	// Add expectation for AckTipReceived that might be called
+	mockPayClient.On("AckTipReceived", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Once()
+	mockPayClient.On("AckTipProgress", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Once()
+
+	// Add the missing FetchReceivedTipsByUID expectation
+	mockDB.On("FetchReceivedTipsByUID", mock.Anything, uid, serverdb.StatusSending).
+		Return([]serverdb.ReceivedTipWrapper{
+			{Tip: &types.ReceivedTip{Uid: uid[:], AmountMatoms: 100000, SequenceId: 1}, Status: serverdb.StatusSending},
+		}, nil).
+		Once()
+
+	mockDB.On("UpdateTipStatus", mock.Anything, uid[:], mock.Anything, serverdb.StatusProcessed).
+		Return(errors.New("database error")).Once()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		err := srv.SendTipProgressLoop(ctx)
+		t.Logf("loop finished: %v", err)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	mockPayClient.AssertExpectations(t)
+	mockDB.AssertExpectations(t)
+}
+
+func TestSendTipProgressLoop_UnprocessedTips(t *testing.T) {
+	srv := setupTestServer(t)
+
+	mockPayClient := srv.paymentClient.(*mocks.MockPaymentClient)
+	mockDB := &mocks.MockDB{}
+	srv.db = mockDB
+
+	uid := zkidentity.ShortID{}
+	uid.FromString("0123456789abcdef0123456789abcde10123456789abcdef0123456789abcde1")
+
+	progressStream := &mocks.MockTipProgressClient{
+		Events: []types.TipProgressEvent{
+			{Uid: uid[:], AmountMatoms: 100000, SequenceId: 1, Completed: true},
+			{Uid: uid[:], AmountMatoms: 200000, SequenceId: 2, Completed: true},
+		},
+	}
+
+	mockPayClient.On("TipProgress", mock.Anything, mock.Anything).Return(progressStream, nil).Once()
+
+	// We expect 2 calls to FetchReceivedTipsByUID because:
+	// - 2 progress events in the stream (sequence 1 and 2)
+	// - Each event triggers a separate fetch
+	mockDB.On("FetchReceivedTipsByUID", mock.Anything, uid, serverdb.StatusSending).
+		Return([]serverdb.ReceivedTipWrapper{
+			{Tip: &types.ReceivedTip{Uid: uid[:], AmountMatoms: 100000, SequenceId: 1}, Status: serverdb.StatusSending},
+			{Tip: &types.ReceivedTip{Uid: uid[:], AmountMatoms: 200000, SequenceId: 2}, Status: serverdb.StatusSending},
+		}, nil).
+		Times(2)
+
+	// We expect 4 UpdateTipStatus calls because:
+	// - 2 progress events
+	// - 2 tips processed per event
+	// - 1 status update per tip
+	mockDB.On("UpdateTipStatus", mock.Anything, uid[:], mock.Anything, serverdb.StatusProcessed).
+		Return(nil).Times(4)
+
+	// Expect 2 AckTipProgress calls (1 per progress event)
+	mockPayClient.On("AckTipProgress", mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+	// Expect 4 AckTipReceived calls because:
+	// - 2 progress events
+	// - 2 tips processed per event
+	// - 1 ack per tip completion
+	mockPayClient.On("AckTipReceived", mock.Anything, mock.Anything, mock.Anything).Return(nil).Times(4)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		err := srv.SendTipProgressLoop(ctx)
+		t.Logf("loop finished: %v", err)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	mockPayClient.AssertExpectations(t)
+	mockDB.AssertExpectations(t)
+}
+
+func TestReceiveTipLoop_DBStoreError(t *testing.T) {
+	srv := setupTestServer(t)
+
+	mockPayClient := srv.paymentClient.(*mocks.MockPaymentClient)
+	mockDB := &mocks.MockDB{}
+	srv.db = mockDB
+
+	uid := zkidentity.ShortID{}
+	uid.FromString("0123456789abcdef0123456789abcde10123456789abcdef0123456789abcde1")
+
+	tipStream := &mocks.MockTipStreamClient{
+		ReceivedTips: []*types.ReceivedTip{
+			{Uid: uid[:], AmountMatoms: 100000, SequenceId: 1},
+		},
+	}
+
+	mockPayClient.On("TipStream", mock.Anything, mock.Anything).Return(tipStream, nil).Once()
+
+	// Simulate database storage error
+	mockDB.On("StoreUnprocessedTip", mock.Anything, mock.Anything, mock.Anything).
+		Return(errors.New("storage error")).Once()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		err := srv.ReceiveTipLoop(ctx)
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	mockPayClient.AssertExpectations(t)
+	mockDB.AssertExpectations(t)
+}
+
+func TestSendTipProgressLoop_NoMatchingTip(t *testing.T) {
+	srv := setupTestServer(t)
+
+	mockPayClient := srv.paymentClient.(*mocks.MockPaymentClient)
+	mockDB := &mocks.MockDB{}
+	srv.db = mockDB
+
+	uid := zkidentity.ShortID{}
+	uid.FromString("0123456789abcdef0123456789abcde10123456789abcdef0123456789abcde1")
+
+	progressStream := &mocks.MockTipProgressClient{
+		Events: []types.TipProgressEvent{
+			{Uid: uid[:], AmountMatoms: 100000, SequenceId: 1, Completed: true},
+		},
+	}
+
+	mockPayClient.On("TipProgress", mock.Anything, mock.Anything).Return(progressStream, nil).Once()
+
+	// Add expectation for AckTipProgress that will be called
+	mockPayClient.On("AckTipProgress", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Once()
+
+	// Return no matching tips from database
+	mockDB.On("FetchReceivedTipsByUID", mock.Anything, uid, serverdb.StatusSending).
+		Return([]serverdb.ReceivedTipWrapper{}, nil).
+		Once()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		err := srv.SendTipProgressLoop(ctx)
+		t.Logf("loop finished: %v", err)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	mockPayClient.AssertExpectations(t)
+	mockDB.AssertExpectations(t)
+}
