@@ -4,10 +4,10 @@ A Pong implementation with betting capabilities, built on top of Bison Relay's p
 
 ### Features
 
-🏓 Real-time Pong gameplay with terminal-based and flutter UI
-💰 Betting system with DCR transactions
-🚦 Matchmaking system with waiting rooms
-🔔 In-game notifications system
+ - 🏓 Real-time Pong gameplay with terminal-based and flutter UI
+ - 💰 Betting system with DCR transactions
+ - 🚦 Matchmaking system with waiting rooms
+ - 🔔 In-game notifications system
 
 ### System Architecture:
 - gRPC API handles game state synchronization
