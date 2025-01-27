@@ -31,8 +31,8 @@ func testPongServerDBInterface(t *testing.T, db serverdb.ServerDB) {
 		Tip: &types.ReceivedTip{
 			Uid:          clientID.Bytes(),
 			AmountMatoms: amountMatoms,
-			TimestampMs:  time.Now().UnixMilli(),
-			SequenceId:   uint64(6546546516),
+			// TimestampMs:  time.Now().UnixMilli(),
+			SequenceId: uint64(6546546516),
 		},
 		Status: serverdb.StatusUnprocessed,
 	}
