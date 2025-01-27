@@ -3,9 +3,7 @@ package server
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"sync"
 
 	"github.com/companyzero/bisonrelay/clientrpc/types"
@@ -15,51 +13,6 @@ import (
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 	"github.com/vctt94/pong-bisonrelay/server/serverdb"
 )
-
-// handleFetchTipsByClientIDHandler fetches tips for a specific client ID.
-func (s *Server) handleFetchTipsByClientIDHandler(w http.ResponseWriter, r *http.Request) {
-	clientIDStr := r.URL.Query().Get("clientID")
-	if clientIDStr == "" {
-		http.Error(w, "clientID parameter is required", http.StatusBadRequest)
-		return
-	}
-
-	var clientID zkidentity.ShortID
-	if err := clientID.FromString(clientIDStr); err != nil {
-		http.Error(w, fmt.Sprintf("invalid client ID: %v", err), http.StatusBadRequest)
-		return
-	}
-
-	tips, err := s.db.FetchAllReceivedTipsByUID(context.Background(), clientID)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("error fetching tips: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tips)
-}
-
-// handleFetchAllUnprocessedTipsHandler fetches all unprocessed tips for all clients.
-func (s *Server) handleFetchAllUnprocessedTipsHandler(w http.ResponseWriter, r *http.Request) {
-	tips, err := s.db.FetchUnprocessedTips(context.Background())
-	if err != nil {
-		http.Error(w, fmt.Sprintf("error fetching unprocessed tips: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	// Convert the map[zkidentity.ShortID][]serverdb.ReceivedTipWrapper to map[string][]serverdb.ReceivedTipWrapper
-	response := make(map[string][]serverdb.ReceivedTipWrapper)
-	for clientID, clientTips := range tips {
-		response[clientID.String()] = clientTips // Convert clientID to string
-	}
-
-	// Encode the response as JSON
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, fmt.Sprintf("error encoding response: %v", err), http.StatusInternalServerError)
-	}
-}
 
 func (s *Server) handleReturnUnprocessedTips(ctx context.Context, clientID zkidentity.ShortID, paymentClient types.PaymentsServiceClient, log slog.Logger) error {
 	tips, err := s.db.FetchReceivedTipsByUID(ctx, clientID, serverdb.StatusUnprocessed)
@@ -74,7 +27,7 @@ func (s *Server) handleReturnUnprocessedTips(ctx context.Context, clientID zkide
 
 	totalDcrAmount := 0.0
 	for _, tip := range tips {
-		totalDcrAmount += float64(tip.Tip.AmountMatoms) / 1e11 // Convert matoms to DCR
+		totalDcrAmount += float64(tip.AmountMatoms) / 1e11 // Convert matoms to DCR
 	}
 
 	paymentReq := &types.TipUserRequest{
@@ -91,7 +44,7 @@ func (s *Server) handleReturnUnprocessedTips(ctx context.Context, clientID zkide
 	log.Infof("Returned unprocessed tips to client %s: %.8f", clientID.String(), totalDcrAmount)
 	for _, tip := range tips {
 		tipID := make([]byte, 8)
-		binary.BigEndian.PutUint64(tipID, tip.Tip.SequenceId)
+		binary.BigEndian.PutUint64(tipID, tip.SequenceId)
 		if err := s.db.UpdateTipStatus(ctx, clientID.Bytes(), tipID, serverdb.StatusSending); err != nil {
 			log.Errorf("Failed to update tip status for client %s: %v", clientID.String(), err)
 		}
@@ -100,7 +53,7 @@ func (s *Server) handleReturnUnprocessedTips(ctx context.Context, clientID zkide
 	return nil
 }
 
-func (s *Server) handleFetchTotalUnprocessedTips(ctx context.Context, clientID zkidentity.ShortID) (float64, []serverdb.ReceivedTipWrapper, error) {
+func (s *Server) handleFetchTotalUnprocessedTips(ctx context.Context, clientID zkidentity.ShortID) (float64, []*types.ReceivedTip, error) {
 	// Fetch unprocessed tips from the database
 	tips, err := s.db.FetchReceivedTipsByUID(ctx, clientID, serverdb.StatusUnprocessed)
 	if err != nil {
@@ -111,7 +64,7 @@ func (s *Server) handleFetchTotalUnprocessedTips(ctx context.Context, clientID z
 	// Calculate total DCR amount
 	totalDcrAmount := 0.0
 	for _, tip := range tips {
-		totalDcrAmount += float64(tip.Tip.AmountMatoms) / 1e11 // Convert matoms to DCR
+		totalDcrAmount += float64(tip.AmountMatoms) / 1e11 // Convert matoms to DCR
 	}
 
 	s.log.Infof("Fetched %d unprocessed tips for client %s, total amount: %.8f", len(tips), clientID.String(), totalDcrAmount)
@@ -217,9 +170,9 @@ func (s *Server) handleGameEnd(ctx context.Context, game *ponggame.GameInstance,
 			if err != nil {
 				s.log.Errorf("Failed to fetch unprocessed tips for player %s: %v", player.ID, err)
 			}
-			for _, w := range unprocessedTips {
+			for _, tip := range unprocessedTips {
 				tipID := make([]byte, 8)
-				binary.BigEndian.PutUint64(tipID, w.Tip.SequenceId)
+				binary.BigEndian.PutUint64(tipID, tip.SequenceId)
 				err := s.db.UpdateTipStatus(ctx, player.ID.Bytes(), tipID, serverdb.StatusSending)
 				if err != nil {
 					s.log.Errorf("Failed to update tip status for player %s: %v", player.ID, err)

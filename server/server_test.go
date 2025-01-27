@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -204,7 +205,7 @@ func TestGameStreamDisconnection(t *testing.T) {
 	mockDB := &mocks.MockDB{}
 	srv.db = mockDB
 	mockDB.On("FetchReceivedTipsByUID", mock.Anything, clientID, serverdb.StatusUnprocessed).
-		Return([]serverdb.ReceivedTipWrapper{}, nil)
+		Return([]*types.ReceivedTip{}, nil)
 	mockDB.On("UpdateTipStatus", mock.Anything, mock.Anything, serverdb.StatusSending).Return(nil)
 
 	// Create player session before starting stream

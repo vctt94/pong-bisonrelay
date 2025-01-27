@@ -62,10 +62,10 @@ func (s *Server) SendTipProgressLoop(ctx context.Context) error {
 					break
 				}
 
-				for _, w := range tips {
+				for _, tip := range tips {
 					// update tip status to processed
 					tipID := make([]byte, 8)
-					binary.BigEndian.PutUint64(tipID, w.Tip.SequenceId)
+					binary.BigEndian.PutUint64(tipID, tip.SequenceId)
 					err = s.db.UpdateTipStatus(ctx, tip.Uid, tipID, serverdb.StatusProcessed)
 					if err != nil {
 						s.log.Debugf("Failed to UpdateTipStatus player %s: %v", uid.String(), err)
@@ -127,13 +127,8 @@ func (s *Server) ReceiveTipLoop(ctx context.Context) error {
 					})
 				}
 			}
-			tipID := make([]byte, 8)
-			binary.BigEndian.PutUint64(tipID, tip.SequenceId)
-			wrappedTip := &serverdb.ReceivedTipWrapper{
-				Tip:    &tip,
-				Status: serverdb.StatusUnprocessed,
-			}
-			if err := s.db.StoreUnprocessedTip(ctx, tipID, wrappedTip); err != nil {
+
+			if err := s.db.StoreUnprocessedTip(ctx, &tip); err != nil {
 				s.log.Errorf("Error while storing unprocessed tip: %v", err)
 				// if already stored, ack the tip received
 				ackReq.SequenceId = tip.SequenceId

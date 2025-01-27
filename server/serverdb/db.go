@@ -2,10 +2,12 @@ package serverdb
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"time"
 
+	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
 	bolt "go.etcd.io/bbolt"
 )
@@ -40,7 +42,12 @@ func NewBoltDB(dbPath string) (ServerDB, error) {
 }
 
 // StoreUnprocessedTip stores a tip under the Uid sub-bucket in the main tips bucket.
-func (b *boltDB) StoreUnprocessedTip(ctx context.Context, sequenceID []byte, payload *ReceivedTipWrapper) error {
+func (b *boltDB) StoreUnprocessedTip(ctx context.Context, tip *types.ReceivedTip) error {
+	payload := ReceivedTipWrapper{
+		Tip:    tip,
+		Status: StatusUnprocessed,
+	}
+
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -57,11 +64,13 @@ func (b *boltDB) StoreUnprocessedTip(ctx context.Context, sequenceID []byte, pay
 			return err
 		}
 
-		if userBucket.Get(sequenceID) != nil {
+		sequenceId := make([]byte, 8)
+		binary.BigEndian.PutUint64(sequenceId, tip.SequenceId)
+		if userBucket.Get(sequenceId) != nil {
 			return ErrAlreadyStoredRV
 		}
 
-		return userBucket.Put(sequenceID, data)
+		return userBucket.Put(sequenceId, data)
 	})
 }
 
@@ -110,8 +119,8 @@ func (b *boltDB) Close() error {
 }
 
 // FetchReceivedTipsByUID retrieves all tips with a specific status for a specific user by Uid.
-func (b *boltDB) FetchReceivedTipsByUID(ctx context.Context, uid zkidentity.ShortID, status TipStatus) ([]ReceivedTipWrapper, error) {
-	var unprocessedTips []ReceivedTipWrapper
+func (b *boltDB) FetchReceivedTipsByUID(ctx context.Context, uid zkidentity.ShortID, status TipStatus) ([]*types.ReceivedTip, error) {
+	var unprocessedTips []*types.ReceivedTip
 
 	err := b.db.View(func(tx *bolt.Tx) error {
 		mainBucket := tx.Bucket(tipsBucket)
@@ -138,7 +147,7 @@ func (b *boltDB) FetchReceivedTipsByUID(ctx context.Context, uid zkidentity.Shor
 			// Filter based on the specified status
 			if tip.Status == status {
 				// Add the decoded tip to the unprocessed tips slice
-				unprocessedTips = append(unprocessedTips, *tip)
+				unprocessedTips = append(unprocessedTips, tip.Tip)
 			}
 			return nil
 		})
@@ -186,8 +195,8 @@ func (b *boltDB) FetchAllReceivedTipsByUID(ctx context.Context, uid zkidentity.S
 }
 
 // FetchUnprocessedTips retrieves all unprocessed tips for all users.
-func (b *boltDB) FetchUnprocessedTips(ctx context.Context) (map[zkidentity.ShortID][]ReceivedTipWrapper, error) {
-	unprocessedTips := make(map[zkidentity.ShortID][]ReceivedTipWrapper)
+func (b *boltDB) FetchUnprocessedTips(ctx context.Context) (map[zkidentity.ShortID][]*types.ReceivedTip, error) {
+	unprocessedTips := make(map[zkidentity.ShortID][]*types.ReceivedTip)
 
 	err := b.db.View(func(tx *bolt.Tx) error {
 		mainBucket := tx.Bucket(tipsBucket)
@@ -217,7 +226,7 @@ func (b *boltDB) FetchUnprocessedTips(ctx context.Context) (map[zkidentity.Short
 
 				// Only append tips with StatusUnprocessed
 				if wrapper.Status == StatusUnprocessed {
-					unprocessedTips[userID] = append(unprocessedTips[userID], wrapper)
+					unprocessedTips[userID] = append(unprocessedTips[userID], wrapper.Tip)
 				}
 				return nil
 			})

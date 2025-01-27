@@ -3,6 +3,7 @@ package mocks
 import (
 	"context"
 
+	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/stretchr/testify/mock"
 	"github.com/vctt94/pong-bisonrelay/server/serverdb"
@@ -12,23 +13,23 @@ type MockDB struct {
 	mock.Mock
 }
 
-func (m *MockDB) StoreUnprocessedTip(ctx context.Context, tipID []byte, tip *serverdb.ReceivedTipWrapper) error {
+func (m *MockDB) StoreUnprocessedTip(ctx context.Context, tip *types.ReceivedTip) error {
 	// If you want to track calls or return an error, do it here.
-	m.Called(ctx, tipID, tip)
+	m.Called(ctx, tip)
 	return nil
 }
 
-func (m *MockDB) FetchUnprocessedTips(ctx context.Context) (map[zkidentity.ShortID][]serverdb.ReceivedTipWrapper, error) {
+func (m *MockDB) FetchUnprocessedTips(ctx context.Context) (map[zkidentity.ShortID][]*types.ReceivedTip, error) {
 	args := m.Called(ctx)
-	return args.Get(0).(map[zkidentity.ShortID][]serverdb.ReceivedTipWrapper), args.Error(1)
+	return args.Get(0).(map[zkidentity.ShortID][]*types.ReceivedTip), args.Error(1)
 }
 
 // You also need to mock whatever else your code calls, for example:
-func (m *MockDB) FetchReceivedTipsByUID(ctx context.Context, uid zkidentity.ShortID, status serverdb.TipStatus) ([]serverdb.ReceivedTipWrapper, error) {
+func (m *MockDB) FetchReceivedTipsByUID(ctx context.Context, uid zkidentity.ShortID, status serverdb.TipStatus) ([]*types.ReceivedTip, error) {
 	args := m.Called(ctx, uid, status)
 	// The first return value is the list of tips. If you need to return a slice, use:
 	if raw := args.Get(0); raw != nil {
-		return raw.([]serverdb.ReceivedTipWrapper), args.Error(1)
+		return raw.([]*types.ReceivedTip), args.Error(1)
 	}
 	return nil, args.Error(1)
 }
