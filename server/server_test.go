@@ -7,11 +7,13 @@ import (
 	"testing"
 
 	"github.com/companyzero/bisonrelay/zkidentity"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/vctt94/pong-bisonrelay/botlib"
 	"github.com/vctt94/pong-bisonrelay/ponggame"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 	"github.com/vctt94/pong-bisonrelay/server/mocks"
+	"github.com/vctt94/pong-bisonrelay/server/serverdb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
 )
@@ -187,4 +189,49 @@ func TestConcurrentWaitingRoomCreation(t *testing.T) {
 
 	// Validate that all rooms were created
 	require.Len(t, srv.gameManager.WaitingRooms, numRooms)
+}
+
+func TestGameStreamDisconnection(t *testing.T) {
+	srv := setupTestServer(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var clientID zkidentity.ShortID
+	err := clientID.FromString("1111111111111111111111111111111111111111111111111111111111111111")
+	require.NoError(t, err)
+
+	// Properly setup mock DB expectations
+	mockDB := &mocks.MockDB{}
+	srv.db = mockDB
+	mockDB.On("FetchReceivedTipsByUID", mock.Anything, clientID, serverdb.StatusUnprocessed).
+		Return([]serverdb.ReceivedTipWrapper{}, nil)
+	mockDB.On("UpdateTipStatus", mock.Anything, mock.Anything, serverdb.StatusSending).Return(nil)
+
+	// Create player session before starting stream
+	player := srv.gameManager.PlayerSessions.GetOrCreateSession(clientID)
+	player.NotifierStream = &mocks.MockNtfnStreamServer{Ctx: ctx}
+	player.BetAmt = 0.5
+	// Setup mock stream
+	mockStream := &mocks.MockGameStreamServer{Ctx: ctx}
+	req := &pong.StartGameStreamRequest{
+		ClientId: clientID.String(),
+	}
+
+	// Start stream in goroutine
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := srv.StartGameStream(req, mockStream)
+		require.ErrorIs(t, err, context.Canceled)
+	}()
+
+	// Simulate disconnection
+	cancel()
+	wg.Wait()
+
+	// Verify cleanup
+	srv.gameManager.Lock()
+	defer srv.gameManager.Unlock()
+	require.Empty(t, srv.gameManager.PlayerSessions.Sessions)
 }
