@@ -349,9 +349,11 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 	}
 
 	hostPlayer := s.gameManager.PlayerSessions.Sessions[hostID]
-	s.log.Debugf("creating waiting room. Host ID: %s", hostID)
 	if hostPlayer == nil {
 		return nil, fmt.Errorf("player not found: %s", req.HostId)
+	}
+	if hostPlayer.BetAmt != req.BetAmt {
+		return nil, fmt.Errorf("server and request mismatch. request amt: %.8f, server amt: %.8f", req.BetAmt, hostPlayer.BetAmt)
 	}
 	if !s.isF2P && req.BetAmt == 0 {
 		return nil, fmt.Errorf("bet needs to be higher than 0")
@@ -359,6 +361,8 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 	if !s.isF2P && req.BetAmt < s.minBetAmt {
 		return nil, fmt.Errorf("bet needs to be higher than %.8f", s.minBetAmt)
 	}
+
+	s.log.Debugf("creating waiting room. Host ID: %s", hostID)
 
 	// Check if a Waiting Room with the same Host ID already exists
 	s.gameManager.Lock()
