@@ -88,7 +88,9 @@ func (s *Server) SendTipProgressLoop(ctx context.Context) error {
 }
 
 func (s *Server) ReceiveTipLoop(ctx context.Context) error {
+	var ackRes types.AckResponse
 	var ackReq types.AckRequest
+
 	for {
 		streamReq := types.TipStreamRequest{UnackedFrom: ackReq.SequenceId}
 		stream, err := s.paymentClient.TipStream(ctx, &streamReq)
@@ -133,6 +135,13 @@ func (s *Server) ReceiveTipLoop(ctx context.Context) error {
 			}
 			if err := s.db.StoreUnprocessedTip(ctx, tipID, wrappedTip); err != nil {
 				s.log.Errorf("Error while storing unprocessed tip: %v", err)
+				// if already stored, ack the tip received
+				ackReq.SequenceId = tip.SequenceId
+				err = s.paymentClient.AckTipReceived(ctx, &ackReq, &ackRes)
+				if err != nil {
+					s.log.Warnf("Error while ack'ing received tip: %v", err)
+					break
+				}
 				continue
 			}
 		}
