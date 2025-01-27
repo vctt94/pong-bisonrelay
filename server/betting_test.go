@@ -308,8 +308,8 @@ func TestSendTipProgressLoop_NormalOperation(t *testing.T) {
 	// Expect database updates for processed tips
 	mockDB.
 		On("FetchReceivedTipsByUID", mock.Anything, uid, serverdb.StatusSending).
-		Return([]serverdb.ReceivedTipWrapper{
-			{Tip: &types.ReceivedTip{Uid: uid[:], AmountMatoms: 100000, SequenceId: 1}, Status: serverdb.StatusSending},
+		Return([]*types.ReceivedTip{
+			{Uid: uid[:], AmountMatoms: 100000, SequenceId: 1},
 		}, nil).
 		Once()
 
@@ -428,8 +428,8 @@ func TestSendTipProgressLoop_DBError(t *testing.T) {
 
 	// Add the missing FetchReceivedTipsByUID expectation
 	mockDB.On("FetchReceivedTipsByUID", mock.Anything, uid, serverdb.StatusSending).
-		Return([]serverdb.ReceivedTipWrapper{
-			{Tip: &types.ReceivedTip{Uid: uid[:], AmountMatoms: 100000, SequenceId: 1}, Status: serverdb.StatusSending},
+		Return([]*types.ReceivedTip{
+			{Uid: uid[:], AmountMatoms: 100000, SequenceId: 1},
 		}, nil).
 		Once()
 
@@ -474,9 +474,9 @@ func TestSendTipProgressLoop_UnprocessedTips(t *testing.T) {
 	// - 2 progress events in the stream (sequence 1 and 2)
 	// - Each event triggers a separate fetch
 	mockDB.On("FetchReceivedTipsByUID", mock.Anything, uid, serverdb.StatusSending).
-		Return([]serverdb.ReceivedTipWrapper{
-			{Tip: &types.ReceivedTip{Uid: uid[:], AmountMatoms: 100000, SequenceId: 1}, Status: serverdb.StatusSending},
-			{Tip: &types.ReceivedTip{Uid: uid[:], AmountMatoms: 200000, SequenceId: 2}, Status: serverdb.StatusSending},
+		Return([]*types.ReceivedTip{
+			{Uid: uid[:], AmountMatoms: 100000, SequenceId: 1},
+			{Uid: uid[:], AmountMatoms: 200000, SequenceId: 2},
 		}, nil).
 		Times(2)
 
@@ -575,7 +575,7 @@ func TestSendTipProgressLoop_NoMatchingTip(t *testing.T) {
 
 	// Return no matching tips from database
 	mockDB.On("FetchReceivedTipsByUID", mock.Anything, uid, serverdb.StatusSending).
-		Return([]serverdb.ReceivedTipWrapper{}, nil).
+		Return([]*types.ReceivedTip{}, nil).
 		Once()
 
 	ctx, cancel := context.WithCancel(context.Background())

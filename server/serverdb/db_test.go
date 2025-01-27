@@ -27,20 +27,17 @@ func testPongServerDBInterface(t *testing.T, db serverdb.ServerDB) {
 	// Create a test tip entry
 	amount := 0.0001
 	amountMatoms := int64(amount * 1e11)
-	tip := serverdb.ReceivedTipWrapper{
-		Tip: &types.ReceivedTip{
-			Uid:          clientID.Bytes(),
-			AmountMatoms: amountMatoms,
-			// TimestampMs:  time.Now().UnixMilli(),
-			SequenceId: uint64(6546546516),
-		},
-		Status: serverdb.StatusUnprocessed,
-	}
 
+	sequenceID := uint64(6546546516)
 	tipID := make([]byte, 8)
-	binary.BigEndian.PutUint64(tipID, tip.Tip.SequenceId)
+	binary.BigEndian.PutUint64(tipID, 6546546516)
+
 	// Store the tip and ensure it's retrievable
-	err = db.StoreUnprocessedTip(ctx, tipID, &tip)
+	err = db.StoreUnprocessedTip(ctx, &types.ReceivedTip{
+		Uid:          clientID.Bytes(),
+		AmountMatoms: amountMatoms,
+		SequenceId:   sequenceID,
+	})
 	if err != nil {
 		t.Fatalf("Failed to store tip: %v", err)
 	}
@@ -50,7 +47,7 @@ func testPongServerDBInterface(t *testing.T, db serverdb.ServerDB) {
 	if err != nil {
 		t.Fatalf("Failed to fetch tips: %v", err)
 	}
-	if len(tips) != 1 || tips[0].Tip.AmountMatoms != amountMatoms {
+	if len(tips) != 1 || tips[0].AmountMatoms != amountMatoms {
 		t.Fatalf("Unexpected tip data: %+v", tips)
 	}
 
@@ -65,7 +62,7 @@ func testPongServerDBInterface(t *testing.T, db serverdb.ServerDB) {
 	if err != nil {
 		t.Fatalf("Failed to fetch updated tips: %v", err)
 	}
-	if len(updatedTips) != 1 || updatedTips[0].Status != serverdb.StatusSending {
+	if len(updatedTips) != 1 {
 		t.Fatalf("Unexpected tip data after status update: %+v", updatedTips)
 	}
 
