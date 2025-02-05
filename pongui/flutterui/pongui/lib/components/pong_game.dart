@@ -8,7 +8,6 @@ import 'package:pongui/grpc/grpc_client.dart';
 class PongGame {
   final GrpcPongClient grpcClient; // gRPC client instance
   final String clientId;
-  Timer? _inputTimer; // Timer to repeatedly send input
 
   PongGame(this.clientId, this.grpcClient);
 
@@ -20,11 +19,9 @@ class PongGame {
         child: KeyboardListener(
           focusNode: focusNode..requestFocus(),
           onKeyEvent: (KeyEvent event) {
-            if (event is KeyDownEvent) {
+            if (event is KeyDownEvent || event is KeyRepeatEvent) {
               String keyLabel = event.logicalKey.keyLabel;
-              handleInput(clientId, keyLabel, true); // Start handling input
-            } else if (event is KeyUpEvent) {
-              _inputTimer?.cancel(); // Stop handling input when key is released
+              handleInput(clientId, keyLabel);
             }
           },
           child: LayoutBuilder(
@@ -46,41 +43,26 @@ class PongGame {
     grpcClient.sendInput(clientId, data);
   }
 
-  Future<void> handleInput(String clientId, String data, bool isKeyDown) async {
-    if (isKeyDown) {
+  Future<void> handleInput(String clientId, String data) async {
       // Send the first input immediately
       await _sendKeyInput(data);
 
-      // Start the timer to continuously send input
-      _inputTimer?.cancel(); // Cancel any existing timer
-      _inputTimer = Timer.periodic(Duration(milliseconds: 100), (timer) {
-        _sendKeyInput(data); // Send input at intervals
-      });
-    } else {
-      // Stop the timer when the key is released
-      _inputTimer?.cancel();
-    }
   }
 
   Future<void> _sendKeyInput(String data) async {
     try {
       String action;
 
-      // Translate raw key label to action
       if (data == 'W' || data == 'Arrow Up') {
         action = 'ArrowUp';
       } else if (data == 'S' || data == 'Arrow Down') {
         action = 'ArrowDown';
       } else {
-        // Ignore unhandled keys
         return;
       }
-
-      // Send the action via gRPC
       await grpcClient.sendInput(clientId, action);
     } catch (e) {
       print(e);
-      // Handle error if needed
     }
   }
 
