@@ -50,3 +50,8 @@ func (m *MockDB) FetchAllReceivedTipsByUID(ctx context.Context, uid zkidentity.S
 	// Return the values from the `mock.Called(...)`
 	return args.Get(0).([]serverdb.ReceivedTipWrapper), args.Error(1)
 }
+
+func (m *MockDB) FetchTip(ctx context.Context, tipID uint64) (*serverdb.ReceivedTipWrapper, error) {
+	args := m.Called(ctx, tipID)
+	return args.Get(0).(*serverdb.ReceivedTipWrapper), args.Error(1)
+}

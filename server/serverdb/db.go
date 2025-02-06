@@ -238,3 +238,47 @@ func (b *boltDB) FetchUnprocessedTips(ctx context.Context) (map[zkidentity.Short
 
 	return unprocessedTips, nil
 }
+
+func (b *boltDB) FetchTip(ctx context.Context, tipID uint64) (*ReceivedTipWrapper, error) {
+	var tip *ReceivedTipWrapper
+	var found bool
+
+	err := b.db.View(func(tx *bolt.Tx) error {
+		mainBucket := tx.Bucket(tipsBucket)
+		if mainBucket == nil {
+			return ErrMainBucketNotFound
+		}
+
+		// Iterate through all user buckets
+		return mainBucket.ForEach(func(uid, _ []byte) error {
+			if found { // Skip remaining iterations once found
+				return nil
+			}
+
+			userBucket := mainBucket.Bucket(uid)
+			if userBucket == nil {
+				return nil
+			}
+
+			tipIDBytes := make([]byte, 8)
+			binary.BigEndian.PutUint64(tipIDBytes, tipID)
+			data := userBucket.Get(tipIDBytes)
+			if data != nil {
+				var wrapper *ReceivedTipWrapper
+				if err := json.Unmarshal(data, &wrapper); err != nil {
+					return err
+				}
+				tip = wrapper
+				found = true
+			}
+			return nil
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, nil
+	}
+	return tip, nil
+}
