@@ -64,7 +64,7 @@ func (ps *PlayerSessions) GetPlayer(clientID zkidentity.ShortID) *Player {
 	return player
 }
 
-func (ps *PlayerSessions) GetOrCreateSession(clientID zkidentity.ShortID) *Player {
+func (ps *PlayerSessions) CreateSession(clientID zkidentity.ShortID) *Player {
 	ps.Lock()
 	defer ps.Unlock()
 

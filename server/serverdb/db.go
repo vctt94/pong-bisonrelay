@@ -56,7 +56,7 @@ func (b *boltDB) StoreUnprocessedTip(ctx context.Context, tip *types.ReceivedTip
 	return b.db.Update(func(tx *bolt.Tx) error {
 		mainBucket := tx.Bucket(tipsBucket)
 		if mainBucket == nil {
-			return errors.New("main bucket not found")
+			return ErrMainBucketNotFound
 		}
 
 		userBucket, err := mainBucket.CreateBucketIfNotExists(payload.Tip.Uid)
@@ -67,7 +67,7 @@ func (b *boltDB) StoreUnprocessedTip(ctx context.Context, tip *types.ReceivedTip
 		sequenceId := make([]byte, 8)
 		binary.BigEndian.PutUint64(sequenceId, tip.SequenceId)
 		if userBucket.Get(sequenceId) != nil {
-			return ErrAlreadyStoredRV
+			return ErrDuplicateEntry
 		}
 
 		return userBucket.Put(sequenceId, data)
@@ -79,19 +79,19 @@ func (b *boltDB) UpdateTipStatus(ctx context.Context, uid []byte, tipID []byte, 
 	return b.db.Update(func(tx *bolt.Tx) error {
 		mainBucket := tx.Bucket(tipsBucket)
 		if mainBucket == nil {
-			return errors.New("main bucket not found")
+			return ErrMainBucketNotFound
 		}
 
 		// Locate the sub-bucket for the specified uid.
 		userBucket := mainBucket.Bucket(uid)
 		if userBucket == nil {
-			return errors.New("user bucket not found for the given UID")
+			return ErrUserBucketNotFound
 		}
 
 		// Retrieve the tip data by tipID within the user bucket.
 		data := userBucket.Get(tipID)
 		if data == nil {
-			return errors.New("tip not found")
+			return ErrTipNotFound
 		}
 
 		// Decode the data into ReceivedTipWrapper
@@ -125,7 +125,7 @@ func (b *boltDB) FetchReceivedTipsByUID(ctx context.Context, uid zkidentity.Shor
 	err := b.db.View(func(tx *bolt.Tx) error {
 		mainBucket := tx.Bucket(tipsBucket)
 		if mainBucket == nil {
-			return errors.New("tip bucket not found")
+			return ErrTipBucketNotFound
 		}
 
 		// Retrieve the sub-bucket for the specified Uid
@@ -201,7 +201,7 @@ func (b *boltDB) FetchUnprocessedTips(ctx context.Context) (map[zkidentity.Short
 	err := b.db.View(func(tx *bolt.Tx) error {
 		mainBucket := tx.Bucket(tipsBucket)
 		if mainBucket == nil {
-			return errors.New("main bucket not found")
+			return ErrMainBucketNotFound
 		}
 
 		// Iterate over each UID's sub-bucket within the main bucket
@@ -237,4 +237,48 @@ func (b *boltDB) FetchUnprocessedTips(ctx context.Context) (map[zkidentity.Short
 	}
 
 	return unprocessedTips, nil
+}
+
+func (b *boltDB) FetchTip(ctx context.Context, tipID uint64) (*ReceivedTipWrapper, error) {
+	var tip *ReceivedTipWrapper
+	var found bool
+
+	err := b.db.View(func(tx *bolt.Tx) error {
+		mainBucket := tx.Bucket(tipsBucket)
+		if mainBucket == nil {
+			return ErrMainBucketNotFound
+		}
+
+		// Iterate through all user buckets
+		return mainBucket.ForEach(func(uid, _ []byte) error {
+			if found { // Skip remaining iterations once found
+				return nil
+			}
+
+			userBucket := mainBucket.Bucket(uid)
+			if userBucket == nil {
+				return nil
+			}
+
+			tipIDBytes := make([]byte, 8)
+			binary.BigEndian.PutUint64(tipIDBytes, tipID)
+			data := userBucket.Get(tipIDBytes)
+			if data != nil {
+				var wrapper *ReceivedTipWrapper
+				if err := json.Unmarshal(data, &wrapper); err != nil {
+					return err
+				}
+				tip = wrapper
+				found = true
+			}
+			return nil
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, nil
+	}
+	return tip, nil
 }

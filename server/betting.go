@@ -116,29 +116,49 @@ func (s *Server) ReceiveTipLoop(ctx context.Context) error {
 
 			s.log.Debugf("Received tip from %s amount %d", hex.EncodeToString(tip.Uid), tip.AmountMatoms)
 
-			player := s.gameManager.PlayerSessions.GetPlayer(zkidentity.ShortID(tip.Uid))
-			if player != nil {
-				player.BetAmt += float64(tip.AmountMatoms) / 1e11 // Add the tip amount to existing betAmt
-				if player.NotifierStream != nil {
-					player.NotifierStream.Send(&pong.NtfnStreamResponse{
-						NotificationType: pong.NotificationType_BET_AMOUNT_UPDATE,
-						BetAmt:           player.BetAmt,
-						PlayerId:         player.ID.String(),
-					})
+			dbTip, err := s.db.FetchTip(ctx, tip.SequenceId)
+			if err != nil {
+				s.log.Warnf("Error while fetching tip %d: %v", tip.SequenceId, err)
+			}
+			// if tip is not in the db, we store it
+			if dbTip == nil {
+				err = s.db.StoreUnprocessedTip(ctx, &tip)
+				if err != nil {
+					s.log.Errorf("Error while storing unprocessed tip: %v", err)
+					break
+				}
+			} else {
+				// if tip already processed, we can ack it
+				if dbTip.Status == serverdb.StatusProcessed {
+					ackReq.SequenceId = tip.SequenceId
+					err = s.paymentClient.AckTipReceived(ctx, &ackReq, &ackRes)
+					if err != nil {
+						s.log.Warnf("Error while ack'ing received tip: %v", err)
+						break
+					}
+					continue
+				}
+				// if tip is sending, we do not update the player's betAmt
+				if dbTip.Status == serverdb.StatusSending {
+					continue
 				}
 			}
 
-			if err := s.db.StoreUnprocessedTip(ctx, &tip); err != nil {
-				s.log.Errorf("Error while storing unprocessed tip: %v", err)
-				// if already stored, ack the tip received
-				ackReq.SequenceId = tip.SequenceId
-				err = s.paymentClient.AckTipReceived(ctx, &ackReq, &ackRes)
-				if err != nil {
-					s.log.Warnf("Error while ack'ing received tip: %v", err)
-					break
-				}
+			player := s.gameManager.PlayerSessions.GetPlayer(zkidentity.ShortID(tip.Uid))
+			// if player is nil, we can skip it.
+			if player == nil {
 				continue
 			}
+			s.gameManager.PlayerSessions.Lock()
+			player.BetAmt += float64(tip.AmountMatoms) / 1e11 // Add the tip amount to existing betAmt
+			if player.NotifierStream != nil {
+				player.NotifierStream.Send(&pong.NtfnStreamResponse{
+					NotificationType: pong.NotificationType_BET_AMOUNT_UPDATE,
+					BetAmt:           player.BetAmt,
+					PlayerId:         player.ID.String(),
+				})
+			}
+			s.gameManager.PlayerSessions.Unlock()
 		}
 		time.Sleep(time.Second)
 	}

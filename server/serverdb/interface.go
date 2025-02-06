@@ -8,7 +8,13 @@ import (
 	"github.com/companyzero/bisonrelay/zkidentity"
 )
 
-var ErrAlreadyStoredRV = errors.New("already stored tip")
+var (
+	ErrDuplicateEntry     = errors.New("tip already stored")
+	ErrMainBucketNotFound = errors.New("main bucket not found")
+	ErrUserBucketNotFound = errors.New("user bucket not found")
+	ErrTipNotFound        = errors.New("tip not found")
+	ErrTipBucketNotFound  = errors.New("tip bucket not found")
+)
 
 type TipStatus string
 
@@ -30,6 +36,7 @@ type FetchUnprocessedTipsResult struct {
 type ServerDB interface {
 	StoreUnprocessedTip(ctx context.Context, tip *types.ReceivedTip) error
 	FetchUnprocessedTips(ctx context.Context) (map[zkidentity.ShortID][]*types.ReceivedTip, error)
+	FetchTip(ctx context.Context, tipID uint64) (*ReceivedTipWrapper, error)
 	FetchReceivedTipsByUID(ctx context.Context, uid zkidentity.ShortID, status TipStatus) ([]*types.ReceivedTip, error)
 	UpdateTipStatus(ctx context.Context, uid []byte, tipID []byte, status TipStatus) error
 	FetchAllReceivedTipsByUID(ctx context.Context, uid zkidentity.ShortID) ([]ReceivedTipWrapper, error)

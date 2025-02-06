@@ -95,7 +95,7 @@ func TestCreateWaitingRoom(t *testing.T) {
 
 	var hostID zkidentity.ShortID
 	_ = hostID.FromString("11111111111111111111111111111111")
-	srv.gameManager.PlayerSessions.GetOrCreateSession(hostID)
+	srv.gameManager.PlayerSessions.CreateSession(hostID)
 
 	// Now call CreateWaitingRoom from the client side
 	resp, err := client.CreateWaitingRoom(ctx, &pong.CreateWaitingRoomRequest{
@@ -125,7 +125,7 @@ func TestCreateWaitingRoomWithInvalidBet(t *testing.T) {
 
 	var hostID zkidentity.ShortID
 	_ = hostID.FromString("11111111111111111111111111111111")
-	srv.gameManager.PlayerSessions.GetOrCreateSession(hostID)
+	srv.gameManager.PlayerSessions.CreateSession(hostID)
 
 	// Case: Bet amount less than MinBetAmt
 	_, err := client.CreateWaitingRoom(ctx, &pong.CreateWaitingRoomRequest{
@@ -171,7 +171,7 @@ func TestConcurrentWaitingRoomCreation(t *testing.T) {
 				t.Errorf("Failed to convert string to Host ID: %v", err)
 				return
 			}
-			srv.gameManager.PlayerSessions.GetOrCreateSession(hostID)
+			srv.gameManager.PlayerSessions.CreateSession(hostID)
 
 			// Attempt to create a waiting room
 			resp, err := client.CreateWaitingRoom(ctx, &pong.CreateWaitingRoomRequest{
@@ -209,7 +209,7 @@ func TestGameStreamDisconnection(t *testing.T) {
 	mockDB.On("UpdateTipStatus", mock.Anything, mock.Anything, serverdb.StatusSending).Return(nil)
 
 	// Create player session before starting stream
-	player := srv.gameManager.PlayerSessions.GetOrCreateSession(clientID)
+	player := srv.gameManager.PlayerSessions.CreateSession(clientID)
 	player.NotifierStream = &mocks.MockNtfnStreamServer{Ctx: ctx}
 	player.BetAmt = 0.5
 	// Setup mock stream
