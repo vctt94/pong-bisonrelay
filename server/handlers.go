@@ -82,9 +82,7 @@ func (s *Server) handleGameLifecycle(ctx context.Context, players []*ponggame.Pl
 		for _, g := range s.gameManager.Games {
 			if g == game {
 				for _, player := range game.Players {
-					player.Score = 0
-					player.PlayerNumber = 0
-					player.BetAmt = 0
+					player.ResetPlayer()
 				}
 			}
 		}

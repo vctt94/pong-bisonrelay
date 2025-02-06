@@ -23,6 +23,13 @@ type Player struct {
 	Ready          bool
 }
 
+func (p *Player) ResetPlayer() {
+	p.Score = 0
+	p.PlayerNumber = 0
+	p.BetAmt = 0
+	p.Ready = false
+}
+
 type GameInstance struct {
 	sync.Mutex
 	Id          string
