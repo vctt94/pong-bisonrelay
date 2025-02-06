@@ -170,9 +170,10 @@ func (s *Server) StartNtfnStream(req *pong.StartNtfnStreamRequest, stream pong.P
 	s.activeStreams.Store(clientID, cancel)
 	defer s.activeStreams.Delete(clientID)
 
-	// Setup player session
-	player := s.gameManager.SetupPlayerSession(clientID, stream)
+	// Create player session
+	player := s.gameManager.PlayerSessions.CreateSession(clientID)
 	s.Lock()
+	player.NotifierStream = stream
 	s.users[&clientID] = player
 	s.Unlock()
 

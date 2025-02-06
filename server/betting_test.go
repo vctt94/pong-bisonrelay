@@ -215,7 +215,7 @@ func TestReceiveTipLoop_PlayerSessionUpdate(t *testing.T) {
 		return
 	}
 	playerUID.FromString(strID)
-	player := srv.gameManager.PlayerSessions.GetOrCreateSession(playerUID)
+	player := srv.gameManager.PlayerSessions.CreateSession(playerUID)
 	// Mock Payment Client
 	mockPayClient := srv.paymentClient.(*mocks.MockPaymentClient)
 

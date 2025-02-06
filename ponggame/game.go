@@ -14,13 +14,6 @@ import (
 
 const maxScore = 3
 
-// SetupPlayerSession sets up a player session and assigns the notifier stream.
-func (gm *GameManager) SetupPlayerSession(clientID zkidentity.ShortID, stream pong.PongGame_StartNtfnStreamServer) *Player {
-	player := gm.PlayerSessions.GetOrCreateSession(clientID)
-	player.NotifierStream = stream
-	return player
-}
-
 func (gm *GameManager) StartGameStream(req *StartGameStreamRequest) (*Player, error) {
 	player := gm.PlayerSessions.GetPlayer(req.ClientID)
 	if player == nil {
