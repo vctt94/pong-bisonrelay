@@ -8,7 +8,13 @@ import (
 	"github.com/companyzero/bisonrelay/zkidentity"
 )
 
-var ErrAlreadyStoredRV = errors.New("already stored tip")
+var (
+	ErrDuplicateEntry     = errors.New("tip already stored")
+	ErrMainBucketNotFound = errors.New("main bucket not found")
+	ErrUserBucketNotFound = errors.New("user bucket not found")
+	ErrTipNotFound        = errors.New("tip not found")
+	ErrTipBucketNotFound  = errors.New("tip bucket not found")
+)
 
 type TipStatus string
 
