@@ -26,7 +26,7 @@ func (wr *WaitingRoom) Marshal() (*pong.WaitingRoom, error) {
 
 	return &pong.WaitingRoom{
 		Id:      wr.ID,
-		HostId:  wr.HostID.String(), // Assuming HostID has a String() method
+		HostId:  wr.HostID.String(),
 		Players: players,
 		BetAmt:  wr.BetAmount,
 	}, nil
