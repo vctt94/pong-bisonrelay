@@ -253,10 +253,18 @@ func handleClientCmd(cc *clientCtx, cmd *cmd) (interface{}, error) {
 			return nil, fmt.Errorf("failed to create waiting room: %v", err)
 		}
 
+		players := make([]*player, len(res.Players))
+		for i, p := range res.Players {
+			players[i], err = playerFromServer(p)
+			if err != nil {
+				return nil, err
+			}
+		}
 		return &waitingRoom{
-			ID:     res.Id,
-			HostID: res.HostId,
-			BetAmt: res.BetAmt,
+			ID:      res.Id,
+			HostID:  res.HostId,
+			BetAmt:  res.BetAmt,
+			Players: players,
 		}, nil
 
 	case CTStopClient:

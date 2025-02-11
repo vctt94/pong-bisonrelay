@@ -83,18 +83,23 @@ class GetUserNickArgs {
 }
 
 @JsonSerializable()
-class Player {
+class LocalPlayer {
   @JsonKey(name: 'uid')
   final String uid;
   @JsonKey(name: 'nick')
   final String? nick;
   @JsonKey(name: 'bet_amt')
   final double betAmount;
+  @JsonKey(name: 'ready')
+  final bool ready;
 
-  const Player(this.uid, this.nick, this.betAmount);
+  const LocalPlayer(this.uid, this.nick, this.betAmount, {
+    this.ready = false,
+  });
 
-  factory Player.fromJson(Map<String, dynamic> json) => _$PlayerFromJson(json);
-  Map<String, dynamic> toJson() => _$PlayerToJson(this);
+  factory LocalPlayer.fromJson(Map<String, dynamic> json) => _$LocalPlayerFromJson(json);
+  Map<String, dynamic> toJson() => _$LocalPlayerToJson(this);
+
 }
 
 @JsonSerializable()
@@ -106,10 +111,10 @@ class LocalWaitingRoom {
   @JsonKey(name: 'bet_amt')
   final double betAmt;
   @JsonKey(name: 'players', defaultValue: [])
-  final List<Player>? players;
+  final List<LocalPlayer> players;
 
   const LocalWaitingRoom(this.id, this.host, this.betAmt, {
-    this.players,
+    this.players = const [],
   });
 
   factory LocalWaitingRoom.fromJson(Map<String, dynamic> json) =>
@@ -410,12 +415,12 @@ abstract class PluginPlatform {
     return await asyncCall(CTGetUserNick, pid);
   }
 
-  Future<List<Player>> getWRPlayers() async {
+  Future<List<LocalPlayer>> getWRPlayers() async {
     var res = await asyncCall(CTGetWRPlayers, "");
     if (res == null) {
       return [];
     }
-    return (res as List).map<Player>((v) => Player.fromJson(v)).toList();
+    return (res as List).map<LocalPlayer>((v) => LocalPlayer.fromJson(v)).toList();
   }
 
   Future<List<LocalWaitingRoom>> getWaitingRooms() async {
@@ -447,6 +452,7 @@ abstract class PluginPlatform {
     try {
       final response = await asyncCall(CTCreateWaitingRoom, args);
 
+      print("CreateWaitingRoom response: $response");
       if (response is Map<String, dynamic>) {
         return LocalWaitingRoom.fromJson(response);
       } else {
