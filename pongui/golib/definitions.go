@@ -48,6 +48,7 @@ type player struct {
 	UID    client.UserID `json:"uid"`
 	Nick   string        `json:"nick"`
 	BetAmt float64       `json:"bet_amt"`
+	Ready  bool          `json:"ready"`
 }
 
 func playerFromServer(p *pong.Player) (*player, error) {
@@ -60,6 +61,7 @@ func playerFromServer(p *pong.Player) (*player, error) {
 		UID:    id,
 		Nick:   p.Nick,
 		BetAmt: p.BetAmt,
+		Ready:  p.Ready,
 	}, nil
 }
 

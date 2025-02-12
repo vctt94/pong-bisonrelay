@@ -57,16 +57,19 @@ Map<String, dynamic> _$GetUserNickArgsToJson(GetUserNickArgs instance) =>
       'uid': instance.uid,
     };
 
-Player _$PlayerFromJson(Map<String, dynamic> json) => Player(
+LocalPlayer _$LocalPlayerFromJson(Map<String, dynamic> json) => LocalPlayer(
       json['uid'] as String,
       json['nick'] as String?,
       (json['bet_amt'] as num).toDouble(),
+      ready: json['ready'] as bool? ?? false,
     );
 
-Map<String, dynamic> _$PlayerToJson(Player instance) => <String, dynamic>{
+Map<String, dynamic> _$LocalPlayerToJson(LocalPlayer instance) =>
+    <String, dynamic>{
       'uid': instance.uid,
       'nick': instance.nick,
       'bet_amt': instance.betAmount,
+      'ready': instance.ready,
     };
 
 LocalWaitingRoom _$LocalWaitingRoomFromJson(Map<String, dynamic> json) =>
@@ -74,6 +77,10 @@ LocalWaitingRoom _$LocalWaitingRoomFromJson(Map<String, dynamic> json) =>
       json['id'] as String,
       json['host_id'] as String,
       (json['bet_amt'] as num).toDouble(),
+      players: (json['players'] as List<dynamic>?)
+              ?.map((e) => LocalPlayer.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
     );
 
 Map<String, dynamic> _$LocalWaitingRoomToJson(LocalWaitingRoom instance) =>
@@ -81,6 +88,7 @@ Map<String, dynamic> _$LocalWaitingRoomToJson(LocalWaitingRoom instance) =>
       'id': instance.id,
       'host_id': instance.host,
       'bet_amt': instance.betAmt,
+      'players': instance.players,
     };
 
 LocalInfo _$LocalInfoFromJson(Map<String, dynamic> json) => LocalInfo(

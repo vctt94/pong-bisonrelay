@@ -108,6 +108,8 @@ class PongModel extends ChangeNotifier {
 
         case NotificationType.GAME_START:
           gameStarted = true;
+          // can set current wr as null after game starting
+          currentWR = null;
           notificationModel.showNotification(
             "Game started with ID: ${ntfn.gameId}",
           );
@@ -116,8 +118,19 @@ class PongModel extends ChangeNotifier {
 
         case NotificationType.PLAYER_JOINED_WR:
           if (ntfn.playerId == clientId) {
-            currentWR =
-                LocalWaitingRoom(ntfn.wr.id, ntfn.wr.hostId, ntfn.wr.betAmt);
+            currentWR = LocalWaitingRoom(
+              ntfn.wr.id,
+              ntfn.wr.hostId,
+              ntfn.wr.betAmt,
+              players: ntfn.wr.players
+                  .map((player) => LocalPlayer(
+                        player.uid,
+                        player.nick,
+                        player.betAmt,
+                        ready: player.ready,
+                      ))
+                  .toList(),  
+            );
           }
           notificationModel
               .showNotification("A new player joined the waiting room");
@@ -174,7 +187,7 @@ class PongModel extends ChangeNotifier {
       var roomInfo = await Golib.CreateWaitingRoom(createRoomArgs);
 
       // Update the model state
-      currentWR = LocalWaitingRoom(roomInfo.id, clientId, roomInfo.betAmt);
+      currentWR = roomInfo;
       errorMessage = '';
       notifyListeners();
 
