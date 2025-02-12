@@ -44,24 +44,42 @@ class TopStatusCard extends StatelessWidget {
                           ),
                         ],
                       ),
-                      if (pongModel.currentWR != null) ...[
+                      // only show current wr information if not in game
+                      if (pongModel.gameStarted == false) ...[
                         const SizedBox(height: 12),
                         Divider(color: Colors.grey.shade400),
                         const SizedBox(height: 12),
-                        Text(
-                          "Current Waiting Room:",
-                          style: Theme.of(context).textTheme.titleMedium,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "Current Waiting Room:",
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            if (pongModel.betAmt > 0) ...[
+                              if (pongModel.currentWR == null)
+                                FilledButton(
+                                  onPressed: pongModel.createWaitingRoom,
+                                  child: const Text("Create Waiting Room"),
+                                ),
+                              if (pongModel.currentWR != null)
+                                FilledButton(
+                                  onPressed: pongModel.toggleReady,
+                                  child: Text(
+                                    pongModel.isReady
+                                        ? "Cancel Ready"
+                                        : "Ready",
+                                  ),
+                                ),
+                            ],
+                          ],
                         ),
                         const SizedBox(height: 8),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              "Room ID: ${pongModel.currentWR?.id}",
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                            Text(
-                              "Bet: ${pongModel.currentWR?.betAmt}",
+                              "Room ID: ${pongModel.currentWR?.id ?? ""}",
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
                           ],

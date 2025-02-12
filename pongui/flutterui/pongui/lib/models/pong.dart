@@ -108,6 +108,8 @@ class PongModel extends ChangeNotifier {
 
         case NotificationType.GAME_START:
           gameStarted = true;
+          // can set current wr as null after game starting
+          currentWR = null;
           notificationModel.showNotification(
             "Game started with ID: ${ntfn.gameId}",
           );
