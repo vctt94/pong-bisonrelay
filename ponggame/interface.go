@@ -24,6 +24,7 @@ type Player struct {
 }
 
 func (p *Player) ResetPlayer() {
+	p.GameStream = nil
 	p.Score = 0
 	p.PlayerNumber = 0
 	p.BetAmt = 0

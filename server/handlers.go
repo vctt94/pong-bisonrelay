@@ -79,21 +79,12 @@ func (s *Server) handleGameLifecycle(ctx context.Context, players []*ponggame.Pl
 	}
 	defer func() {
 		// reset player status
-		for _, g := range s.gameManager.Games {
-			if g == game {
-				for _, player := range game.Players {
-					player.ResetPlayer()
-				}
-			}
+		for _, player := range game.Players {
+			player.ResetPlayer()
 		}
 		// remove game from gameManager after it ended
-		for gameID, g := range s.gameManager.Games {
-			if g == game {
-				delete(s.gameManager.Games, gameID)
-				s.log.Infof("Game %s cleaned up", gameID)
-				break
-			}
-		}
+		delete(s.gameManager.Games, game.Id)
+		s.log.Infof("Game %s cleaned up", game.Id)
 	}()
 
 	game.Run()

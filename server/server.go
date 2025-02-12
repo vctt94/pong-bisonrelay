@@ -331,7 +331,7 @@ func (s *Server) JoinWaitingRoom(ctx context.Context, req *pong.JoinWaitingRoomR
 		p.NotifierStream.Send(&pong.NtfnStreamResponse{
 			NotificationType: pong.NotificationType_PLAYER_JOINED_WR,
 			Message:          fmt.Sprintf("New player joined Waiting Room: %s", player.Nick),
-			PlayerId:         player.ID.String(),
+			PlayerId:         p.ID.String(),
 			RoomId:           wr.ID,
 			Wr:               pwr,
 		})
