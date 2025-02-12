@@ -443,7 +443,6 @@ abstract class PluginPlatform {
         throw Exception("Invalid response format: $response");
       }
     } catch (err) {
-      print("Error joining waiting room: $err");
       throw Exception("Failed to join waiting room: $err");
     }
   }
@@ -452,14 +451,12 @@ abstract class PluginPlatform {
     try {
       final response = await asyncCall(CTCreateWaitingRoom, args);
 
-      print("CreateWaitingRoom response: $response");
       if (response is Map<String, dynamic>) {
         return LocalWaitingRoom.fromJson(response);
       } else {
         throw Exception("Invalid response format: $response");
       }
     } catch (err) {
-      print("Error joining waiting room: $err");
       throw Exception("Failed to join waiting room: $err");
     }
   }

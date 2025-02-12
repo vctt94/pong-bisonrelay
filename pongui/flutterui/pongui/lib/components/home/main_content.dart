@@ -17,7 +17,7 @@ class MainContent extends StatelessWidget {
       return Center(
         child: pongModel.pongGame.buildWidget(
           pongModel.gameState,
-          FocusNode(), // or pass the correct FocusNode
+          FocusNode(),
         ),
       );
     }
@@ -43,7 +43,6 @@ class MainContent extends StatelessWidget {
       );
     }
 
-    // NOT READY => Show "Ready" + "Create" buttons, plus waiting room list
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -54,19 +53,19 @@ class MainContent extends StatelessWidget {
               const Text(
                 "Welcome to Pong!",
                 style: TextStyle(
-                  fontSize: 22,  // Slightly smaller title
-                  fontWeight: FontWeight.w600,  // Semi-bold instead of bold
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
                   color: Colors.blueAccent,
                 ),
               ),
-              const SizedBox(height: 4),  // Reduced spacing
+              const SizedBox(height: 4),
               Text(
                 "To place a bet send a tip to the pongbot on Bison Relay",
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 14,  // Smaller text
+                  fontSize: 14,
                   color: Colors.grey[600],
-                  height: 1.3,  // Tighter line height
+                  height: 1.3,
                 ),
               ),
             ],
@@ -74,8 +73,6 @@ class MainContent extends StatelessWidget {
         ),
         const SizedBox(height: 8),
 
-        // The waiting room list should scroll if it has many items,
-        // so we give it leftover space with `Expanded`.
         Expanded(
           child: WaitingRoomList(
             pongModel.waitingRooms,
