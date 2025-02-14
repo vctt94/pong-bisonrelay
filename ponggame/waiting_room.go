@@ -101,12 +101,12 @@ func (wr *WaitingRoom) GetPlayers() []*Player {
 	return wr.Players
 }
 
-func (wr *WaitingRoom) RemovePlayer(clientID *zkidentity.ShortID) {
+func (wr *WaitingRoom) RemovePlayer(clientID zkidentity.ShortID) {
 	wr.Lock()
 	defer wr.Unlock()
 
 	for i, player := range wr.Players {
-		if player.ID == clientID {
+		if *player.ID == clientID {
 			wr.Players = append(wr.Players[:i], wr.Players[i+1:]...)
 			break
 		}

@@ -48,14 +48,14 @@ func (gm *GameManager) HandleWaitingRoomDisconnection(clientID zkidentity.ShortI
 		return
 	}
 
-	// if host disconnected, remove wr
+	// If host disconnected, remove wr
 	if clientID == *wr.HostID {
 		remainingPlayers := GetRemainingPlayersInWaitingRoom(wr, clientID)
 		for _, player := range remainingPlayers {
 			if player.NotifierStream != nil {
 				player.NotifierStream.Send(&pong.NtfnStreamResponse{
 					NotificationType: pong.NotificationType_OPPONENT_DISCONNECTED,
-					Message:          "Opponent left the waiting room.",
+					Message:          "Host left the waiting room. Room closed.",
 					Started:          false,
 				})
 			}
@@ -64,6 +64,30 @@ func (gm *GameManager) HandleWaitingRoomDisconnection(clientID zkidentity.ShortI
 		log.Debugf("Player %s disconnected; removing waiting room %s", clientID, wr.ID)
 		wr.Cancel()
 		gm.RemoveWaitingRoom(wr.ID)
+	} else {
+		// Handle regular player disconnection
+		wr.RemovePlayer(clientID)
+		remainingPlayers := GetRemainingPlayersInWaitingRoom(wr, clientID)
+
+		// Marshal updated waiting room
+		pongwr, err := wr.Marshal()
+		if err != nil {
+			log.Errorf("Failed to marshal waiting room: %v", err)
+			return
+		}
+
+		// Notify remaining players
+		for _, player := range remainingPlayers {
+			if player.NotifierStream != nil {
+				player.NotifierStream.Send(&pong.NtfnStreamResponse{
+					NotificationType: pong.NotificationType_OPPONENT_DISCONNECTED,
+					Message:          "Player left the waiting room",
+					Wr:               pongwr,
+				})
+			}
+		}
+
+		log.Debugf("Player %s disconnected from waiting room %s", clientID, wr.ID)
 	}
 }
 
@@ -83,14 +107,6 @@ func (gm *GameManager) HandleGameDisconnection(clientID zkidentity.ShortID, log 
 		})
 	}
 
-	log.Debugf("Player %s disconnected; cleaning up game", clientID)
-	for gameID, g := range gm.Games {
-		if g == game {
-			delete(gm.Games, gameID)
-			log.Debugf("Game %s cleaned up", gameID)
-			break
-		}
-	}
 }
 
 func (gm *GameManager) HandlePlayerInput(clientID zkidentity.ShortID, req *pong.PlayerInput) (*pong.GameUpdate, error) {
