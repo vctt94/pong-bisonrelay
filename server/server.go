@@ -46,12 +46,13 @@ type Server struct {
 
 	paymentClient types.PaymentsServiceClient
 	chatClient    types.ChatServiceClient
-	users         map[*zkidentity.ShortID]*ponggame.Player
+	users         map[zkidentity.ShortID]*ponggame.Player
 	gameManager   *ponggame.GameManager
 
-	httpServer    *http.Server
-	activeStreams sync.Map
-	db            serverdb.ServerDB
+	httpServer        *http.Server
+	activeNtfnStreams sync.Map
+	activeGameStreams sync.Map
+	db                serverdb.ServerDB
 }
 
 func NewServer(id *zkidentity.ShortID, cfg ServerConfig) *Server {
@@ -78,7 +79,7 @@ func NewServer(id *zkidentity.ShortID, cfg ServerConfig) *Server {
 		isF2P:              cfg.IsF2P,
 		minBetAmt:          cfg.MinBetAmt,
 		waitingRoomCreated: make(chan struct{}, 1),
-		users:              make(map[*zkidentity.ShortID]*ponggame.Player),
+		users:              make(map[zkidentity.ShortID]*ponggame.Player),
 		gameManager: &ponggame.GameManager{
 			ID:             id,
 			Games:          make(map[string]*ponggame.GameInstance),
@@ -112,9 +113,15 @@ func NewServer(id *zkidentity.ShortID, cfg ServerConfig) *Server {
 }
 
 func (s *Server) StartGameStream(req *pong.StartGameStreamRequest, stream pong.PongGame_StartGameStreamServer) error {
-	ctx := stream.Context()
+	ctx, cancel := context.WithCancel(stream.Context())
+	defer cancel()
+	defer s.activeGameStreams.Delete(req.ClientId)
+
 	var clientID zkidentity.ShortID
 	clientID.FromString(req.ClientId)
+
+	// Store the cancel function
+	s.activeGameStreams.Store(clientID, cancel)
 
 	s.log.Debugf("Client %s called StartGameStream", req.ClientId)
 
@@ -138,6 +145,22 @@ func (s *Server) StartGameStream(req *pong.StartGameStreamRequest, stream pong.P
 }
 
 func (s *Server) handleDisconnect(clientID zkidentity.ShortID) {
+	// Cancel any active streams for this client
+	if cancel, ok := s.activeNtfnStreams.Load(clientID); ok {
+		if cancelFn, isCancel := cancel.(context.CancelFunc); isCancel {
+			cancelFn()
+		}
+	}
+	if cancel, ok := s.activeGameStreams.Load(clientID); ok {
+		if cancelFn, isCancel := cancel.(context.CancelFunc); isCancel {
+			cancelFn()
+		}
+	}
+
+	s.Lock()
+	s.users[clientID] = nil
+	s.Unlock()
+
 	// Remove player from sessions
 	playerSession := s.gameManager.PlayerSessions.GetPlayer(clientID)
 	if playerSession != nil {
@@ -161,20 +184,21 @@ func (s *Server) handleDisconnect(clientID zkidentity.ShortID) {
 func (s *Server) StartNtfnStream(req *pong.StartNtfnStreamRequest, stream pong.PongGame_StartNtfnStreamServer) error {
 	ctx, cancel := context.WithCancel(stream.Context())
 	defer cancel()
+	defer s.activeNtfnStreams.Delete(req.ClientId)
 
 	var clientID zkidentity.ShortID
 	clientID.FromString(req.ClientId)
 	s.log.Debugf("StartNtfnStream called by client %s", clientID)
 
 	// Add to active streams
-	s.activeStreams.Store(clientID, cancel)
-	defer s.activeStreams.Delete(clientID)
+	s.activeNtfnStreams.Store(clientID, cancel)
 
 	// Create player session
 	player := s.gameManager.PlayerSessions.CreateSession(clientID)
-	s.Lock()
 	player.NotifierStream = stream
-	s.users[&clientID] = player
+
+	s.Lock()
+	s.users[clientID] = player
 	s.Unlock()
 
 	// Fetch unprocessed tips
@@ -188,7 +212,7 @@ func (s *Server) StartNtfnStream(req *pong.StartNtfnStreamRequest, stream pong.P
 	player.BetAmt = totalDcrAmount
 	s.log.Debugf("Pending payments applied to client %s, total amount: %.8f", clientID, totalDcrAmount)
 
-	s.users[&clientID].NotifierStream.Send(&pong.NtfnStreamResponse{
+	s.users[clientID].NotifierStream.Send(&pong.NtfnStreamResponse{
 		NotificationType: pong.NotificationType_BET_AMOUNT_UPDATE,
 		BetAmt:           player.BetAmt,
 		PlayerId:         player.ID.String(),
@@ -435,7 +459,7 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 
 // Shutdown forcefully shuts down the server, closing HTTP server, database, waiting rooms, and games.
 func (s *Server) Shutdown(ctx context.Context) error {
-	// Stop HTTP server
+	// Stop HTTP server first
 	if s.httpServer != nil {
 		s.log.Info("Shutting down HTTP server...")
 		if err := s.httpServer.Shutdown(ctx); err != nil {
@@ -443,29 +467,40 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		}
 	}
 
-	// Close the database
-	s.log.Info("Closing database...")
-	if err := s.db.Close(); err != nil {
-		s.log.Errorf("Error closing database: %v", err)
-	}
-
-	s.log.Info("Canceling active gRPC streams...")
-	s.activeStreams.Range(func(key, value interface{}) bool {
+	// Cancel all active streams before cleaning up resources
+	s.log.Info("Canceling all active streams...")
+	s.activeNtfnStreams.Range(func(key, value interface{}) bool {
+		if cancel, ok := value.(context.CancelFunc); ok {
+			cancel()
+		}
+		return true
+	})
+	s.activeGameStreams.Range(func(key, value interface{}) bool {
 		if cancel, ok := value.(context.CancelFunc); ok {
 			cancel()
 		}
 		return true
 	})
 
-	// Gracefully close all waiting rooms and ongoing games
+	// Clean up game resources before closing database
 	s.log.Info("Shutting down waiting rooms and games...")
+
 	s.gameManager.Lock()
 	for _, wr := range s.gameManager.WaitingRooms {
 		wr.Cancel() // Cancel each waiting room context
 	}
-	s.users = nil
 	s.gameManager.WaitingRooms = nil // Clear all waiting rooms
 	s.gameManager.Unlock()
+
+	s.Lock()
+	s.users = nil
+	s.Unlock()
+
+	// Close database LAST after all operations are done
+	s.log.Info("Closing database...")
+	if err := s.db.Close(); err != nil {
+		s.log.Errorf("Error closing database: %v", err)
+	}
 
 	s.log.Info("Server shut down completed.")
 	return nil
