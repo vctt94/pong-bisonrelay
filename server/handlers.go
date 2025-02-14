@@ -1,10 +1,12 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
@@ -71,16 +73,34 @@ func (s *Server) handleFetchTotalUnprocessedTips(ctx context.Context, clientID z
 	return totalDcrAmount, tips, nil
 }
 
-func (s *Server) handleGameLifecycle(ctx context.Context, players []*ponggame.Player, betAmt float64) {
+func (s *Server) handleGameLifecycle(ctx context.Context, players []*ponggame.Player, tips []*types.ReceivedTip) {
 	game, err := s.gameManager.StartGame(ctx, players)
 	if err != nil {
 		s.log.Errorf("Failed to start game: %v", err)
 		return
 	}
+
 	defer func() {
 		// reset player status
 		for _, player := range game.Players {
 			player.ResetPlayer()
+			// Fetch latest unprocessed tips and update bet amount
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			totalDcrAmount, _, err := s.handleFetchTotalUnprocessedTips(ctx, *player.ID)
+			cancel()
+			if err != nil {
+				s.log.Errorf("Error fetching tips for player %s: %v", player.ID, err)
+				continue
+			}
+			playerSession := s.gameManager.PlayerSessions.GetPlayer(*player.ID)
+			playerSession.BetAmt = totalDcrAmount
+			s.log.Debugf("Reset player %s with updated bet amount: %.8f", player.ID, totalDcrAmount)
+			// notify player
+			playerSession.NotifierStream.Send(&pong.NtfnStreamResponse{
+				NotificationType: pong.NotificationType_BET_AMOUNT_UPDATE,
+				BetAmt:           player.BetAmt,
+				PlayerId:         player.ID.String(),
+			})
 		}
 		// remove game from gameManager after it ended
 		delete(s.gameManager.Games, game.Id)
@@ -111,10 +131,10 @@ func (s *Server) handleGameLifecycle(ctx context.Context, players []*ponggame.Pl
 
 	wg.Wait() // Wait for both players' streams to finish
 
-	s.handleGameEnd(ctx, game, players, betAmt)
+	s.handleGameEnd(ctx, game, players, tips)
 }
 
-func (s *Server) handleGameEnd(ctx context.Context, game *ponggame.GameInstance, players []*ponggame.Player, betAmt float64) {
+func (s *Server) handleGameEnd(ctx context.Context, game *ponggame.GameInstance, players []*ponggame.Player, tips []*types.ReceivedTip) {
 	winner := game.Winner
 	var winnerID string
 	if winner != nil {
@@ -124,14 +144,27 @@ func (s *Server) handleGameEnd(ctx context.Context, game *ponggame.GameInstance,
 		s.log.Infof("Game ended in a draw.")
 	}
 
-	totalBet := betAmt * 2
+	// Calculate total from actual reserved tips
+	totalDcrAmount := 0.0
+	for _, tip := range tips {
+		totalDcrAmount += float64(tip.AmountMatoms) / 1e11
+	}
+
 	// Notify players of game outcome
 	for _, player := range players {
 		message := "Game ended in a draw."
 		if player.ID == winner {
-			message = fmt.Sprintf("Congratulations, you won and received: %.8f", totalBet)
+			message = fmt.Sprintf("Congratulations, you won and received: %.8f", totalDcrAmount)
 		} else {
-			message = fmt.Sprintf("Sorry, you lost and lose: %.8f", betAmt)
+			// Calculate lost amount for this player
+			lostAmount := 0.0
+			for _, tip := range tips {
+				// Compare player ID with tip UID
+				if bytes.Equal(player.ID[:], tip.Uid) {
+					lostAmount += float64(tip.AmountMatoms) / 1e11
+				}
+			}
+			message = fmt.Sprintf("Sorry, you lost and lose: %.8f", lostAmount)
 		}
 		player.NotifierStream.Send(&pong.NtfnStreamResponse{
 			NotificationType: pong.NotificationType_GAME_END,
@@ -140,33 +173,27 @@ func (s *Server) handleGameEnd(ctx context.Context, game *ponggame.GameInstance,
 		})
 	}
 
-	// Transfer bet amount to winner
+	// Transfer actual reserved tip amounts to winner
 	if winner != nil {
+		// Process the reserved tips
+		for _, tip := range tips {
+			tipID := make([]byte, 8)
+			binary.BigEndian.PutUint64(tipID, tip.SequenceId)
+			err := s.db.UpdateTipStatus(ctx, tip.Uid, tipID, serverdb.StatusSending)
+			if err != nil {
+				s.log.Errorf("Failed to update tip status for player %s: %v", tip.Uid, err)
+			}
+		}
+
 		resp := &types.TipUserResponse{}
 		err := s.paymentClient.TipUser(ctx, &types.TipUserRequest{
 			User:        winner.String(),
-			DcrAmount:   totalBet,
+			DcrAmount:   totalDcrAmount, // Use actual reserved tip total
 			MaxAttempts: 3,
 		}, resp)
 		if err != nil {
 			s.log.Errorf("Failed to transfer bet amount to winner %s: %v", winner.String(), err)
 			return
-		}
-
-		s.log.Infof("transfering %.8f to winner %s", totalBet, winner.String())
-		for _, player := range players {
-			unprocessedTips, err := s.db.FetchReceivedTipsByUID(ctx, *player.ID, serverdb.StatusUnprocessed)
-			if err != nil {
-				s.log.Errorf("Failed to fetch unprocessed tips for player %s: %v", player.ID, err)
-			}
-			for _, tip := range unprocessedTips {
-				tipID := make([]byte, 8)
-				binary.BigEndian.PutUint64(tipID, tip.SequenceId)
-				err := s.db.UpdateTipStatus(ctx, player.ID.Bytes(), tipID, serverdb.StatusSending)
-				if err != nil {
-					s.log.Errorf("Failed to update tip status for player %s: %v", player.ID, err)
-				}
-			}
 		}
 	}
 }

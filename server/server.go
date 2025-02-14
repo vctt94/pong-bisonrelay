@@ -190,7 +190,6 @@ func (s *Server) StartNtfnStream(req *pong.StartNtfnStreamRequest, stream pong.P
 
 	s.users[&clientID].NotifierStream.Send(&pong.NtfnStreamResponse{
 		NotificationType: pong.NotificationType_BET_AMOUNT_UPDATE,
-		Message:          "Notifier stream Initialized",
 		BetAmt:           player.BetAmt,
 		PlayerId:         player.ID.String(),
 	})
@@ -224,7 +223,7 @@ func (s *Server) ManageWaitingRoom(ctx context.Context, wr *ponggame.WaitingRoom
 			if ready {
 				s.log.Infof("Game starting with players: %v and %v", players[0].ID, players[1].ID)
 
-				go s.handleGameLifecycle(ctx, players, wr.BetAmount) // Start game lifecycle in a goroutine
+				go s.handleGameLifecycle(ctx, players, wr.ReservedTips) // Start game lifecycle in a goroutine
 				return nil
 			}
 		}
@@ -316,12 +315,27 @@ func (s *Server) JoinWaitingRoom(ctx context.Context, req *pong.JoinWaitingRoomR
 		return nil, fmt.Errorf("waiting room not found: %s", req.RoomId)
 	}
 
-	// Check if BetAmt matches
-	if player.BetAmt != wr.BetAmount {
-		return nil, fmt.Errorf("bet amount mismatch. Room Bet: %.8f, Player Bet: %.8f", wr.BetAmount, player.BetAmt)
+	// Fetch and reserve joining player's tips
+	tips, err := s.db.FetchReceivedTipsByUID(ctx, uid, serverdb.StatusUnprocessed)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch player tips: %v", err)
+	}
+
+	// Calculate total from tips
+	totalBet := 0.0
+	for _, tip := range tips {
+		totalBet += float64(tip.AmountMatoms) / 1e11
+	}
+
+	// Validate bet amount matches
+	if totalBet != wr.BetAmount {
+		return nil, fmt.Errorf("bet amount mismatch. Available: %.8f, Required: %.8f", totalBet, wr.BetAmount)
 	}
 
 	wr.AddPlayer(player)
+	wr.Lock()
+	wr.ReservedTips = append(wr.ReservedTips, tips...)
+	wr.Unlock()
 
 	pwr, err := wr.Marshal()
 	if err != nil {
@@ -365,19 +379,33 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 
 	s.log.Debugf("creating waiting room. Host ID: %s", hostID)
 
-	// Check if a Waiting Room with the same Host ID already exists
-	s.gameManager.Lock()
-	defer s.gameManager.Unlock()
-	for _, room := range s.gameManager.WaitingRooms {
-		if *room.HostID == hostID {
-			return nil, fmt.Errorf("A Waiting Room already exists for Host ID: %s", hostID)
-		}
+	// Fetch and reserve unprocessed tips
+	tips, err := s.db.FetchReceivedTipsByUID(ctx, hostID, serverdb.StatusUnprocessed)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch unprocessed tips: %v", err)
 	}
 
+	// Calculate total from tips
+	totalBet := 0.0
+	for _, tip := range tips {
+		totalBet += float64(tip.AmountMatoms) / 1e11
+	}
+
+	// Validate bet amount matches
+	if totalBet != req.BetAmt {
+		return nil, fmt.Errorf("bet amount mismatch. Available: %.8f, Requested: %.8f", totalBet, req.BetAmt)
+	}
+
+	// Create waiting room with reserved tips
 	wr, err := ponggame.NewWaitingRoom(hostPlayer, req.BetAmt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create waiting room: %v", err)
 	}
+
+	wr.Lock()
+	wr.ReservedTips = tips // Store reserved tips
+	wr.Unlock()
+
 	s.gameManager.WaitingRooms = append(s.gameManager.WaitingRooms, wr)
 	s.log.Debugf("waiting room created. Total rooms: %d", len(s.gameManager.WaitingRooms))
 
