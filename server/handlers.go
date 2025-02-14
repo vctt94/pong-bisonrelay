@@ -93,6 +93,10 @@ func (s *Server) handleGameLifecycle(ctx context.Context, players []*ponggame.Pl
 				continue
 			}
 			playerSession := s.gameManager.PlayerSessions.GetPlayer(*player.ID)
+			if playerSession == nil {
+				s.log.Errorf("Error finding player session %s", player.ID)
+				continue
+			}
 			playerSession.BetAmt = totalDcrAmount
 			s.log.Debugf("Reset player %s with updated bet amount: %.8f", player.ID, totalDcrAmount)
 			// notify player

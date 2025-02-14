@@ -158,27 +158,27 @@ func (s *Server) handleDisconnect(clientID zkidentity.ShortID) {
 	}
 
 	s.Lock()
-	s.users[clientID] = nil
+	delete(s.users, clientID)
 	s.Unlock()
 
-	// Remove player from sessions
+	// Only process tips if player exists in sessions AND is not in an active game
 	playerSession := s.gameManager.PlayerSessions.GetPlayer(clientID)
 	if playerSession != nil {
 		s.gameManager.PlayerSessions.RemovePlayer(clientID)
+
+		// Check if player is not currently in any game
+		if s.gameManager.GetPlayerGame(clientID) == nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			if err := s.handleReturnUnprocessedTips(ctx, clientID, s.paymentClient, s.log); err != nil {
+				s.log.Errorf("Error returning unprocessed tips for client %s: %v", clientID.String(), err)
+			}
+		}
 	}
 
-	// Handle waiting room disconnection
+	// These can safely be called multiple times
 	s.gameManager.HandleWaitingRoomDisconnection(clientID, s.log)
-
-	// Handle game disconnection
 	s.gameManager.HandleGameDisconnection(clientID, s.log)
-
-	// Handle unprocessed tips
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := s.handleReturnUnprocessedTips(ctx, clientID, s.paymentClient, s.log); err != nil {
-		s.log.Errorf("Error returning unprocessed tips for client %s: %v", clientID.String(), err)
-	}
 }
 
 func (s *Server) StartNtfnStream(req *pong.StartNtfnStreamRequest, stream pong.PongGame_StartNtfnStreamServer) error {
@@ -445,12 +445,18 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 		return nil, err
 	}
 
+	s.RLock()
 	for _, user := range s.users {
+		if user.NotifierStream == nil {
+			s.log.Errorf("user %s without NotifierStream", user.ID)
+			continue
+		}
 		user.NotifierStream.Send(&pong.NtfnStreamResponse{
 			Wr:               pongWR,
 			NotificationType: pong.NotificationType_ON_WR_CREATED,
 		})
 	}
+	s.RUnlock()
 
 	return &pong.CreateWaitingRoomResponse{
 		Wr: pongWR,
