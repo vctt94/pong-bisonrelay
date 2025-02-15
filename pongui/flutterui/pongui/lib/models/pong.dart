@@ -6,7 +6,7 @@ import 'package:golib_plugin/definitions.dart';
 import 'package:golib_plugin/golib_plugin.dart';
 import 'package:pongui/components/pong_game.dart';
 import 'package:pongui/config.dart';
-import 'package:pongui/grpc/generated/pong.pbgrpc.dart';
+import 'package:golib_plugin/grpc/generated/pong.pbgrpc.dart';
 import 'package:pongui/grpc/grpc_client.dart';
 import 'package:pongui/models/notifications.dart';
 
@@ -88,18 +88,11 @@ class PongModel extends ChangeNotifier {
         case NotificationType.BET_AMOUNT_UPDATE:
           if (ntfn.playerId == clientId) {
             betAmt = ntfn.betAmt;
-            notificationModel.showNotification(
-              "Bet Amount Updated: ${ntfn.betAmt}",
-            );
           }
           break;
 
         case NotificationType.ON_WR_CREATED:
-          waitingRooms.add(LocalWaitingRoom(
-            ntfn.wr.id,
-            ntfn.wr.hostId,
-            ntfn.wr.betAmt,
-          ));
+          waitingRooms.add(LocalWaitingRoom.fromProto(ntfn.wr));
           notificationModel.showNotification(
             "Waiting room created by ${ntfn.wr.hostId}",
           );
@@ -118,19 +111,7 @@ class PongModel extends ChangeNotifier {
 
         case NotificationType.PLAYER_JOINED_WR:
           if (ntfn.playerId == clientId) {
-            currentWR = LocalWaitingRoom(
-              ntfn.wr.id,
-              ntfn.wr.hostId,
-              ntfn.wr.betAmt,
-              players: ntfn.wr.players
-                  .map((player) => LocalPlayer(
-                        player.uid,
-                        player.nick,
-                        player.betAmt,
-                        ready: player.ready,
-                      ))
-                  .toList(),  
-            );
+            currentWR = LocalWaitingRoom.fromProto(ntfn.wr);
           }
           notificationModel
               .showNotification("A new player joined the waiting room");
@@ -151,6 +132,13 @@ class PongModel extends ChangeNotifier {
           notifyListeners();
           break;
 
+        case NotificationType.OPPONENT_DISCONNECTED:
+          gameStarted = false;
+          currentWR = LocalWaitingRoom.fromProto(ntfn.wr);
+          notificationModel.showNotification(ntfn.message);
+          notifyListeners();
+          break;
+
         default:
           developer.log("Unknown notification type: ${ntfn.notificationType}");
       }
@@ -166,7 +154,7 @@ class PongModel extends ChangeNotifier {
 
   void resetGameState() {
     isReady = false;
-    currentWR = const LocalWaitingRoom("", "", 0.0);
+    currentWR = null;
     gameStarted = false;
     betAmt = 0;
     notifyListeners();

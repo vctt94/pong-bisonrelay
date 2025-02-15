@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:pongui/grpc/generated/pong.pbgrpc.dart';
+import 'package:golib_plugin/grpc/generated/pong.pbgrpc.dart';
 import 'package:grpc/grpc.dart';
 
 class GrpcPongClient {
