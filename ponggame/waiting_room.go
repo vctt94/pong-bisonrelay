@@ -1,9 +1,11 @@
 package ponggame
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
+	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/vctt94/pong-bisonrelay/botlib"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
@@ -105,12 +107,22 @@ func (wr *WaitingRoom) RemovePlayer(clientID zkidentity.ShortID) {
 	wr.Lock()
 	defer wr.Unlock()
 
+	// Remove player from Players slice
 	for i, player := range wr.Players {
 		if *player.ID == clientID {
 			wr.Players = append(wr.Players[:i], wr.Players[i+1:]...)
 			break
 		}
 	}
+
+	// Remove all reserved tips for this player
+	filteredTips := make([]*types.ReceivedTip, 0, len(wr.ReservedTips))
+	for _, tip := range wr.ReservedTips {
+		if !bytes.Equal(tip.Uid, clientID.Bytes()) {
+			filteredTips = append(filteredTips, tip)
+		}
+	}
+	wr.ReservedTips = filteredTips
 }
 
 func (wr *WaitingRoom) length() int {
