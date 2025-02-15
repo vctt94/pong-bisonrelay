@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/companyzero/bisonrelay/client/clientintf"
+	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/decred/slog"
 	"github.com/ndabAP/ping-pong/engine"
@@ -44,6 +45,7 @@ type GameInstance struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
 	Winner      *zkidentity.ShortID
+
 	// betAmt sum of total bets
 	betAmt float64
 
@@ -52,12 +54,13 @@ type GameInstance struct {
 
 type WaitingRoom struct {
 	sync.RWMutex
-	Ctx       context.Context
-	Cancel    context.CancelFunc
-	ID        string
-	HostID    *clientintf.UserID
-	Players   []*Player
-	BetAmount float64
+	Ctx          context.Context
+	Cancel       context.CancelFunc
+	ID           string
+	HostID       *clientintf.UserID
+	Players      []*Player
+	BetAmount    float64
+	ReservedTips []*types.ReceivedTip
 }
 
 type GameManager struct {
