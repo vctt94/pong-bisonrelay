@@ -119,7 +119,7 @@ func (s *Server) ReceiveTipLoop(ctx context.Context) error {
 				break
 			}
 
-			s.log.Debugf("Received tip from %s amount %d", hex.EncodeToString(tip.Uid), tip.AmountMatoms)
+			s.log.Debugf("Received tip from %s amount %.8f ID %d", hex.EncodeToString(tip.Uid), float64(tip.AmountMatoms)/1e11, tip.SequenceId)
 
 			// Check if the tip already exists in the database.
 			dbTip, err := s.db.FetchTip(ctx, tip.SequenceId)
