@@ -11,6 +11,7 @@ import 'package:golib_plugin/mock.dart';
 import 'package:golib_plugin/util.dart';
 import 'package:json_annotation/json_annotation.dart';
 import 'package:blake_hash/blake_hash.dart';
+import 'package:golib_plugin/grpc/generated/pong.pbgrpc.dart';
 
 part 'definitions.g.dart';
 
@@ -100,6 +101,14 @@ class LocalPlayer {
   factory LocalPlayer.fromJson(Map<String, dynamic> json) => _$LocalPlayerFromJson(json);
   Map<String, dynamic> toJson() => _$LocalPlayerToJson(this);
 
+  factory LocalPlayer.fromProto(Player player) {
+    return LocalPlayer(
+      player.uid,
+      player.nick,
+      player.betAmt,
+      ready: player.ready,
+    );
+  }
 }
 
 @JsonSerializable()
@@ -120,6 +129,22 @@ class LocalWaitingRoom {
   factory LocalWaitingRoom.fromJson(Map<String, dynamic> json) =>
       _$LocalWaitingRoomFromJson(json);
   Map<String, dynamic> toJson() => _$LocalWaitingRoomToJson(this);
+
+  factory LocalWaitingRoom.fromProto(WaitingRoom wr) {
+    return LocalWaitingRoom(
+      wr.id,
+      wr.hostId,
+      wr.betAmt,
+      players: wr.players
+          .map((player) => LocalPlayer(
+                player.uid,
+                player.nick,
+                player.betAmt,
+                ready: player.ready,
+              ))
+          .toList(),
+    );
+  }
 }
 
 @JsonSerializable()
