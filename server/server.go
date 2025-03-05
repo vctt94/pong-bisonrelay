@@ -94,8 +94,9 @@ func NewServer(id *zkidentity.ShortID, cfg ServerConfig) *Server {
 	if cfg.HTTPPort != "" {
 		// Set up HTTP server for db calls
 		mux := http.NewServeMux()
-		mux.HandleFunc("/fetchTipsByClientID", s.handleFetchTipsByClientIDHandler)
+		mux.HandleFunc("/received", s.handleFetchTipsByClientIDHandler)
 		mux.HandleFunc("/fetchAllUnprocessedTips", s.handleFetchAllUnprocessedTipsHandler)
+		mux.HandleFunc("/tipprogress", s.handleGetSendProgressByWinnerHandler)
 		s.httpServer = &http.Server{
 			Addr:    fmt.Sprintf(":%s", cfg.HTTPPort),
 			Handler: mux,
@@ -340,7 +341,7 @@ func (s *Server) JoinWaitingRoom(ctx context.Context, req *pong.JoinWaitingRoomR
 	}
 
 	// Fetch and reserve joining player's tips
-	tips, err := s.db.FetchReceivedTipsByUID(ctx, uid, serverdb.StatusUnprocessed)
+	tips, err := s.db.FetchReceivedTipsByUID(ctx, uid, serverdb.StatusUnpaid)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch player tips: %v", err)
 	}
@@ -404,7 +405,7 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 	s.log.Debugf("creating waiting room. Host ID: %s", hostID)
 
 	// Fetch and reserve unprocessed tips
-	tips, err := s.db.FetchReceivedTipsByUID(ctx, hostID, serverdb.StatusUnprocessed)
+	tips, err := s.db.FetchReceivedTipsByUID(ctx, hostID, serverdb.StatusUnpaid)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch unprocessed tips: %v", err)
 	}

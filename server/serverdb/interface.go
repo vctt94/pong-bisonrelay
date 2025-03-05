@@ -3,6 +3,7 @@ package serverdb
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
@@ -19,9 +20,9 @@ var (
 type TipStatus string
 
 const (
-	StatusUnprocessed TipStatus = "unprocessed"
-	StatusSending     TipStatus = "sending"
-	StatusProcessed   TipStatus = "processed"
+	StatusUnpaid  TipStatus = "unpaid"
+	StatusSending TipStatus = "sending"
+	StatusPaid    TipStatus = "paid"
 )
 
 type ReceivedTipWrapper struct {
@@ -29,8 +30,13 @@ type ReceivedTipWrapper struct {
 	Status TipStatus
 }
 
-type FetchUnprocessedTipsResult struct {
-	UnprocessedTips map[zkidentity.ShortID][]types.ReceivedTip
+type TipProgressRecord struct {
+	ID          uint64               `json:"id"`
+	WinnerUID   []byte               `json:"winner_uid"`
+	TotalAmount int64                `json:"total_amount"`
+	Status      TipStatus            `json:"status"`
+	Tips        []*types.ReceivedTip `json:"received_tip"`
+	CreatedAt   time.Time            `json:"created_at"`
 }
 
 type ServerDB interface {
@@ -40,5 +46,10 @@ type ServerDB interface {
 	FetchReceivedTipsByUID(ctx context.Context, uid zkidentity.ShortID, status TipStatus) ([]*types.ReceivedTip, error)
 	UpdateTipStatus(ctx context.Context, uid []byte, tipID []byte, status TipStatus) error
 	FetchAllReceivedTipsByUID(ctx context.Context, uid zkidentity.ShortID) ([]ReceivedTipWrapper, error)
+
+	StoreSendTipProgress(ctx context.Context, winnerUID []byte, totalAmount int64, tips []*types.ReceivedTip, status TipStatus) error
+	FetchLatestUncompletedTipProgress(ctx context.Context, winnerUID []byte, totalAmount int64) (*TipProgressRecord, error)
+	FetchSendTipProgressByClient(ctx context.Context, clientID []byte) ([]*TipProgressRecord, error)
+	UpdateTipProgressStatus(ctx context.Context, recordID uint64, status TipStatus) error
 	Close() error
 }

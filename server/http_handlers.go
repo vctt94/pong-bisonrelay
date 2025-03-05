@@ -54,3 +54,29 @@ func (s *Server) handleFetchAllUnprocessedTipsHandler(w http.ResponseWriter, r *
 		http.Error(w, fmt.Sprintf("error encoding response: %v", err), http.StatusInternalServerError)
 	}
 }
+
+// handleGetSendProgressByWinnerHandler retrieves progress for a specific winner
+func (s *Server) handleGetSendProgressByWinnerHandler(w http.ResponseWriter, r *http.Request) {
+	clientIDStr := r.URL.Query().Get("clientID")
+	fmt.Printf("aqui: %+v\n\n", clientIDStr)
+	if clientIDStr == "" {
+		http.Error(w, "clientID parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	var clientID zkidentity.ShortID
+	if err := clientID.FromString(clientIDStr); err != nil {
+		http.Error(w, fmt.Sprintf("invalid client ID: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	fmt.Printf("clientID: %+v\n\n", clientID.String())
+	records, err := s.db.FetchSendTipProgressByClient(r.Context(), clientID.Bytes())
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error fetching progress: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(records)
+}

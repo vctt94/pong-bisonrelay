@@ -17,7 +17,7 @@ import (
 )
 
 func (s *Server) handleReturnUnprocessedTips(ctx context.Context, clientID zkidentity.ShortID, paymentClient types.PaymentsServiceClient, log slog.Logger) error {
-	tips, err := s.db.FetchReceivedTipsByUID(ctx, clientID, serverdb.StatusUnprocessed)
+	tips, err := s.db.FetchReceivedTipsByUID(ctx, clientID, serverdb.StatusUnpaid)
 	if err != nil {
 		log.Errorf("Failed to fetch unprocessed tips for client %s: %v", clientID.String(), err)
 		return err
@@ -44,6 +44,17 @@ func (s *Server) handleReturnUnprocessedTips(ctx context.Context, clientID zkide
 	}
 
 	log.Infof("Returned unprocessed tips to client %s: %.8f", clientID.String(), totalDcrAmount)
+
+	// Convert total back to matoms for storage
+	totalMatoms := int64(totalDcrAmount * 1e11)
+
+	// Store send progress with all tips being returned
+	err = s.db.StoreSendTipProgress(ctx, clientID.Bytes(), totalMatoms, tips, serverdb.StatusSending)
+	if err != nil {
+		log.Errorf("Failed to store return tip progress: %v", err)
+		return err
+	}
+
 	for _, tip := range tips {
 		tipID := make([]byte, 8)
 		binary.BigEndian.PutUint64(tipID, tip.SequenceId)
@@ -57,7 +68,7 @@ func (s *Server) handleReturnUnprocessedTips(ctx context.Context, clientID zkide
 
 func (s *Server) handleFetchTotalUnprocessedTips(ctx context.Context, clientID zkidentity.ShortID) (float64, []*types.ReceivedTip, error) {
 	// Fetch unprocessed tips from the database
-	tips, err := s.db.FetchReceivedTipsByUID(ctx, clientID, serverdb.StatusUnprocessed)
+	tips, err := s.db.FetchReceivedTipsByUID(ctx, clientID, serverdb.StatusUnpaid)
 	if err != nil {
 		s.log.Errorf("Failed to fetch unprocessed tips for client %s: %v", clientID.String(), err)
 		return 0, nil, err
@@ -149,9 +160,29 @@ func (s *Server) handleGameEnd(ctx context.Context, game *ponggame.GameInstance,
 	}
 
 	// Calculate total from actual reserved tips
-	totalDcrAmount := 0.0
+	totalAmountMatoms := int64(0)
 	for _, tip := range tips {
-		totalDcrAmount += float64(tip.AmountMatoms) / 1e11
+		totalAmountMatoms += tip.AmountMatoms
+	}
+
+	// Convert total to matoms for storage
+	totalDcrAmount := float64(totalAmountMatoms) / 1e11
+
+	// Store send progress with ALL tips (both players')
+	err := s.db.StoreSendTipProgress(ctx, winner[:], totalAmountMatoms, tips, serverdb.StatusSending)
+	if err != nil {
+		s.log.Errorf("Failed to store send progress: %v", err)
+		return
+	}
+
+	// Process the reserved tips
+	for _, tip := range tips {
+		tipID := make([]byte, 8)
+		binary.BigEndian.PutUint64(tipID, tip.SequenceId)
+		err := s.db.UpdateTipStatus(ctx, tip.Uid, tipID, serverdb.StatusSending)
+		if err != nil {
+			s.log.Errorf("Failed to update tip status for player %s: %v", tip.Uid, err)
+		}
 	}
 
 	// Notify players of game outcome
@@ -188,11 +219,10 @@ func (s *Server) handleGameEnd(ctx context.Context, game *ponggame.GameInstance,
 				s.log.Errorf("Failed to update tip status for player %s: %v", tip.Uid, err)
 			}
 		}
-
 		resp := &types.TipUserResponse{}
 		err := s.paymentClient.TipUser(ctx, &types.TipUserRequest{
 			User:        winner.String(),
-			DcrAmount:   totalDcrAmount, // Use actual reserved tip total
+			DcrAmount:   totalDcrAmount,
 			MaxAttempts: 3,
 		}, resp)
 		if err != nil {

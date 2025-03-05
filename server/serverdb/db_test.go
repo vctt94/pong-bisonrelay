@@ -43,7 +43,7 @@ func testPongServerDBInterface(t *testing.T, db serverdb.ServerDB) {
 	}
 
 	// Fetch the stored tip and verify its content
-	tips, err := db.FetchReceivedTipsByUID(ctx, clientID, serverdb.StatusUnprocessed)
+	tips, err := db.FetchReceivedTipsByUID(ctx, clientID, serverdb.StatusUnpaid)
 	if err != nil {
 		t.Fatalf("Failed to fetch tips: %v", err)
 	}

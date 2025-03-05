@@ -1,6 +1,7 @@
 package serverdb
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -13,8 +14,16 @@ import (
 )
 
 var (
-	tipsBucket = []byte("receivedTips")
+	receivedTipsBucket    = []byte("receivedTips")
+	sendTipProgressBucket = []byte("sendTipsProgress")
 )
+
+// itob converte um uint64 em []byte usando BigEndian.
+func itob(v uint64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, v)
+	return b
+}
 
 // BoltDB implements the ServerDB interface using bbolt as the backend.
 type boltDB struct {
@@ -31,7 +40,11 @@ func NewBoltDB(dbPath string) (ServerDB, error) {
 	}
 	// Initialize the main and status buckets on the first run.
 	err = db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists(tipsBucket)
+		_, err := tx.CreateBucketIfNotExists(receivedTipsBucket)
+		return err
+	})
+	err = db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists(sendTipProgressBucket)
 		return err
 	})
 	if err != nil {
@@ -45,7 +58,7 @@ func NewBoltDB(dbPath string) (ServerDB, error) {
 func (b *boltDB) StoreUnprocessedTip(ctx context.Context, tip *types.ReceivedTip) error {
 	payload := ReceivedTipWrapper{
 		Tip:    tip,
-		Status: StatusUnprocessed,
+		Status: StatusUnpaid,
 	}
 
 	data, err := json.Marshal(payload)
@@ -54,7 +67,7 @@ func (b *boltDB) StoreUnprocessedTip(ctx context.Context, tip *types.ReceivedTip
 	}
 
 	return b.db.Update(func(tx *bolt.Tx) error {
-		mainBucket := tx.Bucket(tipsBucket)
+		mainBucket := tx.Bucket(receivedTipsBucket)
 		if mainBucket == nil {
 			return ErrMainBucketNotFound
 		}
@@ -77,7 +90,7 @@ func (b *boltDB) StoreUnprocessedTip(ctx context.Context, tip *types.ReceivedTip
 // MarkTipAsSending updates the status of a specific tip to "sending".
 func (b *boltDB) UpdateTipStatus(ctx context.Context, uid []byte, tipID []byte, status TipStatus) error {
 	return b.db.Update(func(tx *bolt.Tx) error {
-		mainBucket := tx.Bucket(tipsBucket)
+		mainBucket := tx.Bucket(receivedTipsBucket)
 		if mainBucket == nil {
 			return ErrMainBucketNotFound
 		}
@@ -123,7 +136,7 @@ func (b *boltDB) FetchReceivedTipsByUID(ctx context.Context, uid zkidentity.Shor
 	var unprocessedTips []*types.ReceivedTip
 
 	err := b.db.View(func(tx *bolt.Tx) error {
-		mainBucket := tx.Bucket(tipsBucket)
+		mainBucket := tx.Bucket(receivedTipsBucket)
 		if mainBucket == nil {
 			return ErrTipBucketNotFound
 		}
@@ -163,7 +176,7 @@ func (b *boltDB) FetchAllReceivedTipsByUID(ctx context.Context, uid zkidentity.S
 	var allTips []ReceivedTipWrapper
 
 	err := b.db.View(func(tx *bolt.Tx) error {
-		mainBucket := tx.Bucket(tipsBucket)
+		mainBucket := tx.Bucket(receivedTipsBucket)
 		if mainBucket == nil {
 			return errors.New("tip bucket not found")
 		}
@@ -199,7 +212,7 @@ func (b *boltDB) FetchUnprocessedTips(ctx context.Context) (map[zkidentity.Short
 	unprocessedTips := make(map[zkidentity.ShortID][]*types.ReceivedTip)
 
 	err := b.db.View(func(tx *bolt.Tx) error {
-		mainBucket := tx.Bucket(tipsBucket)
+		mainBucket := tx.Bucket(receivedTipsBucket)
 		if mainBucket == nil {
 			return ErrMainBucketNotFound
 		}
@@ -225,7 +238,7 @@ func (b *boltDB) FetchUnprocessedTips(ctx context.Context) (map[zkidentity.Short
 				}
 
 				// Only append tips with StatusUnprocessed
-				if wrapper.Status == StatusUnprocessed {
+				if wrapper.Status == StatusUnpaid {
 					unprocessedTips[userID] = append(unprocessedTips[userID], wrapper.Tip)
 				}
 				return nil
@@ -244,7 +257,7 @@ func (b *boltDB) FetchTip(ctx context.Context, tipID uint64) (*ReceivedTipWrappe
 	var found bool
 
 	err := b.db.View(func(tx *bolt.Tx) error {
-		mainBucket := tx.Bucket(tipsBucket)
+		mainBucket := tx.Bucket(receivedTipsBucket)
 		if mainBucket == nil {
 			return ErrMainBucketNotFound
 		}
@@ -281,4 +294,130 @@ func (b *boltDB) FetchTip(ctx context.Context, tipID uint64) (*ReceivedTipWrappe
 		return nil, nil
 	}
 	return tip, nil
+}
+
+func (b *boltDB) StoreSendTipProgress(ctx context.Context, winnerUID []byte, totalAmount int64, tips []*types.ReceivedTip, status TipStatus) error {
+	err := b.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(sendTipProgressBucket)
+		if bucket == nil {
+			return ErrTipBucketNotFound
+		}
+
+		record := TipProgressRecord{
+			WinnerUID:   winnerUID,
+			TotalAmount: totalAmount,
+			Tips:        tips,
+			CreatedAt:   time.Now(),
+			Status:      status,
+		}
+
+		// Generate sequence ID
+		id, _ := bucket.NextSequence()
+		record.ID = id
+
+		data, err := json.Marshal(record)
+		if err != nil {
+			return err
+		}
+
+		return bucket.Put(itob(id), data)
+	})
+	return err
+}
+
+func (b *boltDB) FetchLatestUncompletedTipProgress(ctx context.Context, winnerUID []byte, totalAmount int64) (*TipProgressRecord, error) {
+	var latestRecord *TipProgressRecord
+
+	err := b.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(sendTipProgressBucket)
+		if bucket == nil {
+			return ErrTipBucketNotFound
+		}
+
+		return bucket.ForEach(func(k, v []byte) error {
+			var record TipProgressRecord
+			if err := json.Unmarshal(v, &record); err != nil {
+				return err
+			}
+
+			// Check if the record matches the given winnerUID and totalAmount and is uncompleted.
+			if bytes.Equal(record.WinnerUID, winnerUID) && record.TotalAmount == totalAmount && record.Status != StatusPaid {
+				// Update latestRecord if this record is newer.
+				if latestRecord == nil || record.CreatedAt.After(latestRecord.CreatedAt) {
+					tmp := record // create a copy to get its address
+					latestRecord = &tmp
+				}
+			}
+			return nil
+		})
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if latestRecord == nil {
+		return nil, ErrTipNotFound
+	}
+
+	return latestRecord, nil
+}
+
+func (b *boltDB) FetchSendTipProgressByClient(ctx context.Context, clientID []byte) ([]*TipProgressRecord, error) {
+	var results []*TipProgressRecord
+
+	err := b.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(sendTipProgressBucket)
+		if bucket == nil {
+			return ErrTipBucketNotFound
+		}
+
+		return bucket.ForEach(func(_, v []byte) error {
+			var record TipProgressRecord
+			if err := json.Unmarshal(v, &record); err != nil {
+				return err
+			}
+
+			if bytes.Equal(record.WinnerUID, clientID) {
+				// Clone the record to avoid referencing loop variable
+				recordCopy := record
+				results = append(results, &recordCopy)
+			}
+			return nil
+		})
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+func (b *boltDB) UpdateTipProgressStatus(ctx context.Context, recordID uint64, status TipStatus) error {
+	return b.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(sendTipProgressBucket)
+		if bucket == nil {
+			return ErrTipBucketNotFound
+		}
+
+		key := itob(recordID)
+		data := bucket.Get(key)
+		if data == nil {
+			return ErrTipNotFound
+		}
+
+		var record TipProgressRecord
+		if err := json.Unmarshal(data, &record); err != nil {
+			return err
+		}
+
+		record.Status = status
+		updatedData, err := json.Marshal(record)
+		if err != nil {
+			return err
+		}
+
+		return bucket.Put(key, updatedData)
+	})
 }
