@@ -55,3 +55,29 @@ func (m *MockDB) FetchTip(ctx context.Context, tipID uint64) (*serverdb.Received
 	args := m.Called(ctx, tipID)
 	return args.Get(0).(*serverdb.ReceivedTipWrapper), args.Error(1)
 }
+
+func (m *MockDB) FetchLatestUncompletedTipProgress(ctx context.Context, winnerUID []byte, totalAmount int64) (*serverdb.TipProgressRecord, error) {
+	args := m.Called(ctx, winnerUID, totalAmount)
+	if args.Get(0) != nil {
+		return args.Get(0).(*serverdb.TipProgressRecord), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *MockDB) FetchSendTipProgressByClient(ctx context.Context, clientID []byte) ([]*serverdb.TipProgressRecord, error) {
+	args := m.Called(ctx, clientID)
+	if args.Get(0) != nil {
+		return args.Get(0).([]*serverdb.TipProgressRecord), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *MockDB) StoreSendTipProgress(ctx context.Context, winnerUID []byte, totalAmount int64, tips []*types.ReceivedTip, status serverdb.TipStatus) error {
+	args := m.Called(ctx, winnerUID, totalAmount, tips, status)
+	return args.Error(0)
+}
+
+func (m *MockDB) UpdateTipProgressStatus(ctx context.Context, recordID uint64, status serverdb.TipStatus) error {
+	args := m.Called(ctx, recordID, status)
+	return args.Error(0)
+}

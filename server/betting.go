@@ -66,6 +66,13 @@ func (s *Server) SendTipProgressLoop(ctx context.Context) error {
 					continue
 				}
 
+				// Skip processing if no record was found
+				if record == nil {
+					s.log.Infof("No matching tip progress record found for UID %s and amount %.8f",
+						hex.EncodeToString(winnerUID), float64(totalMatoms)/1e11)
+					continue
+				}
+
 				// Mark all associated tips as processed
 				for _, rt := range record.Tips {
 					tipID := make([]byte, 8)

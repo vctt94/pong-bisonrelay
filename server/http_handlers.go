@@ -58,7 +58,6 @@ func (s *Server) handleFetchAllUnprocessedTipsHandler(w http.ResponseWriter, r *
 // handleGetSendProgressByWinnerHandler retrieves progress for a specific winner
 func (s *Server) handleGetSendProgressByWinnerHandler(w http.ResponseWriter, r *http.Request) {
 	clientIDStr := r.URL.Query().Get("clientID")
-	fmt.Printf("aqui: %+v\n\n", clientIDStr)
 	if clientIDStr == "" {
 		http.Error(w, "clientID parameter is required", http.StatusBadRequest)
 		return
@@ -70,7 +69,6 @@ func (s *Server) handleGetSendProgressByWinnerHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	fmt.Printf("clientID: %+v\n\n", clientID.String())
 	records, err := s.db.FetchSendTipProgressByClient(r.Context(), clientID.Bytes())
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error fetching progress: %v", err), http.StatusInternalServerError)

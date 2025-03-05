@@ -388,7 +388,7 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 		return nil, err
 	}
 
-	hostPlayer := s.gameManager.PlayerSessions.Sessions[hostID]
+	hostPlayer := s.gameManager.PlayerSessions.GetPlayer(hostID)
 	if hostPlayer == nil {
 		return nil, fmt.Errorf("player not found: %s", req.HostId)
 	}
