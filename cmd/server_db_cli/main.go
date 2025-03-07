@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 )
 
 var (
 	serverURL = flag.String("serverURL", "http://localhost:8888", "URL of the HTTP server")
-	clientID  = flag.String("client", "", "Client ID to fetch tips for")
-	showAll   = flag.Bool("all", false, "Show all unprocessed tips")
 )
 
 type Tip struct {
@@ -23,25 +23,52 @@ type Tip struct {
 	Status string `json:"Status"`
 }
 
+type TipProgressRecord struct {
+	SequenceID  uint64    `json:"id"`
+	WinnerUID   string    `json:"winner_uid"`
+	TotalAmount int64     `json:"total_amount"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 func main() {
 	flag.Parse()
 
-	if *clientID != "" {
-		fetchTipsByClientID(*clientID)
-	} else if *showAll {
+	args := flag.Args()
+	if len(args) < 1 {
+		fmt.Println("Available commands:")
+		fmt.Println("  getsendprogress <clientID>")
+		fmt.Println("  getreceived <clientID>")
+		fmt.Println("  getall")
+		os.Exit(1)
+	}
+
+	switch args[0] {
+	case "getsendprogress":
+		if len(args) < 2 {
+			fmt.Println("Client ID required for getsendprogress")
+			os.Exit(1)
+		}
+		fetchSendProgress(args[1])
+	case "getreceived":
+		if len(args) < 2 {
+			fmt.Println("Client ID required for getreceived")
+			os.Exit(1)
+		}
+		fetchReceivedTips(args[1])
+	case "getall":
 		fetchAllUnprocessedTips()
-	} else {
-		fmt.Println("Please provide either a client ID (--clientID) or use --all to display all unprocessed tips.")
-		flag.Usage()
+	default:
+		fmt.Println("Unknown command:", args[0])
 		os.Exit(1)
 	}
 }
 
-func fetchTipsByClientID(clientID string) {
-	url := fmt.Sprintf("%s/fetchTipsByClientID?clientID=%s", *serverURL, clientID)
+func fetchReceivedTips(clientID string) {
+	url := fmt.Sprintf("%s/received?clientID=%s", *serverURL, clientID)
 	resp, err := http.Get(url)
 	if err != nil {
-		fmt.Printf("Error fetching tips by client ID: %v\n", err)
+		fmt.Printf("Error fetching received tips: %v\n", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -57,18 +84,11 @@ func fetchTipsByClientID(clientID string) {
 		return
 	}
 
-	fmt.Printf("Tips for client ID %s:\n", clientID)
-	fmt.Printf("%+v\n\n", tips)
+	fmt.Printf("Received tips for client ID %s:\n", clientID)
 	for _, tip := range tips {
-		fmt.Println(tip)
-		// fmt.Printf("tip amt: %+v\n\n", tip.Tip.AmountMatoms)
-		// fmt.Printf("Tip ID: %x\nAmount (matoms): %.8f\nStatus: %v\nTimestamp: %v\n\n",
-		// 	tip.Tip.SequenceId, float64(tip.Tip.AmountMatoms)/1e11, tip.Status, time.UnixMilli(tip.Tip.TimestampMs))
+		fmt.Printf("- Tip ID: %s\n  Amount: %d matoms\n  Status: %s\n",
+			tip.Tip.Uid, tip.Tip.AmountMatoms, tip.Status)
 	}
-	// for _, tip := range tips {
-
-	// 	fmt.Printf("Tip: %+v\n", tip)
-	// }
 }
 
 func fetchAllUnprocessedTips() {
@@ -105,4 +125,68 @@ func fetchAllUnprocessedTips() {
 			}
 		}
 	}
+}
+
+func fetchSendProgress(clientID string) {
+	url := fmt.Sprintf("%s/tipprogress?clientID=%s", *serverURL, clientID)
+	resp, err := http.Get(url)
+	if err != nil {
+		fmt.Printf("Error fetching send progress: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("Server returned error: %s\n", resp.Status)
+		return
+	}
+
+	var records []struct {
+		CreatedAt    time.Time `json:"created_at"`
+		ID           int       `json:"id"`
+		ReceivedTips []struct {
+			AmountMatoms int64  `json:"amount_matoms"`
+			SequenceID   int64  `json:"sequence_id"`
+			UID          string `json:"uid"`
+		} `json:"received_tip"`
+		Status      string `json:"status"`
+		TotalAmount int64  `json:"total_amount"`
+		WinnerUID   string `json:"winner_uid"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&records); err != nil {
+		fmt.Printf("Error decoding response: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("\nSend Progress Records for client %s:\n\n", clientID)
+	for i, record := range records {
+		fmt.Printf("Record #%d\n", i+1)
+		fmt.Printf("• Created:   %s\n", record.CreatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Printf("• Status:    %s\n", strings.ToUpper(record.Status))
+		fmt.Printf("• Total:     %s DCR\n", formatMatoms(record.TotalAmount))
+		fmt.Printf("• Winner:    %s\n", truncateUID(record.WinnerUID))
+		fmt.Println("• Received Tips:")
+
+		for _, tip := range record.ReceivedTips {
+			fmt.Printf("  - ID: %-12d | %8s DCR | UID: %s\n",
+				tip.SequenceID,
+				formatMatoms(tip.AmountMatoms),
+				truncateUID(tip.UID),
+			)
+		}
+		fmt.Println()
+	}
+}
+
+func formatMatoms(matoms int64) string {
+	btc := float64(matoms) / 1e11 // Convert matoms to BTC
+	return fmt.Sprintf("%.2f", btc)
+}
+
+func truncateUID(uid string) string {
+	if len(uid) <= 12 {
+		return uid
+	}
+	return uid[:6] + "..." + uid[len(uid)-6:]
 }

@@ -41,8 +41,8 @@ const (
 
 var (
 	// serverAddr = flag.String("server_addr", "104.131.180.29:50051", "The server address in the format of host:port")
-	serverAddr = flag.String("server_addr", "", "The server address in the format of host:port")
-	// brdatadir          = flag.String("brdatadir", "", "Directory containing the certificates and keys")
+	serverAddr         = flag.String("server_addr", "", "The server address in the format of host:port")
+	datadir            = flag.String("datadir", "", "Directory to load config file from")
 	flagURL            = flag.String("url", "", "URL of the websocket endpoint")
 	flagServerCertPath = flag.String("servercert", "", "Path to rpc.cert file")
 	flagClientCertPath = flag.String("clientcert", "", "Path to rpc-client.cert file")
@@ -242,7 +242,7 @@ func (m *appstate) listWaitingRooms() error {
 
 func (m *appstate) createRoom() error {
 	var err error
-	_, err = m.pc.CreatewaitingRoom(m.pc.ID, m.pc.BetAmt)
+	_, err = m.pc.CreateWaitingRoom(m.pc.ID, m.pc.BetAmt)
 	if err != nil {
 		return err
 	}
@@ -471,7 +471,7 @@ func (m *appstate) View() string {
 
 func realMain() error {
 	flag.Parse()
-	cfg, err := botlib.LoadClientConfig()
+	cfg, err := botlib.LoadClientConfig(*datadir)
 	if err != nil {
 		fmt.Println("Error loading configuration:", err)
 		os.Exit(1)

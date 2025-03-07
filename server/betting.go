@@ -55,32 +55,48 @@ func (s *Server) SendTipProgressLoop(ctx context.Context) error {
 
 			// Only process tip receipt acknowledgement after the tip send progress is completed.
 			if tip.Completed {
-				var uid zkidentity.ShortID
-				uid.FromBytes(tip.Uid)
+				// Convert winner UID and amount to match stored progress
+				winnerUID := tip.Uid
+				totalMatoms := tip.AmountMatoms
 
-				// Fetch tips that are currently marked as 'sending' so they can be updated.
-				tips, err := s.db.FetchReceivedTipsByUID(ctx, uid, serverdb.StatusSending)
+				// Fetch latest tip progress for this winner and amount
+				record, err := s.db.FetchLatestUncompletedTipProgress(ctx, winnerUID, totalMatoms)
 				if err != nil {
-					s.log.Warnf("Error while fetching unprocessed tips: %v", err)
-					break
+					s.log.Errorf("Error fetching tip progress records: %v", err)
+					continue
 				}
 
-				for _, tip := range tips {
-					// Mark the tip as processed in the database.
+				// Skip processing if no record was found
+				if record == nil {
+					s.log.Infof("No matching tip progress record found for UID %s and amount %.8f",
+						hex.EncodeToString(winnerUID), float64(totalMatoms)/1e11)
+					continue
+				}
+
+				// Mark all associated tips as processed
+				for _, rt := range record.Tips {
 					tipID := make([]byte, 8)
-					binary.BigEndian.PutUint64(tipID, tip.SequenceId)
-					err = s.db.UpdateTipStatus(ctx, tip.Uid, tipID, serverdb.StatusProcessed)
+					binary.BigEndian.PutUint64(tipID, rt.SequenceId)
+
+					// Update tip status to processed
+					err = s.db.UpdateTipStatus(ctx, rt.Uid, tipID, serverdb.StatusPaid)
 					if err != nil {
-						s.log.Debugf("Failed to update tip status for player %s: %v", uid.String(), err)
+						s.log.Warnf("Error updating tip %d status: %v", rt.SequenceId, err)
+						continue
 					}
-					// Acknowledge that the tip has been received.
-					ackRes := &types.AckResponse{}
-					err = s.paymentClient.AckTipReceived(ctx, &types.AckRequest{SequenceId: tip.SequenceId}, ackRes)
+
+					// Ack the received tip
+					ackReq.SequenceId = rt.SequenceId
+					err = s.paymentClient.AckTipReceived(ctx, &ackReq, &ackRes)
 					if err != nil {
-						s.log.Debugf("Failed to acknowledge tip for player %s: %v", uid.String(), err)
-					} else {
-						s.log.Debugf("Acknowledged tip with SequenceId %d for player %s", tip.SequenceId, uid.String())
+						s.log.Warnf("Error acknowledging tip %d: %v", rt.SequenceId, err)
 					}
+				}
+
+				// Update the tip progress record status to processed
+				err = s.db.UpdateTipProgressStatus(ctx, record.ID, serverdb.StatusPaid)
+				if err != nil {
+					s.log.Errorf("Error updating tip progress record status: %v", err)
 				}
 			}
 		}
@@ -135,7 +151,7 @@ func (s *Server) ReceiveTipLoop(ctx context.Context) error {
 				}
 			} else {
 				// If the tip has already been processed, acknowledge it.
-				if dbTip.Status == serverdb.StatusProcessed {
+				if dbTip.Status == serverdb.StatusPaid {
 					ackReq.SequenceId = tip.SequenceId
 					err = s.paymentClient.AckTipReceived(ctx, &ackReq, &ackRes)
 					if err != nil {

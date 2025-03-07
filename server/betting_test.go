@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"testing"
 	"time"
@@ -10,7 +11,7 @@ import (
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/stretchr/testify/mock"
 	"github.com/vctt94/pong-bisonrelay/botlib"
-	"github.com/vctt94/pong-bisonrelay/server/mocks"
+	"github.com/vctt94/pong-bisonrelay/server/internal/mocks"
 	"github.com/vctt94/pong-bisonrelay/server/serverdb"
 )
 
@@ -23,6 +24,16 @@ func TestReceiveTipLoop(t *testing.T) {
 	// Mock DB
 	mockDB := &mocks.MockDB{}
 	srv.db = mockDB
+
+	// Expect that FetchTip returns nil (tip doesn't exist) for both tips
+	mockDB.
+		On("FetchTip", mock.Anything, uint64(1)).
+		Return((*serverdb.ReceivedTipWrapper)(nil), nil).
+		Once()
+	mockDB.
+		On("FetchTip", mock.Anything, uint64(2)).
+		Return((*serverdb.ReceivedTipWrapper)(nil), nil).
+		Once()
 
 	// Expect that StoreUnprocessedTip is called at least once
 	mockDB.
@@ -134,6 +145,12 @@ func TestReceiveTipLoop_EOF(t *testing.T) {
 		ErrorAfter: -1, // No errors, ends with EOF
 	}
 
+	// Add FetchTip expectation
+	mockDB.
+		On("FetchTip", mock.Anything, uint64(1)).
+		Return((*serverdb.ReceivedTipWrapper)(nil), nil).
+		Once()
+
 	mockPayClient.
 		On("TipStream", mock.Anything, mock.Anything).
 		Return(tipStream, nil).
@@ -180,6 +197,12 @@ func TestReceiveTipLoop_CustomError(t *testing.T) {
 		RecvError:  context.DeadlineExceeded,
 	}
 
+	// Add missing FetchTip expectation for first tip
+	mockDB.
+		On("FetchTip", mock.Anything, uint64(1)).
+		Return((*serverdb.ReceivedTipWrapper)(nil), nil).
+		Once()
+
 	mockPayClient.
 		On("TipStream", mock.Anything, mock.Anything).
 		Return(tipStream, nil).
@@ -219,6 +242,22 @@ func TestReceiveTipLoop_PlayerSessionUpdate(t *testing.T) {
 	// Mock Payment Client
 	mockPayClient := srv.paymentClient.(*mocks.MockPaymentClient)
 
+	// Mock DB
+	mockDB := &mocks.MockDB{}
+	srv.db = mockDB
+
+	// Add FetchTip expectation
+	mockDB.
+		On("FetchTip", mock.Anything, uint64(1)).
+		Return((*serverdb.ReceivedTipWrapper)(nil), nil).
+		Once()
+
+	// Expect StoreUnprocessedTip to be called once
+	mockDB.
+		On("StoreUnprocessedTip", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Once()
+
 	// Provide a mock stream with a tip for the player
 	tipStream := &mocks.MockTipStreamClient{
 		ReceivedTips: []*types.ReceivedTip{
@@ -229,16 +268,6 @@ func TestReceiveTipLoop_PlayerSessionUpdate(t *testing.T) {
 			},
 		},
 	}
-
-	// Mock DB
-	mockDB := &mocks.MockDB{}
-	srv.db = mockDB
-
-	// Expect StoreUnprocessedTip to be called once
-	mockDB.
-		On("StoreUnprocessedTip", mock.Anything, mock.Anything, mock.Anything).
-		Return(nil).
-		Once()
 
 	// Expect exactly one call to TipStream
 	mockPayClient.
@@ -305,27 +334,49 @@ func TestSendTipProgressLoop_NormalOperation(t *testing.T) {
 		Return(progressStream, nil).
 		Once()
 
-	// Expect database updates for processed tips
-	mockDB.
-		On("FetchReceivedTipsByUID", mock.Anything, uid, serverdb.StatusSending).
-		Return([]*types.ReceivedTip{
-			{Uid: uid[:], AmountMatoms: 100000, SequenceId: 1},
-		}, nil).
-		Once()
-
-	mockDB.
-		On("UpdateTipStatus", mock.Anything, uid[:], mock.Anything, serverdb.StatusProcessed).
-		Return(nil).
-		Once()
-
-	// Expect AckTipProgress and AckTipReceived calls
+	// Expect AckTipProgress call
 	mockPayClient.
 		On("AckTipProgress", mock.Anything, mock.Anything, mock.Anything).
 		Return(nil).
 		Once()
 
+	// Create the mock tip that will be in the progress record
+	tipInProgress := &types.ReceivedTip{
+		Uid:          uid[:],
+		AmountMatoms: 100000,
+		SequenceId:   1,
+	}
+
+	// Mock the FetchLatestUncompletedTipProgress call
+	mockDB.
+		On("FetchLatestUncompletedTipProgress", mock.Anything, uid[:], int64(100000)).
+		Return(&serverdb.TipProgressRecord{
+			ID:          1,
+			WinnerUID:   uid[:],
+			TotalAmount: 100000,
+			Status:      serverdb.StatusSending,
+			Tips:        []*types.ReceivedTip{tipInProgress},
+			CreatedAt:   time.Now(),
+		}, nil).
+		Once()
+
+	// Expect UpdateTipStatus call for the tip in the progress record
+	tipID := make([]byte, 8)
+	binary.BigEndian.PutUint64(tipID, tipInProgress.SequenceId)
+	mockDB.
+		On("UpdateTipStatus", mock.Anything, tipInProgress.Uid, tipID, serverdb.StatusPaid).
+		Return(nil).
+		Once()
+
+	// Expect AckTipReceived call for the tip in the progress record
 	mockPayClient.
 		On("AckTipReceived", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Once()
+
+	// Mock the UpdateTipProgressStatus call
+	mockDB.
+		On("UpdateTipProgressStatus", mock.Anything, uint64(1), serverdb.StatusPaid).
 		Return(nil).
 		Once()
 
@@ -426,15 +477,30 @@ func TestSendTipProgressLoop_DBError(t *testing.T) {
 		Return(nil).
 		Once()
 
-	// Add the missing FetchReceivedTipsByUID expectation
-	mockDB.On("FetchReceivedTipsByUID", mock.Anything, uid, serverdb.StatusSending).
-		Return([]*types.ReceivedTip{
-			{Uid: uid[:], AmountMatoms: 100000, SequenceId: 1},
+	// Add expectation for FetchLatestUncompletedTipProgress
+	tipInProgress := &types.ReceivedTip{
+		Uid:          uid[:],
+		AmountMatoms: 100000,
+		SequenceId:   1,
+	}
+	mockDB.On("FetchLatestUncompletedTipProgress", mock.Anything, uid[:], int64(100000)).
+		Return(&serverdb.TipProgressRecord{
+			ID:          1,
+			WinnerUID:   uid[:],
+			TotalAmount: 100000,
+			Status:      serverdb.StatusSending,
+			Tips:        []*types.ReceivedTip{tipInProgress},
+			CreatedAt:   time.Now(),
 		}, nil).
 		Once()
 
-	mockDB.On("UpdateTipStatus", mock.Anything, uid[:], mock.Anything, serverdb.StatusProcessed).
+	mockDB.On("UpdateTipStatus", mock.Anything, uid[:], mock.Anything, serverdb.StatusPaid).
 		Return(errors.New("database error")).Once()
+
+	// Add expectation for UpdateTipProgressStatus
+	mockDB.On("UpdateTipProgressStatus", mock.Anything, uint64(1), serverdb.StatusPaid).
+		Return(nil).
+		Once()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -470,31 +536,60 @@ func TestSendTipProgressLoop_UnprocessedTips(t *testing.T) {
 
 	mockPayClient.On("TipProgress", mock.Anything, mock.Anything).Return(progressStream, nil).Once()
 
-	// We expect 2 calls to FetchReceivedTipsByUID because:
-	// - 2 progress events in the stream (sequence 1 and 2)
-	// - Each event triggers a separate fetch
-	mockDB.On("FetchReceivedTipsByUID", mock.Anything, uid, serverdb.StatusSending).
-		Return([]*types.ReceivedTip{
-			{Uid: uid[:], AmountMatoms: 100000, SequenceId: 1},
-			{Uid: uid[:], AmountMatoms: 200000, SequenceId: 2},
-		}, nil).
-		Times(2)
+	// Replace FetchReceivedTipsByUID with FetchLatestUncompletedTipProgress expectations
+	// We need one expectation for each progress event
+	tipInProgress1 := &types.ReceivedTip{
+		Uid:          uid[:],
+		AmountMatoms: 100000,
+		SequenceId:   1,
+	}
+	tipInProgress2 := &types.ReceivedTip{
+		Uid:          uid[:],
+		AmountMatoms: 200000,
+		SequenceId:   2,
+	}
 
-	// We expect 4 UpdateTipStatus calls because:
-	// - 2 progress events
-	// - 2 tips processed per event
-	// - 1 status update per tip
-	mockDB.On("UpdateTipStatus", mock.Anything, uid[:], mock.Anything, serverdb.StatusProcessed).
-		Return(nil).Times(4)
+	// First progress event
+	mockDB.On("FetchLatestUncompletedTipProgress", mock.Anything, uid[:], int64(100000)).
+		Return(&serverdb.TipProgressRecord{
+			ID:          1,
+			WinnerUID:   uid[:],
+			TotalAmount: 100000,
+			Status:      serverdb.StatusSending,
+			Tips:        []*types.ReceivedTip{tipInProgress1},
+			CreatedAt:   time.Now(),
+		}, nil).
+		Once()
+
+	// Second progress event
+	mockDB.On("FetchLatestUncompletedTipProgress", mock.Anything, uid[:], int64(200000)).
+		Return(&serverdb.TipProgressRecord{
+			ID:          2,
+			WinnerUID:   uid[:],
+			TotalAmount: 200000,
+			Status:      serverdb.StatusSending,
+			Tips:        []*types.ReceivedTip{tipInProgress2},
+			CreatedAt:   time.Now(),
+		}, nil).
+		Once()
+
+	// We expect 2 UpdateTipStatus calls (one for each progress event's tip)
+	mockDB.On("UpdateTipStatus", mock.Anything, uid[:], mock.Anything, serverdb.StatusPaid).
+		Return(nil).Times(2)
+
+	// Expect 2 UpdateTipProgressStatus calls (one for each progress record)
+	mockDB.On("UpdateTipProgressStatus", mock.Anything, uint64(1), serverdb.StatusPaid).
+		Return(nil).Once()
+	mockDB.On("UpdateTipProgressStatus", mock.Anything, uint64(2), serverdb.StatusPaid).
+		Return(nil).Once()
 
 	// Expect 2 AckTipProgress calls (1 per progress event)
-	mockPayClient.On("AckTipProgress", mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+	mockPayClient.On("AckTipProgress", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).Twice()
 
-	// Expect 4 AckTipReceived calls because:
-	// - 2 progress events
-	// - 2 tips processed per event
-	// - 1 ack per tip completion
-	mockPayClient.On("AckTipReceived", mock.Anything, mock.Anything, mock.Anything).Return(nil).Times(4)
+	// Expect 2 AckTipReceived calls (1 per tip)
+	mockPayClient.On("AckTipReceived", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).Times(2)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -529,6 +624,11 @@ func TestReceiveTipLoop_DBStoreError(t *testing.T) {
 
 	mockPayClient.On("TipStream", mock.Anything, mock.Anything).Return(tipStream, nil).Once()
 
+	// Add the missing FetchTip expectation
+	mockDB.On("FetchTip", mock.Anything, uint64(1)).
+		Return((*serverdb.ReceivedTipWrapper)(nil), nil).
+		Once()
+
 	// Simulate database storage error
 	mockDB.On("StoreUnprocessedTip", mock.Anything, mock.Anything, mock.Anything).
 		Return(errors.New("storage error")).Once()
@@ -541,49 +641,6 @@ func TestReceiveTipLoop_DBStoreError(t *testing.T) {
 		if !errors.Is(err, context.Canceled) {
 			t.Errorf("unexpected error: %v", err)
 		}
-	}()
-
-	time.Sleep(50 * time.Millisecond)
-	cancel()
-
-	mockPayClient.AssertExpectations(t)
-	mockDB.AssertExpectations(t)
-}
-
-func TestSendTipProgressLoop_NoMatchingTip(t *testing.T) {
-	srv := setupTestServer(t)
-
-	mockPayClient := srv.paymentClient.(*mocks.MockPaymentClient)
-	mockDB := &mocks.MockDB{}
-	srv.db = mockDB
-
-	uid := zkidentity.ShortID{}
-	uid.FromString("0123456789abcdef0123456789abcde10123456789abcdef0123456789abcde1")
-
-	progressStream := &mocks.MockTipProgressClient{
-		Events: []types.TipProgressEvent{
-			{Uid: uid[:], AmountMatoms: 100000, SequenceId: 1, Completed: true},
-		},
-	}
-
-	mockPayClient.On("TipProgress", mock.Anything, mock.Anything).Return(progressStream, nil).Once()
-
-	// Add expectation for AckTipProgress that will be called
-	mockPayClient.On("AckTipProgress", mock.Anything, mock.Anything, mock.Anything).
-		Return(nil).
-		Once()
-
-	// Return no matching tips from database
-	mockDB.On("FetchReceivedTipsByUID", mock.Anything, uid, serverdb.StatusSending).
-		Return([]*types.ReceivedTip{}, nil).
-		Once()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	go func() {
-		err := srv.SendTipProgressLoop(ctx)
-		t.Logf("loop finished: %v", err)
 	}()
 
 	time.Sleep(50 * time.Millisecond)

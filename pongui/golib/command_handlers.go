@@ -248,7 +248,7 @@ func handleClientCmd(cc *clientCtx, cmd *cmd) (interface{}, error) {
 			return nil, fmt.Errorf("invalid create waiting room payload: %v", err)
 		}
 
-		res, err := cc.c.CreatewaitingRoom(req.ClientID, req.BetAmt)
+		res, err := cc.c.CreateWaitingRoom(req.ClientID, req.BetAmt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create waiting room: %v", err)
 		}

@@ -13,7 +13,7 @@ import (
 	"github.com/vctt94/pong-bisonrelay/botlib"
 	"github.com/vctt94/pong-bisonrelay/ponggame"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
-	"github.com/vctt94/pong-bisonrelay/server/mocks"
+	"github.com/vctt94/pong-bisonrelay/server/internal/mocks"
 	"github.com/vctt94/pong-bisonrelay/server/serverdb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
@@ -88,14 +88,25 @@ func startInProcessGRPC(t *testing.T, srv *Server) (pong.PongGameClient, func())
 
 func TestCreateWaitingRoom(t *testing.T) {
 	srv := setupTestServer(t) // create our server
+
+	// Add mock expectations for FetchReceivedTipsByUID with a tip of sufficient amount
+	mockDB := srv.db.(*mocks.MockDB)
+	var hostID zkidentity.ShortID
+	_ = hostID.FromString("11111111111111111111111111111111")
+	mockDB.On("FetchReceivedTipsByUID", mock.Anything, hostID, serverdb.StatusUnpaid).
+		Return([]*types.ReceivedTip{
+			{
+				AmountMatoms: 50000000000, // Match the requested bet amount
+			},
+		}, nil)
+
 	client, cleanup := startInProcessGRPC(t, srv)
 	defer cleanup()
 
 	ctx := context.Background()
 
-	var hostID zkidentity.ShortID
-	_ = hostID.FromString("11111111111111111111111111111111")
-	srv.gameManager.PlayerSessions.CreateSession(hostID)
+	player := srv.gameManager.PlayerSessions.CreateSession(hostID)
+	player.BetAmt = 0.5 // Set the bet amount to match the request
 
 	// Now call CreateWaitingRoom from the client side
 	resp, err := client.CreateWaitingRoom(ctx, &pong.CreateWaitingRoomRequest{
@@ -125,7 +136,19 @@ func TestCreateWaitingRoomWithInvalidBet(t *testing.T) {
 
 	var hostID zkidentity.ShortID
 	_ = hostID.FromString("11111111111111111111111111111111")
-	srv.gameManager.PlayerSessions.CreateSession(hostID)
+	player := srv.gameManager.PlayerSessions.CreateSession(hostID)
+
+	// Add mock expectations for FetchReceivedTipsByUID
+	mockDB := srv.db.(*mocks.MockDB)
+	mockDB.On("FetchReceivedTipsByUID", mock.Anything, hostID, serverdb.StatusUnpaid).
+		Return([]*types.ReceivedTip{
+			{
+				AmountMatoms: 50000000000,
+			},
+		}, nil)
+
+	// For the low bet test
+	player.BetAmt = 0.01 // Set the bet amount to match the request
 
 	// Case: Bet amount less than MinBetAmt
 	_, err := client.CreateWaitingRoom(ctx, &pong.CreateWaitingRoomRequest{
@@ -134,6 +157,9 @@ func TestCreateWaitingRoomWithInvalidBet(t *testing.T) {
 	})
 	require.Error(t, err, "expected an error for invalid bet amount")
 	require.Contains(t, err.Error(), "bet needs to be higher than 0.1")
+
+	// For the valid bet test
+	player.BetAmt = 0.5 // Set the bet amount to match the request
 
 	// Case: Valid Bet
 	resp, err := client.CreateWaitingRoom(ctx, &pong.CreateWaitingRoomRequest{
@@ -147,6 +173,16 @@ func TestCreateWaitingRoomWithInvalidBet(t *testing.T) {
 
 func TestConcurrentWaitingRoomCreation(t *testing.T) {
 	srv := setupTestServer(t)
+
+	// We need to set up mock expectations here with a tip that has enough amount
+	mockDB := srv.db.(*mocks.MockDB)
+	mockDB.On("FetchReceivedTipsByUID", mock.Anything, mock.Anything, serverdb.StatusUnpaid).
+		Return([]*types.ReceivedTip{
+			{
+				AmountMatoms: 50000000000, // Match the requested bet amount
+			},
+		}, nil)
+
 	client, cleanup := startInProcessGRPC(t, srv)
 	defer cleanup()
 
@@ -171,7 +207,8 @@ func TestConcurrentWaitingRoomCreation(t *testing.T) {
 				t.Errorf("Failed to convert string to Host ID: %v", err)
 				return
 			}
-			srv.gameManager.PlayerSessions.CreateSession(hostID)
+			player := srv.gameManager.PlayerSessions.CreateSession(hostID)
+			player.BetAmt = 0.5 // Set the bet amount to match the request
 
 			// Attempt to create a waiting room
 			resp, err := client.CreateWaitingRoom(ctx, &pong.CreateWaitingRoomRequest{
@@ -204,7 +241,7 @@ func TestGameStreamDisconnection(t *testing.T) {
 	// Properly setup mock DB expectations
 	mockDB := &mocks.MockDB{}
 	srv.db = mockDB
-	mockDB.On("FetchReceivedTipsByUID", mock.Anything, clientID, serverdb.StatusUnprocessed).
+	mockDB.On("FetchReceivedTipsByUID", mock.Anything, clientID, serverdb.StatusUnpaid).
 		Return([]*types.ReceivedTip{}, nil)
 	mockDB.On("UpdateTipStatus", mock.Anything, mock.Anything, serverdb.StatusSending).Return(nil)
 

@@ -102,10 +102,14 @@ func parseClientConfigFile(configPath string) (*ClientConfig, error) {
 	return cfg, nil
 }
 
-func LoadClientConfig() (*ClientConfig, error) {
-	const funcName = "loadClientConfig"
+func LoadClientConfig(configDir string) (*ClientConfig, error) {
+	const funcName = "LoadClientConfig"
 
-	configDir := defaultClientHomeDir
+	// Use default directory if not specified
+	if configDir == "" {
+		configDir = defaultClientHomeDir
+	}
+
 	configPath := filepath.Join(configDir, "pongclient.conf")
 
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
