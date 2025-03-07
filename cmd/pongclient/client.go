@@ -242,7 +242,7 @@ func (m *appstate) listWaitingRooms() error {
 
 func (m *appstate) createRoom() error {
 	var err error
-	_, err = m.pc.CreatewaitingRoom(m.pc.ID, m.pc.BetAmt)
+	_, err = m.pc.CreateWaitingRoom(m.pc.ID, m.pc.BetAmt)
 	if err != nil {
 		return err
 	}

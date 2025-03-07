@@ -192,7 +192,7 @@ func (pc *PongClient) GetWRPlayers() ([]*pong.Player, error) {
 	return wr.Players, nil
 }
 
-func (pc *PongClient) CreatewaitingRoom(clientId string, betAmt float64) (*pong.WaitingRoom, error) {
+func (pc *PongClient) CreateWaitingRoom(clientId string, betAmt float64) (*pong.WaitingRoom, error) {
 	ctx := context.Background()
 	res, err := pc.gc.CreateWaitingRoom(ctx, &pong.CreateWaitingRoomRequest{
 		HostId: clientId,
