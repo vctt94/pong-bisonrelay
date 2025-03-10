@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
@@ -18,6 +19,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 )
 
 var (
@@ -148,7 +150,17 @@ func realMain() error {
 	if err != nil {
 		return fmt.Errorf("failed to load TLS credentials: %w", err)
 	}
-	grpcServer := grpc.NewServer(grpc.Creds(creds))
+	grpcServer := grpc.NewServer(
+		grpc.Creds(creds),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime: 30 * time.Second, // If a client sends pings more often than this, the server will send a GOAWAY
+		}),
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			Time:              30 * time.Second, // Send keepalive pings every X interval
+			Timeout:           10 * time.Second, // Wait this long for an ACK before considering the connection dead.
+			MaxConnectionIdle: 5 * time.Minute,  // If a connection is idle (no RPCs in flight) for this long, send a GOAWAY and close.
+		}),
+	)
 
 	pong.RegisterPongGameServer(grpcServer, srv)
 
