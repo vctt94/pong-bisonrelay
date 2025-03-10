@@ -210,14 +210,16 @@ func (s *Server) StartNtfnStream(req *pong.StartNtfnStreamRequest, stream pong.P
 	}
 
 	// Update player's bet amount and notify
-	player.BetAmt = totalDcrAmount
-	s.log.Debugf("Pending payments applied to client %s, total amount: %.8f", clientID, totalDcrAmount)
+	if player.BetAmt != totalDcrAmount {
+		player.BetAmt = totalDcrAmount
+		s.log.Debugf("Pending payments applied to client %s, total amount: %.8f", clientID, totalDcrAmount)
 
-	s.users[clientID].NotifierStream.Send(&pong.NtfnStreamResponse{
-		NotificationType: pong.NotificationType_BET_AMOUNT_UPDATE,
-		BetAmt:           player.BetAmt,
-		PlayerId:         player.ID.String(),
-	})
+		s.users[clientID].NotifierStream.Send(&pong.NtfnStreamResponse{
+			NotificationType: pong.NotificationType_BET_AMOUNT_UPDATE,
+			BetAmt:           player.BetAmt,
+			PlayerId:         player.ID.String(),
+		})
+	}
 	// Wait for disconnection
 	<-ctx.Done()
 	s.handleDisconnect(clientID)
@@ -420,6 +422,16 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 	if totalBet != req.BetAmt {
 		return nil, fmt.Errorf("bet amount mismatch. Available: %.8f, Requested: %.8f", totalBet, req.BetAmt)
 	}
+
+	// Check if player is already hosting a waiting room
+	s.gameManager.Lock()
+	for _, existingWR := range s.gameManager.WaitingRooms {
+		if existingWR.HostID.String() == hostID.String() {
+			s.gameManager.Unlock()
+			return nil, fmt.Errorf("player %s is already hosting a waiting room", hostID.String())
+		}
+	}
+	s.gameManager.Unlock()
 
 	// Create waiting room with reserved tips
 	wr, err := ponggame.NewWaitingRoom(hostPlayer, req.BetAmt)
