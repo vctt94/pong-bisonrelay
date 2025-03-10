@@ -160,6 +160,11 @@ class PongModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearErrorMessage() {
+    errorMessage = '';
+    notifyListeners();
+  }
+
   Future<void> createWaitingRoom() async {
     try {
       if (betAmt <= 0) {

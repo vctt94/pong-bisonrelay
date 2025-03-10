@@ -3,10 +3,12 @@ import 'package:pongui/models/pong.dart';
 
 class TopStatusCard extends StatelessWidget {
   final PongModel pongModel;
+  final VoidCallback? onErrorDismissed;
 
   const TopStatusCard({
     Key? key,
     required this.pongModel,
+    this.onErrorDismissed,
   }) : super(key: key);
 
   @override
@@ -44,8 +46,8 @@ class TopStatusCard extends StatelessWidget {
                           ),
                         ],
                       ),
-                      // only show current wr information if not in game
-                      if (pongModel.gameStarted == false) ...[
+                      // If game hasn't started, show waiting room info
+                      if (!pongModel.gameStarted) ...[
                         const SizedBox(height: 12),
                         Divider(color: Colors.grey.shade400),
                         const SizedBox(height: 12),
@@ -117,6 +119,19 @@ class TopStatusCard extends StatelessWidget {
                             .textTheme
                             .bodyMedium
                             ?.copyWith(color: Colors.red),
+                      ),
+                    ),
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          onErrorDismissed?.call();
+                        },
+                        borderRadius: BorderRadius.circular(20),
+                        child: const Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: Icon(Icons.close, color: Colors.red, size: 20),
+                        ),
                       ),
                     ),
                   ],

@@ -28,13 +28,13 @@ class MainContent extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-          Icon(
+            Icon(
               Icons.sports_tennis,
               size: 60,
               color: Colors.blueAccent,
             ),
-          SizedBox(height: 10),
-          Text(
+            SizedBox(height: 10),
+            Text(
               "Waiting for players...",
               style: TextStyle(fontSize: 16),
             ),
@@ -72,10 +72,10 @@ class MainContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-
         Expanded(
           child: WaitingRoomList(
             pongModel.waitingRooms,
+            currentRoomId: pongModel.currentWR?.id,
             (roomId) => pongModel.joinWaitingRoom(roomId),
           ),
         ),
