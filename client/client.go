@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 )
 
 type UpdatedMsg struct{}
@@ -59,6 +61,12 @@ type PongClient struct {
 	UpdatesCh chan tea.Msg
 	GameCh    chan *pong.GameUpdateBytes
 	ErrorsCh  chan error
+
+	// For reconnection handling
+	ctx          context.Context
+	cancelFunc   context.CancelFunc
+	reconnecting bool
+	reconnectMu  sync.Mutex
 }
 
 func (pc *PongClient) StartNotifier(ctx context.Context) error {
@@ -79,12 +87,21 @@ func (pc *PongClient) StartNotifier(ctx context.Context) error {
 				return
 			default:
 				ntfn, err := pc.notifier.Recv()
-				if errors.Is(err, io.EOF) {
-					pc.ErrorsCh <- fmt.Errorf("notification stream closed")
-					return
-				}
 				if err != nil {
-					pc.ErrorsCh <- fmt.Errorf("notifier stream error: %v", err) // Send error
+					if errors.Is(err, io.EOF) || strings.Contains(err.Error(), "transport is closing") ||
+						strings.Contains(err.Error(), "connection is being forcefully terminated") {
+						// Connection lost
+						pc.log.Warnf("Lost connection to server (notification stream): %v", err)
+
+						// Try to reconnect
+						reconnectErr := pc.reconnect()
+						if reconnectErr != nil {
+							pc.ErrorsCh <- fmt.Errorf("failed to reconnect: %v", reconnectErr)
+						}
+						return // This goroutine ends, but a new one will be started by reconnect()
+					}
+
+					pc.ErrorsCh <- fmt.Errorf("notifier stream error: %v", err)
 					return
 				}
 
@@ -142,12 +159,23 @@ func (pc *PongClient) SignalReady() error {
 		for {
 			update, err := pc.stream.Recv()
 			if err != nil {
-				pc.ErrorsCh <- fmt.Errorf("game stream error: %v", err) // Send error
-				if errors.Is(err, io.EOF) {
-					break
+				if errors.Is(err, io.EOF) || strings.Contains(err.Error(), "transport is closing") ||
+					strings.Contains(err.Error(), "connection is being forcefully terminated") {
+					// Connection lost
+					pc.log.Warnf("Lost connection to server (game stream): %v", err)
+
+					// Try to reconnect
+					reconnectErr := pc.reconnect()
+					if reconnectErr != nil {
+						pc.ErrorsCh <- fmt.Errorf("failed to reconnect: %v", reconnectErr)
+					}
+					return // This goroutine ends, but a new one will be started by reconnect()
 				}
+
+				pc.ErrorsCh <- fmt.Errorf("game stream error: %v", err)
 				return
 			}
+
 			// Forward updates to UpdatesCh
 			go func() { pc.UpdatesCh <- update }()
 		}
@@ -216,20 +244,126 @@ func (pc *PongClient) JoinWaitingRoom(roomID string) (*pong.JoinWaitingRoomRespo
 	return res, nil
 }
 
+func (pc *PongClient) reconnect() error {
+	pc.reconnectMu.Lock()
+	if pc.reconnecting {
+		pc.reconnectMu.Unlock()
+		return nil // Already reconnecting
+	}
+	pc.reconnecting = true
+	pc.reconnectMu.Unlock()
+
+	defer func() {
+		pc.reconnectMu.Lock()
+		pc.reconnecting = false
+		pc.reconnectMu.Unlock()
+	}()
+
+	pc.log.Infof("Attempting to reconnect to server...")
+
+	// Load credentials
+	creds, err := credentials.NewClientTLSFromFile(pc.cfg.GRPCCertPath, "")
+	if err != nil {
+		return fmt.Errorf("failed to load credentials for reconnection: %w", err)
+	}
+
+	// Close existing connection if it's still around
+	if pc.conn != nil {
+		pc.conn.Close()
+	}
+
+	// Implement exponential backoff for reconnection attempts
+	backoff := 1 * time.Second
+	maxBackoff := 30 * time.Second
+	for i := 0; i < 10; i++ { // Try 10 times before giving up
+		// Check if context was canceled
+		if pc.ctx.Err() != nil {
+			return pc.ctx.Err()
+		}
+
+		// Attempt to reconnect
+		pongConn, err := grpc.Dial(pc.cfg.ServerAddr,
+			grpc.WithTransportCredentials(creds),
+			grpc.WithBlock(),
+			grpc.WithKeepaliveParams(keepalive.ClientParameters{
+				Time:                30 * time.Second, // Send pings every 60 seconds instead of 10
+				Timeout:             10 * time.Second, // Wait 20 seconds for ping ack
+				PermitWithoutStream: false,            // Allow pings when there are no active streams
+			}),
+		)
+
+		if err == nil {
+			// Successfully reconnected
+			pc.conn = pongConn
+			pc.gc = pong.NewPongGameClient(pongConn)
+
+			// Re-establish streams
+			err = pc.StartNotifier(pc.ctx)
+			if err != nil {
+				pc.log.Errorf("Failed to restart notifier after reconnection: %v", err)
+				// Close connection and try again
+				pongConn.Close()
+			} else {
+				// If we were in a game, we need to re-establish the game stream
+				if pc.stream != nil {
+					err = pc.SignalReady()
+					if err != nil {
+						pc.log.Errorf("Failed to restart game stream after reconnection: %v", err)
+						// Continue with the reconnected client even if we couldn't restart the game stream
+					}
+				}
+
+				pc.log.Infof("Successfully reconnected to server")
+				// Send notification that we've reconnected
+				pc.UpdatesCh <- UpdatedMsg{}
+				return nil
+			}
+		}
+
+		// Sleep with backoff before retrying
+		select {
+		case <-pc.ctx.Done():
+			return pc.ctx.Err()
+		case <-time.After(backoff):
+			// Increase backoff for next attempt, but cap it
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+		}
+	}
+
+	return fmt.Errorf("failed to reconnect after multiple attempts")
+}
+
 func NewPongClient(clientID string, cfg *PongClientCfg) (*PongClient, error) {
 	if cfg.Log == nil {
 		return nil, fmt.Errorf("client must have logger")
 	}
 
+	// Create a cancelable context for the client
+	ctx, cancel := context.WithCancel(context.Background())
+
 	// Load the credentials from the certificate file
 	creds, err := credentials.NewClientTLSFromFile(cfg.GRPCCertPath, "")
 	if err != nil {
+		cancel() // Clean up the context
 		log.Fatalf("Failed to load credentials: %v", err)
 	}
 
+	// Add connection options with healthchecking to detect disconnection faster
+	dialOpts := []grpc.DialOption{
+		grpc.WithTransportCredentials(creds),
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:    30 * time.Second, // Send pings every 60 seconds instead of 10
+			Timeout: 10 * time.Second, // Wait 20 seconds for ping ack
+		}),
+	}
+
 	// Dial the gRPC server with TLS credentials
-	pongConn, err := grpc.Dial(cfg.ServerAddr, grpc.WithTransportCredentials(creds))
+	pongConn, err := grpc.Dial(cfg.ServerAddr, dialOpts...)
 	if err != nil {
+		cancel() // Clean up the context
 		log.Fatalf("Failed to connect to server: %v", err)
 	}
 
@@ -240,18 +374,28 @@ func NewPongClient(clientID string, cfg *PongClientCfg) (*PongClient, error) {
 
 	// Initialize the pongClient instance
 	pc := &PongClient{
-		ID:        clientID,
-		cfg:       cfg,
-		conn:      pongConn,
-		gc:        pong.NewPongGameClient(pongConn),
-		chat:      cfg.ChatClient,
-		payment:   cfg.PaymentClient,
-		UpdatesCh: make(chan tea.Msg),
-		ErrorsCh:  make(chan error),
-		log:       cfg.Log,
-
-		ntfns: ntfns,
+		ID:         clientID,
+		cfg:        cfg,
+		conn:       pongConn,
+		gc:         pong.NewPongGameClient(pongConn),
+		chat:       cfg.ChatClient,
+		payment:    cfg.PaymentClient,
+		UpdatesCh:  make(chan tea.Msg),
+		ErrorsCh:   make(chan error),
+		log:        cfg.Log,
+		ntfns:      ntfns,
+		ctx:        ctx,
+		cancelFunc: cancel,
 	}
 
 	return pc, nil
+}
+
+func (pc *PongClient) Cleanup() {
+	if pc.cancelFunc != nil {
+		pc.cancelFunc()
+	}
+	if pc.conn != nil {
+		pc.conn.Close()
+	}
 }
