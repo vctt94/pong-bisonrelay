@@ -90,7 +90,7 @@ func (wr *WaitingRoom) GetPlayer(clientID *zkidentity.ShortID) *Player {
 	wr.RLock()
 	defer wr.RUnlock()
 	for _, player := range wr.Players {
-		if player.ID == clientID {
+		if player.ID.String() == clientID.String() {
 			return player
 		}
 	}
