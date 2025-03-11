@@ -44,17 +44,17 @@ func (s *Server) SendTipProgressLoop(ctx context.Context) error {
 				break
 			}
 
-			// Update the last acknowledged sequence ID.
-			ackReq.SequenceId = tip.SequenceId
-			err = s.paymentClient.AckTipProgress(ctx, &ackReq, &ackRes)
-			if err != nil {
-				s.log.Warnf("Error while acknowledging tip progress: %v", err)
-				break
-			}
 			s.log.Infof("Tip amount: %.8f sent to: %s, completed: %t", float64(tip.AmountMatoms)/1e11, hex.EncodeToString(tip.Uid), tip.Completed)
 
 			// Only process tip receipt acknowledgement after the tip send progress is completed.
 			if tip.Completed {
+				// ack tip progress if completed
+				ackReq.SequenceId = tip.SequenceId
+				err = s.paymentClient.AckTipProgress(ctx, &ackReq, &ackRes)
+				if err != nil {
+					s.log.Warnf("Error while acknowledging tip progress: %v", err)
+					break
+				}
 				// Convert winner UID and amount to match stored progress
 				winnerUID := tip.Uid
 				totalMatoms := tip.AmountMatoms
