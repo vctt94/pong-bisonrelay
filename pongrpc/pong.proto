@@ -15,6 +15,7 @@ service PongGame {
   rpc GetWaitingRooms(WaitingRoomsRequest) returns (WaitingRoomsResponse);
   rpc CreateWaitingRoom(CreateWaitingRoomRequest) returns (CreateWaitingRoomResponse);
   rpc JoinWaitingRoom(JoinWaitingRoomRequest) returns (JoinWaitingRoomResponse);
+  rpc LeaveWaitingRoom(LeaveWaitingRoomRequest) returns (LeaveWaitingRoomResponse);
 }
 
 // Notification Messages
@@ -29,6 +30,7 @@ enum NotificationType {
   ON_WR_CREATED = 7;
   ON_PLAYER_READY = 8;
   ON_WR_REMOVED = 9;
+  PLAYER_LEFT_WR = 10;
 }
 
 message StartNtfnStreamRequest {
@@ -143,4 +145,14 @@ message GameUpdate {
   // Optional: if you want to send error messages or debug information
   string error = 23;
   bool debug = 24;
+}
+
+message LeaveWaitingRoomRequest {
+  string client_id = 1;
+  string room_id = 2;
+}
+
+message LeaveWaitingRoomResponse {
+  bool success = 1;
+  string message = 2;
 }

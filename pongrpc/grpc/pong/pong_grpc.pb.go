@@ -31,6 +31,7 @@ type PongGameClient interface {
 	GetWaitingRooms(ctx context.Context, in *WaitingRoomsRequest, opts ...grpc.CallOption) (*WaitingRoomsResponse, error)
 	CreateWaitingRoom(ctx context.Context, in *CreateWaitingRoomRequest, opts ...grpc.CallOption) (*CreateWaitingRoomResponse, error)
 	JoinWaitingRoom(ctx context.Context, in *JoinWaitingRoomRequest, opts ...grpc.CallOption) (*JoinWaitingRoomResponse, error)
+	LeaveWaitingRoom(ctx context.Context, in *LeaveWaitingRoomRequest, opts ...grpc.CallOption) (*LeaveWaitingRoomResponse, error)
 }
 
 type pongGameClient struct {
@@ -150,6 +151,15 @@ func (c *pongGameClient) JoinWaitingRoom(ctx context.Context, in *JoinWaitingRoo
 	return out, nil
 }
 
+func (c *pongGameClient) LeaveWaitingRoom(ctx context.Context, in *LeaveWaitingRoomRequest, opts ...grpc.CallOption) (*LeaveWaitingRoomResponse, error) {
+	out := new(LeaveWaitingRoomResponse)
+	err := c.cc.Invoke(ctx, "/pong.PongGame/LeaveWaitingRoom", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PongGameServer is the server API for PongGame service.
 // All implementations must embed UnimplementedPongGameServer
 // for forward compatibility
@@ -163,6 +173,7 @@ type PongGameServer interface {
 	GetWaitingRooms(context.Context, *WaitingRoomsRequest) (*WaitingRoomsResponse, error)
 	CreateWaitingRoom(context.Context, *CreateWaitingRoomRequest) (*CreateWaitingRoomResponse, error)
 	JoinWaitingRoom(context.Context, *JoinWaitingRoomRequest) (*JoinWaitingRoomResponse, error)
+	LeaveWaitingRoom(context.Context, *LeaveWaitingRoomRequest) (*LeaveWaitingRoomResponse, error)
 	mustEmbedUnimplementedPongGameServer()
 }
 
@@ -190,6 +201,9 @@ func (UnimplementedPongGameServer) CreateWaitingRoom(context.Context, *CreateWai
 }
 func (UnimplementedPongGameServer) JoinWaitingRoom(context.Context, *JoinWaitingRoomRequest) (*JoinWaitingRoomResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method JoinWaitingRoom not implemented")
+}
+func (UnimplementedPongGameServer) LeaveWaitingRoom(context.Context, *LeaveWaitingRoomRequest) (*LeaveWaitingRoomResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LeaveWaitingRoom not implemented")
 }
 func (UnimplementedPongGameServer) mustEmbedUnimplementedPongGameServer() {}
 
@@ -336,6 +350,24 @@ func _PongGame_JoinWaitingRoom_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PongGame_LeaveWaitingRoom_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LeaveWaitingRoomRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PongGameServer).LeaveWaitingRoom(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pong.PongGame/LeaveWaitingRoom",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PongGameServer).LeaveWaitingRoom(ctx, req.(*LeaveWaitingRoomRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PongGame_ServiceDesc is the grpc.ServiceDesc for PongGame service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -362,6 +394,10 @@ var PongGame_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "JoinWaitingRoom",
 			Handler:    _PongGame_JoinWaitingRoom_Handler,
+		},
+		{
+			MethodName: "LeaveWaitingRoom",
+			Handler:    _PongGame_LeaveWaitingRoom_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

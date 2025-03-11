@@ -337,6 +337,18 @@ func (s *Server) JoinWaitingRoom(ctx context.Context, req *pong.JoinWaitingRoomR
 		return nil, fmt.Errorf("player not found: %s", req.ClientId)
 	}
 
+	// Check if player is already in another waiting room
+	s.gameManager.Lock()
+	for _, existingWR := range s.gameManager.WaitingRooms {
+		for _, p := range existingWR.Players {
+			if p.ID.String() == req.ClientId && p.WR != nil {
+				s.gameManager.Unlock()
+				return nil, fmt.Errorf("player %s is already in another waiting room", req.ClientId)
+			}
+		}
+	}
+	s.gameManager.Unlock()
+
 	wr := s.gameManager.GetWaitingRoom(req.RoomId)
 	if wr == nil {
 		return nil, fmt.Errorf("waiting room not found: %s", req.RoomId)
@@ -360,6 +372,8 @@ func (s *Server) JoinWaitingRoom(ctx context.Context, req *pong.JoinWaitingRoomR
 	}
 
 	wr.AddPlayer(player)
+	player.WR = wr
+
 	wr.Lock()
 	wr.ReservedTips = append(wr.ReservedTips, tips...)
 	wr.Unlock()
@@ -403,6 +417,9 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 	if !s.isF2P && req.BetAmt < s.minBetAmt {
 		return nil, fmt.Errorf("bet needs to be higher than %.8f", s.minBetAmt)
 	}
+	if hostPlayer.WR != nil {
+		return nil, fmt.Errorf("player %s is already in a waiting room", hostID.String())
+	}
 
 	s.log.Debugf("creating waiting room. Host ID: %s", hostID)
 
@@ -423,16 +440,6 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 		return nil, fmt.Errorf("bet amount mismatch. Available: %.8f, Requested: %.8f", totalBet, req.BetAmt)
 	}
 
-	// Check if player is already hosting a waiting room
-	s.gameManager.Lock()
-	for _, existingWR := range s.gameManager.WaitingRooms {
-		if existingWR.HostID.String() == hostID.String() {
-			s.gameManager.Unlock()
-			return nil, fmt.Errorf("player %s is already hosting a waiting room", hostID.String())
-		}
-	}
-	s.gameManager.Unlock()
-
 	// Create waiting room with reserved tips
 	wr, err := ponggame.NewWaitingRoom(hostPlayer, req.BetAmt)
 	if err != nil {
@@ -443,6 +450,7 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 	wr.ReservedTips = tips // Store reserved tips
 	wr.Unlock()
 
+	hostPlayer.WR = wr
 	s.gameManager.WaitingRooms = append(s.gameManager.WaitingRooms, wr)
 	s.log.Debugf("waiting room created. Total rooms: %d", len(s.gameManager.WaitingRooms))
 
@@ -473,6 +481,76 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 
 	return &pong.CreateWaitingRoomResponse{
 		Wr: pongWR,
+	}, nil
+}
+
+// LeaveWaitingRoom handles a request from a client to leave a waiting room
+func (s *Server) LeaveWaitingRoom(ctx context.Context, req *pong.LeaveWaitingRoomRequest) (*pong.LeaveWaitingRoomResponse, error) {
+	s.log.Debugf("LeaveWaitingRoom request from client %s for room %s", req.ClientId, req.RoomId)
+
+	var clientID zkidentity.ShortID
+	if err := clientID.FromString(req.ClientId); err != nil {
+		return &pong.LeaveWaitingRoomResponse{
+			Success: false,
+			Message: fmt.Sprintf("invalid client ID: %v", err),
+		}, nil
+	}
+
+	// Get the waiting room
+	wr := s.gameManager.GetWaitingRoom(req.RoomId)
+	if wr == nil {
+		return &pong.LeaveWaitingRoomResponse{
+			Success: false,
+			Message: "waiting room not found",
+		}, nil
+	}
+
+	// Check if player is in the room
+	player := wr.GetPlayer(&clientID)
+	if player == nil {
+		return &pong.LeaveWaitingRoomResponse{
+			Success: false,
+			Message: "player not in waiting room",
+		}, nil
+	}
+
+	// Remove the player from the waiting room
+	wr.RemovePlayer(clientID)
+
+	// If player was the host and there are other players, assign a new host
+	if wr.HostID.String() == clientID.String() && len(wr.Players) > 0 {
+		wr.Lock()
+		wr.HostID = wr.Players[0].ID
+		wr.Unlock()
+	}
+
+	// If the room is now empty, remove it
+	if len(wr.Players) == 0 {
+		s.gameManager.RemoveWaitingRoom(wr.ID)
+	} else {
+		// Notify remaining players that someone left
+		pwrMarshaled, err := wr.Marshal()
+		if err == nil {
+			for _, p := range wr.Players {
+				// Send notification to remaining players
+				p.NotifierStream.Send(&pong.NtfnStreamResponse{
+					NotificationType: pong.NotificationType_PLAYER_LEFT_WR,
+					RoomId:           wr.ID,
+					Wr:               pwrMarshaled,
+					PlayerId:         req.ClientId,
+				})
+			}
+		}
+	}
+
+	// Reset the player's waiting room reference
+	if player != nil {
+		player.WR = nil
+	}
+
+	return &pong.LeaveWaitingRoomResponse{
+		Success: true,
+		Message: "successfully left waiting room",
 	}, nil
 }
 

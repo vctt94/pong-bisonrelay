@@ -27,6 +27,7 @@ const NotificationType$json = {
     {'1': 'ON_WR_CREATED', '2': 7},
     {'1': 'ON_PLAYER_READY', '2': 8},
     {'1': 'ON_WR_REMOVED', '2': 9},
+    {'1': 'PLAYER_LEFT_WR', '2': 10},
   ],
 };
 
@@ -35,7 +36,8 @@ final $typed_data.Uint8List notificationTypeDescriptor = $convert.base64Decode(
     'ChBOb3RpZmljYXRpb25UeXBlEgsKB1VOS05PV04QABILCgdNRVNTQUdFEAESDgoKR0FNRV9TVE'
     'FSVBACEgwKCEdBTUVfRU5EEAMSGQoVT1BQT05FTlRfRElTQ09OTkVDVEVEEAQSFQoRQkVUX0FN'
     'T1VOVF9VUERBVEUQBRIUChBQTEFZRVJfSk9JTkVEX1dSEAYSEQoNT05fV1JfQ1JFQVRFRBAHEh'
-    'MKD09OX1BMQVlFUl9SRUFEWRAIEhEKDU9OX1dSX1JFTU9WRUQQCQ==');
+    'MKD09OX1BMQVlFUl9SRUFEWRAIEhEKDU9OX1dSX1JFTU9WRUQQCRISCg5QTEFZRVJfTEVGVF9X'
+    'UhAK');
 
 @$core.Deprecated('Use startNtfnStreamRequestDescriptor instead')
 const StartNtfnStreamRequest$json = {
@@ -295,4 +297,32 @@ final $typed_data.Uint8List gameUpdateDescriptor = $convert.base64Decode(
     'ABKAFSDWJhbGxYVmVsb2NpdHkSJAoNYmFsbFlWZWxvY2l0eRgKIAEoAVINYmFsbFlWZWxvY2l0'
     'eRIQCgNmcHMYCyABKAFSA2ZwcxIQCgN0cHMYDCABKAFSA3RwcxIUCgVlcnJvchgXIAEoCVIFZX'
     'Jyb3ISFAoFZGVidWcYGCABKAhSBWRlYnVn');
+
+@$core.Deprecated('Use leaveWaitingRoomRequestDescriptor instead')
+const LeaveWaitingRoomRequest$json = {
+  '1': 'LeaveWaitingRoomRequest',
+  '2': [
+    {'1': 'client_id', '3': 1, '4': 1, '5': 9, '10': 'clientId'},
+    {'1': 'room_id', '3': 2, '4': 1, '5': 9, '10': 'roomId'},
+  ],
+};
+
+/// Descriptor for `LeaveWaitingRoomRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List leaveWaitingRoomRequestDescriptor = $convert.base64Decode(
+    'ChdMZWF2ZVdhaXRpbmdSb29tUmVxdWVzdBIbCgljbGllbnRfaWQYASABKAlSCGNsaWVudElkEh'
+    'cKB3Jvb21faWQYAiABKAlSBnJvb21JZA==');
+
+@$core.Deprecated('Use leaveWaitingRoomResponseDescriptor instead')
+const LeaveWaitingRoomResponse$json = {
+  '1': 'LeaveWaitingRoomResponse',
+  '2': [
+    {'1': 'success', '3': 1, '4': 1, '5': 8, '10': 'success'},
+    {'1': 'message', '3': 2, '4': 1, '5': 9, '10': 'message'},
+  ],
+};
+
+/// Descriptor for `LeaveWaitingRoomResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List leaveWaitingRoomResponseDescriptor = $convert.base64Decode(
+    'ChhMZWF2ZVdhaXRpbmdSb29tUmVzcG9uc2USGAoHc3VjY2VzcxgBIAEoCFIHc3VjY2VzcxIYCg'
+    'dtZXNzYWdlGAIgASgJUgdtZXNzYWdl');
 

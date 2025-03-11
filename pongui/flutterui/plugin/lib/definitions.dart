@@ -94,11 +94,15 @@ class LocalPlayer {
   @JsonKey(name: 'ready')
   final bool ready;
 
-  const LocalPlayer(this.uid, this.nick, this.betAmount, {
+  const LocalPlayer(
+    this.uid,
+    this.nick,
+    this.betAmount, {
     this.ready = false,
   });
 
-  factory LocalPlayer.fromJson(Map<String, dynamic> json) => _$LocalPlayerFromJson(json);
+  factory LocalPlayer.fromJson(Map<String, dynamic> json) =>
+      _$LocalPlayerFromJson(json);
   Map<String, dynamic> toJson() => _$LocalPlayerToJson(this);
 
   factory LocalPlayer.fromProto(Player player) {
@@ -122,7 +126,10 @@ class LocalWaitingRoom {
   @JsonKey(name: 'players', defaultValue: [])
   final List<LocalPlayer> players;
 
-  const LocalWaitingRoom(this.id, this.host, this.betAmt, {
+  const LocalWaitingRoom(
+    this.id,
+    this.host,
+    this.betAmt, {
     this.players = const [],
   });
 
@@ -445,7 +452,9 @@ abstract class PluginPlatform {
     if (res == null) {
       return [];
     }
-    return (res as List).map<LocalPlayer>((v) => LocalPlayer.fromJson(v)).toList();
+    return (res as List)
+        .map<LocalPlayer>((v) => LocalPlayer.fromJson(v))
+        .toList();
   }
 
   Future<List<LocalWaitingRoom>> getWaitingRooms() async {
@@ -485,6 +494,10 @@ abstract class PluginPlatform {
       throw Exception("Failed to join waiting room: $err");
     }
   }
+
+  Future<void> LeaveWaitingRoom(String id) async {
+    await asyncCall(CTLeaveWaitingRoom, id);
+  }
 }
 
 const int CTUnknown = 0x00;
@@ -496,6 +509,7 @@ const int CTGetWRPlayers = 0x05;
 const int CTGetWaitingRooms = 0x06;
 const int CTJoinWaitingRoom = 0x07;
 const int CTCreateWaitingRoom = 0x08;
+const int CTLeaveWaitingRoom = 0x09;
 const int CTCloseLockFile = 0x60;
 
 const int notificationsStartID = 0x1000;
