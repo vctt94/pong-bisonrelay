@@ -17,23 +17,25 @@ import (
 type CmdType = int32
 
 const (
-	CTUnknown               CmdType = 0x00
-	CTHello                         = 0x01
-	CTInitClient                    = 0x02
-	CTGetUserNick                   = 0x03
-	CTStopClient                    = 0x04
-	CTGetWRPlayers                  = 0x05
-	CTGetWaitingRooms               = 0x06
-	CTJoinWaitingRoom               = 0x07
-	CTCreateWaitingRoom             = 0x08
-	CTCreateLockFile                = 0x60
-	CTCloseLockFile                 = 0x61
-	CTGetRunState                   = 0x83
-	CTEnableBackgroundNtfs          = 0x84
-	CTDisableBackgroundNtfs         = 0x85
-	CTEnableProfiler                = 0x86
-	CTZipTimedProfilingLogs         = 0x87
-	CTEnableTimedProfiling          = 0x89
+	CTUnknown           CmdType = 0x00
+	CTHello                     = 0x01
+	CTInitClient                = 0x02
+	CTGetUserNick               = 0x03
+	CTStopClient                = 0x04
+	CTGetWRPlayers              = 0x05
+	CTGetWaitingRooms           = 0x06
+	CTJoinWaitingRoom           = 0x07
+	CTCreateWaitingRoom         = 0x08
+	CTLeaveWaitingRoom          = 0x09
+
+	CTCreateLockFile        = 0x60
+	CTCloseLockFile         = 0x61
+	CTGetRunState           = 0x83
+	CTEnableBackgroundNtfs  = 0x84
+	CTDisableBackgroundNtfs = 0x85
+	CTEnableProfiler        = 0x86
+	CTZipTimedProfilingLogs = 0x87
+	CTEnableTimedProfiling  = 0x89
 
 	NTUINotification = 0x1001
 	NTClientStopped  = 0x1002

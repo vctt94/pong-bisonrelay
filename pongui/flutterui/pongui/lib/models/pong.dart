@@ -229,4 +229,26 @@ class PongModel extends ChangeNotifier {
     isReady = !isReady;
     notifyListeners();
   }
+
+  Future<void> leaveWaitingRoom() async {
+    if (currentWR == null) {
+      return;
+    }
+
+    try {
+      await Golib.LeaveWaitingRoom(currentWR!.id);
+
+      // Reset waiting room state
+      currentWR = null;
+      isReady = false;
+      errorMessage = '';
+      notifyListeners();
+
+      notificationModel.showNotification("Left waiting room successfully");
+    } catch (e) {
+      errorMessage = "Error leaving waiting room: $e";
+      developer.log("Error leaving waiting room: $e");
+      notifyListeners();
+    }
+  }
 }

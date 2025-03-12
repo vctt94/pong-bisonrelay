@@ -270,9 +270,14 @@ func handleClientCmd(cc *clientCtx, cmd *cmd) (interface{}, error) {
 	case CTStopClient:
 		cc.cancel()
 		return nil, nil
+
+	case CTLeaveWaitingRoom:
+		id := strings.Trim(string(cmd.Payload), `"`)
+		fmt.Printf("Leaving waiting room: %s\n", id)
+		err := cc.c.LeaveWaitingRoom(id)
+		return nil, err
 	}
 	return nil, nil
-
 }
 
 func handleCreateLockFile(rootDir string) error {

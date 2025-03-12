@@ -65,13 +65,26 @@ class TopStatusCard extends StatelessWidget {
                                   child: const Text("Create Waiting Room"),
                                 ),
                               if (pongModel.currentWR != null)
-                                FilledButton(
-                                  onPressed: pongModel.toggleReady,
-                                  child: Text(
-                                    pongModel.isReady
-                                        ? "Cancel Ready"
-                                        : "Ready",
-                                  ),
+                                Row(
+                                  children: [
+                                    FilledButton(
+                                      onPressed: pongModel.toggleReady,
+                                      child: Text(
+                                        pongModel.isReady
+                                            ? "Cancel Ready"
+                                            : "Ready",
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    FilledButton(
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: Colors.redAccent,
+                                      ),
+                                      onPressed: () =>
+                                          pongModel.leaveWaitingRoom(),
+                                      child: const Text("Leave Room"),
+                                    ),
+                                  ],
                                 ),
                             ],
                           ],
