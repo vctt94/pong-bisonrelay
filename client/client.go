@@ -90,8 +90,6 @@ func (pc *PongClient) StartNotifier(ctx context.Context) error {
 				if err != nil {
 					if errors.Is(err, io.EOF) || strings.Contains(err.Error(), "transport is closing") ||
 						strings.Contains(err.Error(), "connection is being forcefully terminated") {
-						// Connection lost
-						pc.log.Warnf("Lost connection to server (notification stream): %v", err)
 
 						// Try to reconnect
 						reconnectErr := pc.reconnect()
@@ -112,6 +110,8 @@ func (pc *PongClient) StartNotifier(ctx context.Context) error {
 				case pong.NotificationType_MESSAGE:
 				case pong.NotificationType_PLAYER_JOINED_WR:
 					pc.ntfns.notifyPlayerJoinedWR(ntfn.Wr, time.Now())
+				case pong.NotificationType_PLAYER_LEFT_WR:
+					pc.ntfns.notifyPlayerLeftWR(ntfn.Wr, ntfn.PlayerId, time.Now())
 				case pong.NotificationType_GAME_START:
 					if ntfn.Started {
 						pc.ntfns.notifyGameStarted(ntfn.GameId, time.Now())
@@ -131,7 +131,6 @@ func (pc *PongClient) StartNotifier(ctx context.Context) error {
 						pc.UpdatesCh <- true
 					}
 				default:
-					pc.log.Warnf("Unknown notification type: %d", ntfn.NotificationType)
 				}
 			}
 		}
@@ -161,8 +160,6 @@ func (pc *PongClient) SignalReady() error {
 			if err != nil {
 				if errors.Is(err, io.EOF) || strings.Contains(err.Error(), "transport is closing") ||
 					strings.Contains(err.Error(), "connection is being forcefully terminated") {
-					// Connection lost
-					pc.log.Warnf("Lost connection to server (game stream): %v", err)
 
 					// Try to reconnect
 					reconnectErr := pc.reconnect()
@@ -242,6 +239,23 @@ func (pc *PongClient) JoinWaitingRoom(roomID string) (*pong.JoinWaitingRoomRespo
 		return nil, fmt.Errorf("error joining wr: %w", err)
 	}
 	return res, nil
+}
+
+func (pc *PongClient) LeaveWaitingRoom(roomID string) error {
+	ctx := context.Background()
+	res, err := pc.gc.LeaveWaitingRoom(ctx, &pong.LeaveWaitingRoomRequest{
+		ClientId: pc.ID,
+		RoomId:   roomID,
+	})
+	if err != nil {
+		return fmt.Errorf("error leaving waiting room: %w", err)
+	}
+
+	if !res.Success {
+		return fmt.Errorf("failed to leave waiting room: %s", res.Message)
+	}
+
+	return nil
 }
 
 func (pc *PongClient) reconnect() error {
