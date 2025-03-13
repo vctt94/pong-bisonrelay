@@ -27,12 +27,20 @@ Flutter for UI
 
 ## Build
 
+### UI Client (Flutter)
+```bash
+# Navigate to the Flutter UI directory
+cd pongui
+```
+
+For detailed information about building the Flutter UI, please see the [Flutter UI Documentation](pongui/README.md).
+
 ### Bot
 ```bash
 go build -o pongbot ./cmd/pongbot
 ```
 
-### Client
+### Terminal Client
 ```bash
 go build -o pongclient ./cmd/pongclient
 ```
@@ -52,9 +60,24 @@ rpcclientcapath = /home/{user}/.brclient/rpc-ca.cert
 rpcissueclientcert = 1
 ```
 
-when running the bot for the first time it will create a conf file with default values, which might need to be adjusted.
+When running the client (Flutter app or pongclient) for the first time, it will create a new configuration file with default values. These default values should match the RPC configuration of your bruig/brclient setup.
 
-The one created is located at: `{appdata}/pongbot.conf`
+The client config is located at: `{appdata}/.pongui/pongui.conf`
+
+```ini
+serveraddr={server_ip_address}:50051
+rpcurl=wss://127.0.0.1:7676/ws
+servercertpath=/home/{user}/.brclient/rpc.cert
+clientcertpath=/home/{user}/.brclient/rpc-client.cert
+clientkeypath=/home/{user}/.brclient/rpc-client.key
+grpcservercert=/home/{user}/server.cert
+rpcuser=whatever_username_you_want
+rpcpass=some_strong_password
+```
+
+When running the bot for the first time it will create a conf file with default values, which might need to be adjusted.
+
+The bot config is located at: `{appdata}/.pongbot/pongbot.conf`
 
 ```ini
 datadir=/home/{user}/.pongbot
@@ -72,7 +95,7 @@ rpcpass=some_strong_password
 debug=debug
 ```
 
-Same for the client: `{appdata}/pongclient.conf`
+Same for the client: `{appdata}/.pongclient/pongclient.conf`
 
 ```ini
 serveraddr=localhost:50051
@@ -85,7 +108,7 @@ rpcuser=whatever_username_you_want
 rpcpass=some_strong_password
 ```
 
-Running
+## Running
 
 Start the pongbot server or connect to an existing one.
 
@@ -93,35 +116,38 @@ Start the pongbot server or connect to an existing one.
 ./pongbot
 ```
 
-Start a client instance
+Start a client instance (terminal UI)
 
 ```bash
 ./pongclient
 ```
 
-Gameplay
+Start the Flutter UI client
 
-```
-1. Create or join a waiting room
-2. Send tip to bot to set bet amount (DCR)
-3. Get Ready (space key)
-4. Wait for opponent
-5. Play using W/S or arrow keys
-6. Winner takes all
+```bash
+# Navigate to the Flutter UI directory
+cd pongui
 ```
 
-gRPC API
+## Gameplay
 
-Key endpoints
+1. First, you must send a tip to the bot to establish your bet amount (in DCR)
+2. After tipping, you can create or join a waiting room
+3. You can only join waiting rooms with the same bet amount as your tip
+4. In the waiting room, you can:
+   - Get ready/unready
+   - Leave the waiting room
+5. When both players are ready, the game starts automatically
+6. Play using W/S or arrow keys (Up/Down)
+7. First player to score 3 points wins the match
+8. Winner takes all bets
 
- - SendInput:          Player Inputs 
- - StartGameStream:    Update game state stream
- - StartNtfnStream:    Notifications stream
- - GetWaitingRoom:     Single room details
- - GetWaitingRooms:    All available rooms list
- - CreateWaitingRoom:  New Waiting Room
- - JoinWaitingRoom:    Join existing room
+## ⚠️ Warning
 
+- **Ensure Channel Liquidity**: Make sure your client has enough liquidity to receive the bet amount if you win
+- **Check Channel Status**: You can verify your channel liquidity in the Bison Relay application under the Network tab, in the Channels section
+- **Minimum Bet**: The minimum bet is determined by the bot configuration (default: 0.00000001 DCR | 1 atom)
+- **Connection Issues**: Ensure your Bison Relay client is properly connected before starting a game
 
 ## Betting System
 
@@ -133,3 +159,9 @@ Key endpoints
 
 - **Secure Payment Handling**  
   Bot processes transactions through Bison Relay's RPC client
+
+## gRPC API
+
+For detailed information about the gRPC API, please see the [gRPC API Documentation](pongrpc/README.md).
+
+

@@ -1,4 +1,4 @@
-# bruig - Bison Relay UI (graphical)
+# pongui - Pong UI (graphical)
 
 # Building
 
@@ -14,18 +14,6 @@ Replace `linux` with either `macos` or `windows`.
 
 ```shell
 $ go generate ./golibbuilder
-$ cd flutterui/bruig
+$ cd flutterui/pongui
 $ flutter build linux
-```
-
-## Mobile Builds
-
-Use the applicable tags (android, ios):
-
-```shell
-$ go generate -tags android ./golibbuilder
-$ go generate -tags ios ./golibbuilder
-$ cd fd/fd
-$ flutter build android
-$ flutter build ios
 ```
