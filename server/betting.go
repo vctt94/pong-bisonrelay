@@ -73,7 +73,7 @@ func (s *Server) SendTipProgressLoop(ctx context.Context) error {
 					continue
 				}
 
-				// Mark all associated tips as processed
+				// Mark all associated tips as paid
 				for _, rt := range record.Tips {
 					tipID := make([]byte, 8)
 					binary.BigEndian.PutUint64(tipID, rt.SequenceId)
@@ -177,6 +177,7 @@ func (s *Server) ReceiveTipLoop(ctx context.Context) error {
 			s.gameManager.PlayerSessions.Lock()
 			// Convert to dcr from mAtoms and add to player tip amount.
 			player.BetAmt += float64(tip.AmountMatoms) / 1e11
+			s.log.Debugf("Player %s bet amount updated to %.8f", player.ID.String(), player.BetAmt)
 			if player.NotifierStream != nil {
 				player.NotifierStream.Send(&pong.NtfnStreamResponse{
 					NotificationType: pong.NotificationType_BET_AMOUNT_UPDATE,
