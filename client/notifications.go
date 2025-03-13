@@ -42,6 +42,13 @@ type OnPlayerJoinedNtfn func(*pong.WaitingRoom, time.Time)
 
 func (_ OnPlayerJoinedNtfn) typ() string { return OnPlayerJoinedNtfnType }
 
+const onPlayerLeftNtfnType = "onPlayerLeftWR"
+
+// OnPlayerLeftNtfn is the handler for when a player leaves the waiting room.
+type OnPlayerLeftNtfn func(*pong.WaitingRoom, string, time.Time)
+
+func (_ OnPlayerLeftNtfn) typ() string { return onPlayerLeftNtfnType }
+
 const onGameEndedfnType = "onGameEnded"
 
 // onWRCreatedNtfn is the handler for received private messages.
@@ -379,6 +386,11 @@ func (nmgr *NotificationManager) notifyGameEnded(gameID string, msg string, ts t
 		visit(func(h OnGameEndedNtfn) { h(gameID, msg, ts) })
 }
 
+func (nmgr *NotificationManager) notifyPlayerLeftWR(wr *pong.WaitingRoom, playerID string, ts time.Time) {
+	nmgr.handlers[onPlayerLeftNtfnType].(*handlersFor[OnPlayerLeftNtfn]).
+		visit(func(h OnPlayerLeftNtfn) { h(wr, playerID, ts) })
+}
+
 func NewNotificationManager() *NotificationManager {
 	nmgr := &NotificationManager{
 		uiConfig: UINotificationsConfig{
@@ -393,6 +405,7 @@ func NewNotificationManager() *NotificationManager {
 			onGameStartedFnType:    &handlersFor[OnGameStartedNtfn]{},
 			OnPlayerJoinedNtfnType: &handlersFor[OnPlayerJoinedNtfn]{},
 			onGameEndedfnType:      &handlersFor[OnGameEndedNtfn]{},
+			onPlayerLeftNtfnType:   &handlersFor[OnPlayerLeftNtfn]{},
 
 			onUINtfnType: &handlersFor[OnUINotification]{},
 		},

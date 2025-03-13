@@ -31,13 +31,7 @@ func (gm *GameManager) StartGameStream(req *StartGameStreamRequest) (*Player, er
 
 	player.GameStream = req.Stream
 	player.Ready = true
-	player.NotifierStream.Send(&pong.NtfnStreamResponse{
-		NotificationType: pong.NotificationType_ON_PLAYER_READY,
-		Message:          "player ready",
-		PlayerId:         player.ID.String(),
-	})
 
-	req.Log.Debugf("Player %s is now ready for the game", req.ClientID)
 	return player, nil
 }
 

@@ -11,6 +11,7 @@ import 'package:golib_plugin/mock.dart';
 import 'package:golib_plugin/util.dart';
 import 'package:json_annotation/json_annotation.dart';
 import 'package:blake_hash/blake_hash.dart';
+import 'package:golib_plugin/grpc/generated/pong.pbgrpc.dart';
 
 part 'definitions.g.dart';
 
@@ -93,13 +94,25 @@ class LocalPlayer {
   @JsonKey(name: 'ready')
   final bool ready;
 
-  const LocalPlayer(this.uid, this.nick, this.betAmount, {
+  const LocalPlayer(
+    this.uid,
+    this.nick,
+    this.betAmount, {
     this.ready = false,
   });
 
-  factory LocalPlayer.fromJson(Map<String, dynamic> json) => _$LocalPlayerFromJson(json);
+  factory LocalPlayer.fromJson(Map<String, dynamic> json) =>
+      _$LocalPlayerFromJson(json);
   Map<String, dynamic> toJson() => _$LocalPlayerToJson(this);
 
+  factory LocalPlayer.fromProto(Player player) {
+    return LocalPlayer(
+      player.uid,
+      player.nick,
+      player.betAmt,
+      ready: player.ready,
+    );
+  }
 }
 
 @JsonSerializable()
@@ -113,13 +126,32 @@ class LocalWaitingRoom {
   @JsonKey(name: 'players', defaultValue: [])
   final List<LocalPlayer> players;
 
-  const LocalWaitingRoom(this.id, this.host, this.betAmt, {
+  const LocalWaitingRoom(
+    this.id,
+    this.host,
+    this.betAmt, {
     this.players = const [],
   });
 
   factory LocalWaitingRoom.fromJson(Map<String, dynamic> json) =>
       _$LocalWaitingRoomFromJson(json);
   Map<String, dynamic> toJson() => _$LocalWaitingRoomToJson(this);
+
+  factory LocalWaitingRoom.fromProto(WaitingRoom wr) {
+    return LocalWaitingRoom(
+      wr.id,
+      wr.hostId,
+      wr.betAmt,
+      players: wr.players
+          .map((player) => LocalPlayer(
+                player.uid,
+                player.nick,
+                player.betAmt,
+                ready: player.ready,
+              ))
+          .toList(),
+    );
+  }
 }
 
 @JsonSerializable()
@@ -420,7 +452,9 @@ abstract class PluginPlatform {
     if (res == null) {
       return [];
     }
-    return (res as List).map<LocalPlayer>((v) => LocalPlayer.fromJson(v)).toList();
+    return (res as List)
+        .map<LocalPlayer>((v) => LocalPlayer.fromJson(v))
+        .toList();
   }
 
   Future<List<LocalWaitingRoom>> getWaitingRooms() async {
@@ -460,6 +494,10 @@ abstract class PluginPlatform {
       throw Exception("Failed to join waiting room: $err");
     }
   }
+
+  Future<void> LeaveWaitingRoom(String id) async {
+    await asyncCall(CTLeaveWaitingRoom, id);
+  }
 }
 
 const int CTUnknown = 0x00;
@@ -471,6 +509,7 @@ const int CTGetWRPlayers = 0x05;
 const int CTGetWaitingRooms = 0x06;
 const int CTJoinWaitingRoom = 0x07;
 const int CTCreateWaitingRoom = 0x08;
+const int CTLeaveWaitingRoom = 0x09;
 const int CTCloseLockFile = 0x60;
 
 const int notificationsStartID = 0x1000;

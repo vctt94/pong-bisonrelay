@@ -110,12 +110,6 @@ func (s *Server) handleGameLifecycle(ctx context.Context, players []*ponggame.Pl
 			}
 			playerSession.BetAmt = totalDcrAmount
 			s.log.Debugf("Reset player %s with updated bet amount: %.8f", player.ID, totalDcrAmount)
-			// notify player
-			playerSession.NotifierStream.Send(&pong.NtfnStreamResponse{
-				NotificationType: pong.NotificationType_BET_AMOUNT_UPDATE,
-				BetAmt:           player.BetAmt,
-				PlayerId:         player.ID.String(),
-			})
 		}
 		// remove game from gameManager after it ended
 		delete(s.gameManager.Games, game.Id)

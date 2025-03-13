@@ -134,15 +134,33 @@ func (s *Server) StartGameStream(req *pong.StartGameStreamRequest, stream pong.P
 		Log:      s.log,
 	}
 
-	_, err := s.gameManager.StartGameStream(gameStreamReq)
+	player, err := s.gameManager.StartGameStream(gameStreamReq)
 	if err != nil {
 		return err
 	}
 
+	// Notify all players in the waiting room that this player is ready
+	if player.WR != nil {
+		// Marshal the waiting room state to include in notifications
+		pwr, err := player.WR.Marshal()
+		if err != nil {
+			return err
+		}
+		for _, p := range player.WR.Players {
+			p.NotifierStream.Send(&pong.NtfnStreamResponse{
+				NotificationType: pong.NotificationType_ON_PLAYER_READY,
+				Message:          fmt.Sprintf("Player %s is ready", player.Nick),
+				PlayerId:         player.ID.String(),
+				Wr:               pwr,
+				Ready:            true,
+			})
+		}
+	}
+
 	// Wait for context to end and handle disconnection
 	<-ctx.Done()
-	s.handleDisconnect(clientID)
-	return ctx.Err()
+	s.log.Debugf("Client %s disconnected from game stream", clientID)
+	return nil
 }
 
 func (s *Server) handleDisconnect(clientID zkidentity.ShortID) {
@@ -210,16 +228,19 @@ func (s *Server) StartNtfnStream(req *pong.StartNtfnStreamRequest, stream pong.P
 	}
 
 	// Update player's bet amount and notify
-	player.BetAmt = totalDcrAmount
-	s.log.Debugf("Pending payments applied to client %s, total amount: %.8f", clientID, totalDcrAmount)
+	if player.BetAmt != totalDcrAmount {
+		player.BetAmt = totalDcrAmount
+		s.log.Debugf("Pending payments applied to client %s, total amount: %.8f", clientID, totalDcrAmount)
 
-	s.users[clientID].NotifierStream.Send(&pong.NtfnStreamResponse{
-		NotificationType: pong.NotificationType_BET_AMOUNT_UPDATE,
-		BetAmt:           player.BetAmt,
-		PlayerId:         player.ID.String(),
-	})
+		s.users[clientID].NotifierStream.Send(&pong.NtfnStreamResponse{
+			NotificationType: pong.NotificationType_BET_AMOUNT_UPDATE,
+			BetAmt:           player.BetAmt,
+			PlayerId:         player.ID.String(),
+		})
+	}
 	// Wait for disconnection
 	<-ctx.Done()
+	s.log.Debugf("Client %s disconnected", clientID)
 	s.handleDisconnect(clientID)
 	return ctx.Err()
 }
@@ -335,6 +356,18 @@ func (s *Server) JoinWaitingRoom(ctx context.Context, req *pong.JoinWaitingRoomR
 		return nil, fmt.Errorf("player not found: %s", req.ClientId)
 	}
 
+	// Check if player is already in another waiting room
+	s.gameManager.Lock()
+	for _, existingWR := range s.gameManager.WaitingRooms {
+		for _, p := range existingWR.Players {
+			if p.ID.String() == req.ClientId && p.WR != nil {
+				s.gameManager.Unlock()
+				return nil, fmt.Errorf("player %s is already in another waiting room", req.ClientId)
+			}
+		}
+	}
+	s.gameManager.Unlock()
+
 	wr := s.gameManager.GetWaitingRoom(req.RoomId)
 	if wr == nil {
 		return nil, fmt.Errorf("waiting room not found: %s", req.RoomId)
@@ -358,6 +391,8 @@ func (s *Server) JoinWaitingRoom(ctx context.Context, req *pong.JoinWaitingRoomR
 	}
 
 	wr.AddPlayer(player)
+	player.WR = wr
+
 	wr.Lock()
 	wr.ReservedTips = append(wr.ReservedTips, tips...)
 	wr.Unlock()
@@ -401,6 +436,9 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 	if !s.isF2P && req.BetAmt < s.minBetAmt {
 		return nil, fmt.Errorf("bet needs to be higher than %.8f", s.minBetAmt)
 	}
+	if hostPlayer.WR != nil {
+		return nil, fmt.Errorf("player %s is already in a waiting room", hostID.String())
+	}
 
 	s.log.Debugf("creating waiting room. Host ID: %s", hostID)
 
@@ -431,6 +469,7 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 	wr.ReservedTips = tips // Store reserved tips
 	wr.Unlock()
 
+	hostPlayer.WR = wr
 	s.gameManager.WaitingRooms = append(s.gameManager.WaitingRooms, wr)
 	s.log.Debugf("waiting room created. Total rooms: %d", len(s.gameManager.WaitingRooms))
 
@@ -464,6 +503,123 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 	}, nil
 }
 
+// LeaveWaitingRoom handles a request from a client to leave a waiting room
+func (s *Server) LeaveWaitingRoom(ctx context.Context, req *pong.LeaveWaitingRoomRequest) (*pong.LeaveWaitingRoomResponse, error) {
+	s.log.Debugf("LeaveWaitingRoom request from client %s for room %s", req.ClientId, req.RoomId)
+
+	var clientID zkidentity.ShortID
+	if err := clientID.FromString(req.ClientId); err != nil {
+		return &pong.LeaveWaitingRoomResponse{
+			Success: false,
+			Message: fmt.Sprintf("invalid client ID: %v", err),
+		}, nil
+	}
+
+	// Get the waiting room
+	wr := s.gameManager.GetWaitingRoom(req.RoomId)
+	if wr == nil {
+		return &pong.LeaveWaitingRoomResponse{
+			Success: false,
+			Message: "waiting room not found",
+		}, nil
+	}
+
+	// Check if player is in the room
+	player := wr.GetPlayer(&clientID)
+	if player == nil {
+		return &pong.LeaveWaitingRoomResponse{
+			Success: false,
+			Message: "player not in waiting room",
+		}, nil
+	}
+
+	// Remove the player from the waiting room
+	wr.RemovePlayer(clientID)
+
+	// If player was the host and there are other players, assign a new host
+	if wr.HostID.String() == clientID.String() && len(wr.Players) > 0 {
+		wr.Lock()
+		wr.HostID = wr.Players[0].ID
+		wr.Unlock()
+	}
+
+	// If the room is now empty, remove it
+	if len(wr.Players) == 0 {
+		s.gameManager.RemoveWaitingRoom(wr.ID)
+	} else {
+		// Notify remaining players that someone left
+		pwrMarshaled, err := wr.Marshal()
+		if err == nil {
+			for _, p := range wr.Players {
+				// Send notification to remaining players
+				p.NotifierStream.Send(&pong.NtfnStreamResponse{
+					NotificationType: pong.NotificationType_PLAYER_LEFT_WR,
+					RoomId:           wr.ID,
+					Wr:               pwrMarshaled,
+					PlayerId:         req.ClientId,
+				})
+			}
+		}
+	}
+
+	// Reset the player's waiting room reference
+	if player != nil {
+		player.WR = nil
+	}
+
+	return &pong.LeaveWaitingRoomResponse{
+		Success: true,
+		Message: "successfully left waiting room",
+	}, nil
+}
+
+// UnreadyGameStream handles a request from a client who wants to signal they are no longer ready
+func (s *Server) UnreadyGameStream(ctx context.Context, req *pong.UnreadyGameStreamRequest) (*pong.UnreadyGameStreamResponse, error) {
+	var clientID zkidentity.ShortID
+	clientID.FromString(req.ClientId)
+
+	s.log.Debugf("Client %s called UnreadyGameStream", req.ClientId)
+
+	// Find the player
+	player := s.gameManager.PlayerSessions.GetPlayer(clientID)
+	if player == nil {
+		return nil, fmt.Errorf("player not found: %s", req.ClientId)
+	}
+
+	// Check if the player is in a waiting room
+	if player.WR != nil {
+		player.Ready = false
+
+		// First get the cancel function and call it before deleting
+		if cancel, ok := s.activeGameStreams.Load(clientID); ok {
+			if cancelFn, isCancel := cancel.(context.CancelFunc); isCancel {
+				cancelFn()
+			}
+		}
+
+		// Then delete the entry
+		s.activeGameStreams.Delete(clientID)
+		player.GameStream = nil
+
+		// Notify other players in the waiting room
+		pwr, err := player.WR.Marshal()
+		if err == nil {
+			for _, p := range player.WR.Players {
+				p.NotifierStream.Send(&pong.NtfnStreamResponse{
+					NotificationType: pong.NotificationType_ON_PLAYER_READY,
+					Message:          fmt.Sprintf("Player %s is not ready", player.Nick),
+					PlayerId:         p.ID.String(),
+					RoomId:           player.WR.ID,
+					Wr:               pwr,
+					Ready:            false,
+				})
+			}
+		}
+	}
+
+	return &pong.UnreadyGameStreamResponse{}, nil
+}
+
 // Shutdown forcefully shuts down the server, closing HTTP server, database, waiting rooms, and games.
 func (s *Server) Shutdown(ctx context.Context) error {
 	// Stop HTTP server first
@@ -473,6 +629,16 @@ func (s *Server) Shutdown(ctx context.Context) error {
 			s.log.Errorf("Error shutting down HTTP server: %v", err)
 		}
 	}
+
+	// Forcefully terminate all active games
+	s.log.Info("Terminating all active games...")
+	s.gameManager.Lock()
+	for id, game := range s.gameManager.Games {
+		s.log.Debugf("Forcefully terminating game: %s", id)
+		// Close the frame channel to signal goroutines to exit
+		game.Cleanup()
+	}
+	s.gameManager.Unlock()
 
 	// Cancel all active streams before cleaning up resources
 	s.log.Info("Canceling all active streams...")
@@ -488,6 +654,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		}
 		return true
 	})
+
+	// Give a moment for goroutines to clean up
+	time.Sleep(200 * time.Millisecond)
 
 	// Clean up game resources before closing database
 	s.log.Info("Shutting down waiting rooms and games...")

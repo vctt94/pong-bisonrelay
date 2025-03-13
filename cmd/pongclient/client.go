@@ -181,6 +181,15 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
+		case "q":
+			// Leave the current waiting room
+			if m.currentWR != nil && !m.isGameRunning {
+				err := m.leaveRoom()
+				if err != nil {
+					m.notification = fmt.Sprintf("Error leaving room: %v", err)
+				}
+				return m, nil
+			}
 		}
 
 		if m.mode == gameIdle && msg.Type == tea.KeyEsc {
@@ -247,6 +256,9 @@ func (m *appstate) createRoom() error {
 		return err
 	}
 
+	m.mode = gameMode
+	m.msgCh <- client.UpdatedMsg{}
+
 	return nil
 }
 func (m *appstate) joinRoom(roomID string) error {
@@ -287,6 +299,22 @@ func (m *appstate) handleGameInput(msg tea.KeyMsg) tea.Cmd {
 	}
 }
 
+func (m *appstate) leaveRoom() error {
+	if m.currentWR == nil {
+		return fmt.Errorf("not in a waiting room")
+	}
+
+	err := m.pc.LeaveWaitingRoom(m.currentWR.Id)
+	if err != nil {
+		return err
+	}
+
+	m.currentWR = nil
+	m.mode = gameIdle
+	m.notification = "Successfully left the waiting room"
+	return nil
+}
+
 func (m *appstate) View() string {
 	var b strings.Builder
 
@@ -318,6 +346,7 @@ func (m *appstate) View() string {
 		b.WriteString("[L] - List rooms\n")
 		b.WriteString("[C] - Create room\n")
 		b.WriteString("[J] - Join room\n")
+		b.WriteString("[Q] - Leave current room\n")
 		b.WriteString("[Esc] - Exit\n")
 		b.WriteString("====================\n\n")
 	}
@@ -550,10 +579,12 @@ func realMain() error {
 		as.waitingRooms = append(as.waitingRooms, wr)
 		as.currentWR = wr
 		as.betAmount = wr.BetAmt
+		as.mode = gameMode
 		as.Unlock()
 		as.notification = fmt.Sprintf("New waiting room created: %s", wr.Id)
 
 		go func() {
+			as.msgCh <- client.UpdatedMsg{}
 			select {
 			case as.createdWRChan <- struct{}{}:
 			case <-as.ctx.Done():
@@ -607,6 +638,19 @@ func realMain() error {
 		as.betAmount = 0
 		as.isGameRunning = false
 		as.mode = gameIdle
+		go func() {
+			as.msgCh <- client.UpdatedMsg{}
+		}()
+	}))
+
+	ntfns.Register(client.OnPlayerLeftNtfn(func(wr *pong.WaitingRoom, playerID string, ts time.Time) {
+		if playerID == clientID {
+			as.currentWR = nil
+			as.notification = "You left the waiting room"
+		} else {
+			as.currentWR = wr
+			as.notification = fmt.Sprintf("Player %s left the waiting room", playerID)
+		}
 		go func() {
 			as.msgCh <- client.UpdatedMsg{}
 		}()

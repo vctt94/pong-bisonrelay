@@ -22,6 +22,8 @@ type Player struct {
 	GameStream     pong.PongGame_StartGameStreamServer
 	NotifierStream pong.PongGame_StartNtfnStreamServer
 	Ready          bool
+
+	WR *WaitingRoom
 }
 
 func (p *Player) ResetPlayer() {
