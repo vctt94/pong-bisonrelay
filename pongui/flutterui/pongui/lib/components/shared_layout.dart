@@ -14,7 +14,13 @@ class SharedLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pongModel = Provider.of<PongModel>(context);
+    // Try to get PongModel, but don't throw if it's not available
+    PongModel? pongModel;
+    try {
+      pongModel = Provider.of<PongModel>(context);
+    } catch (e) {
+      // PongModel not available, we'll use a simplified layout
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -28,67 +34,79 @@ class SharedLayout extends StatelessWidget {
               )
             : null,
       ),
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            const DrawerHeader(
-              decoration: BoxDecoration(color: Colors.blueAccent),
-              child: Text('Menu',
-                  style: TextStyle(color: Colors.white, fontSize: 24)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.home),
-              title: const Text('Home'),
-              onTap: () {
-                Navigator.of(context).pushReplacementNamed('/');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.settings),
-              title: const Text('Settings'),
-              onTap: () {
-                Navigator.of(context).pushNamed('/settings');
-              },
-            ),
-          ],
-        ),
-      ),
+      drawer: pongModel != null
+          ? Drawer(
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  const DrawerHeader(
+                    decoration: BoxDecoration(color: Colors.blueAccent),
+                    child: Text('Menu',
+                        style: TextStyle(color: Colors.white, fontSize: 24)),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.home),
+                    title: const Text('Home'),
+                    onTap: () {
+                      Navigator.of(context).pushReplacementNamed('/');
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.settings),
+                    title: const Text('Settings'),
+                    onTap: () {
+                      Navigator.of(context).pushNamed('/settings');
+                    },
+                  ),
+                ],
+              ),
+            )
+          : null,
       body: Column(
         children: [
           Expanded(child: child),
-          // Footer Section
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade900,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+          // Footer Section - only shown when PongModel is available
+          if (pongModel != null)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade900,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(12)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        pongModel.isConnected
+                            ? Icons.cloud_done
+                            : Icons.cloud_off,
+                        color:
+                            pongModel.isConnected ? Colors.green : Colors.red,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        pongModel.isConnected ? "Connected" : "Disconnected",
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: pongModel.isConnected
+                                  ? Colors.green
+                                  : Colors.red,
+                            ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    "Client ID: ${pongModel.clientId}",
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: Colors.white70),
+                  ),
+                ],
+              ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      pongModel.isConnected ? Icons.cloud_done : Icons.cloud_off,
-                      color: pongModel.isConnected ? Colors.green : Colors.red,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      pongModel.isConnected ? "Connected" : "Disconnected",
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: pongModel.isConnected ? Colors.green : Colors.red,
-                          ),
-                    ),
-                  ],
-                ),
-                Text(
-                  "Client ID: ${pongModel.clientId}",
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white70),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );

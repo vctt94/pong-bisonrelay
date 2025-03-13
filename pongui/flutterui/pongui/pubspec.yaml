@@ -41,6 +41,7 @@ dependencies:
   ini: ^2.1.0
   window_manager: ^0.4.3
   provider: ^6.1.2
+  path: ^1.9.0
 
 dev_dependencies:
   flutter_test:
