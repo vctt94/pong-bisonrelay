@@ -81,7 +81,7 @@ const NtfnStreamResponse$json = {
     {'1': 'started', '3': 2, '4': 1, '5': 8, '10': 'started'},
     {'1': 'game_id', '3': 3, '4': 1, '5': 9, '10': 'gameId'},
     {'1': 'message', '3': 4, '4': 1, '5': 9, '10': 'message'},
-    {'1': 'betAmt', '3': 5, '4': 1, '5': 1, '10': 'betAmt'},
+    {'1': 'betAmt', '3': 5, '4': 1, '5': 3, '10': 'betAmt'},
     {'1': 'player_number', '3': 6, '4': 1, '5': 5, '10': 'playerNumber'},
     {'1': 'player_id', '3': 7, '4': 1, '5': 9, '10': 'playerId'},
     {'1': 'room_id', '3': 8, '4': 1, '5': 9, '10': 'roomId'},
@@ -95,7 +95,7 @@ final $typed_data.Uint8List ntfnStreamResponseDescriptor = $convert.base64Decode
     'ChJOdGZuU3RyZWFtUmVzcG9uc2USQwoRbm90aWZpY2F0aW9uX3R5cGUYASABKA4yFi5wb25nLk'
     '5vdGlmaWNhdGlvblR5cGVSEG5vdGlmaWNhdGlvblR5cGUSGAoHc3RhcnRlZBgCIAEoCFIHc3Rh'
     'cnRlZBIXCgdnYW1lX2lkGAMgASgJUgZnYW1lSWQSGAoHbWVzc2FnZRgEIAEoCVIHbWVzc2FnZR'
-    'IWCgZiZXRBbXQYBSABKAFSBmJldEFtdBIjCg1wbGF5ZXJfbnVtYmVyGAYgASgFUgxwbGF5ZXJO'
+    'IWCgZiZXRBbXQYBSABKANSBmJldEFtdBIjCg1wbGF5ZXJfbnVtYmVyGAYgASgFUgxwbGF5ZXJO'
     'dW1iZXISGwoJcGxheWVyX2lkGAcgASgJUghwbGF5ZXJJZBIXCgdyb29tX2lkGAggASgJUgZyb2'
     '9tSWQSIQoCd3IYCSABKAsyES5wb25nLldhaXRpbmdSb29tUgJ3chIUCgVyZWFkeRgKIAEoCFIF'
     'cmVhZHk=');
@@ -157,14 +157,14 @@ const CreateWaitingRoomRequest$json = {
   '1': 'CreateWaitingRoomRequest',
   '2': [
     {'1': 'host_id', '3': 1, '4': 1, '5': 9, '10': 'hostId'},
-    {'1': 'betAmt', '3': 2, '4': 1, '5': 1, '10': 'betAmt'},
+    {'1': 'betAmt', '3': 2, '4': 1, '5': 3, '10': 'betAmt'},
   ],
 };
 
 /// Descriptor for `CreateWaitingRoomRequest`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List createWaitingRoomRequestDescriptor = $convert.base64Decode(
     'ChhDcmVhdGVXYWl0aW5nUm9vbVJlcXVlc3QSFwoHaG9zdF9pZBgBIAEoCVIGaG9zdElkEhYKBm'
-    'JldEFtdBgCIAEoAVIGYmV0QW10');
+    'JldEFtdBgCIAEoA1IGYmV0QW10');
 
 @$core.Deprecated('Use createWaitingRoomResponseDescriptor instead')
 const CreateWaitingRoomResponse$json = {
@@ -186,14 +186,14 @@ const WaitingRoom$json = {
     {'1': 'id', '3': 1, '4': 1, '5': 9, '10': 'id'},
     {'1': 'host_id', '3': 2, '4': 1, '5': 9, '10': 'hostId'},
     {'1': 'players', '3': 3, '4': 3, '5': 11, '6': '.pong.Player', '10': 'players'},
-    {'1': 'bet_amt', '3': 4, '4': 1, '5': 1, '10': 'betAmt'},
+    {'1': 'bet_amt', '3': 4, '4': 1, '5': 3, '10': 'betAmt'},
   ],
 };
 
 /// Descriptor for `WaitingRoom`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List waitingRoomDescriptor = $convert.base64Decode(
     'CgtXYWl0aW5nUm9vbRIOCgJpZBgBIAEoCVICaWQSFwoHaG9zdF9pZBgCIAEoCVIGaG9zdElkEi'
-    'YKB3BsYXllcnMYAyADKAsyDC5wb25nLlBsYXllclIHcGxheWVycxIXCgdiZXRfYW10GAQgASgB'
+    'YKB3BsYXllcnMYAyADKAsyDC5wb25nLlBsYXllclIHcGxheWVycxIXCgdiZXRfYW10GAQgASgD'
     'UgZiZXRBbXQ=');
 
 @$core.Deprecated('Use waitingRoomRequestDescriptor instead')
@@ -224,7 +224,7 @@ const Player$json = {
   '2': [
     {'1': 'uid', '3': 1, '4': 1, '5': 9, '10': 'uid'},
     {'1': 'nick', '3': 2, '4': 1, '5': 9, '10': 'nick'},
-    {'1': 'bet_amt', '3': 3, '4': 1, '5': 1, '10': 'betAmt'},
+    {'1': 'bet_amt', '3': 3, '4': 1, '5': 3, '10': 'betAmt'},
     {'1': 'number', '3': 4, '4': 1, '5': 5, '10': 'number'},
     {'1': 'score', '3': 5, '4': 1, '5': 5, '10': 'score'},
     {'1': 'ready', '3': 6, '4': 1, '5': 8, '10': 'ready'},
@@ -234,7 +234,7 @@ const Player$json = {
 /// Descriptor for `Player`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List playerDescriptor = $convert.base64Decode(
     'CgZQbGF5ZXISEAoDdWlkGAEgASgJUgN1aWQSEgoEbmljaxgCIAEoCVIEbmljaxIXCgdiZXRfYW'
-    '10GAMgASgBUgZiZXRBbXQSFgoGbnVtYmVyGAQgASgFUgZudW1iZXISFAoFc2NvcmUYBSABKAVS'
+    '10GAMgASgDUgZiZXRBbXQSFgoGbnVtYmVyGAQgASgFUgZudW1iZXISFAoFc2NvcmUYBSABKAVS'
     'BXNjb3JlEhQKBXJlYWR5GAYgASgIUgVyZWFkeQ==');
 
 @$core.Deprecated('Use startGameStreamRequestDescriptor instead')

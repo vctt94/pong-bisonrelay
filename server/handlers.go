@@ -66,7 +66,7 @@ func (s *Server) handleReturnUnprocessedTips(ctx context.Context, clientID zkide
 	return nil
 }
 
-func (s *Server) handleFetchTotalUnprocessedTips(ctx context.Context, clientID zkidentity.ShortID) (float64, []*types.ReceivedTip, error) {
+func (s *Server) handleFetchTotalUnprocessedTips(ctx context.Context, clientID zkidentity.ShortID) (int64, []*types.ReceivedTip, error) {
 	// Fetch unprocessed tips from the database
 	tips, err := s.db.FetchReceivedTipsByUID(ctx, clientID, serverdb.StatusUnpaid)
 	if err != nil {
@@ -75,9 +75,9 @@ func (s *Server) handleFetchTotalUnprocessedTips(ctx context.Context, clientID z
 	}
 
 	// Calculate total DCR amount
-	totalDcrAmount := 0.0
+	totalDcrAmount := int64(0)
 	for _, tip := range tips {
-		totalDcrAmount += float64(tip.AmountMatoms) / 1e11 // Convert matoms to DCR
+		totalDcrAmount += tip.AmountMatoms
 	}
 
 	s.log.Infof("Fetched %d unprocessed tips for client %s, total amount: %.8f", len(tips), clientID.String(), totalDcrAmount)

@@ -11,6 +11,7 @@
 
 import 'dart:core' as $core;
 
+import 'package:fixnum/fixnum.dart' as $fixnum;
 import 'package:protobuf/protobuf.dart' as $pb;
 
 import 'pong.pbenum.dart';
@@ -155,7 +156,7 @@ class NtfnStreamResponse extends $pb.GeneratedMessage {
     $core.bool? started,
     $core.String? gameId,
     $core.String? message,
-    $core.double? betAmt,
+    $fixnum.Int64? betAmt,
     $core.int? playerNumber,
     $core.String? playerId,
     $core.String? roomId,
@@ -204,7 +205,7 @@ class NtfnStreamResponse extends $pb.GeneratedMessage {
     ..aOB(2, _omitFieldNames ? '' : 'started')
     ..aOS(3, _omitFieldNames ? '' : 'gameId')
     ..aOS(4, _omitFieldNames ? '' : 'message')
-    ..a<$core.double>(5, _omitFieldNames ? '' : 'betAmt', $pb.PbFieldType.OD, protoName: 'betAmt')
+    ..aInt64(5, _omitFieldNames ? '' : 'betAmt', protoName: 'betAmt')
     ..a<$core.int>(6, _omitFieldNames ? '' : 'playerNumber', $pb.PbFieldType.O3)
     ..aOS(7, _omitFieldNames ? '' : 'playerId')
     ..aOS(8, _omitFieldNames ? '' : 'roomId')
@@ -271,9 +272,9 @@ class NtfnStreamResponse extends $pb.GeneratedMessage {
   void clearMessage() => clearField(4);
 
   @$pb.TagNumber(5)
-  $core.double get betAmt => $_getN(4);
+  $fixnum.Int64 get betAmt => $_getI64(4);
   @$pb.TagNumber(5)
-  set betAmt($core.double v) { $_setDouble(4, v); }
+  set betAmt($fixnum.Int64 v) { $_setInt64(4, v); }
   @$pb.TagNumber(5)
   $core.bool hasBetAmt() => $_has(4);
   @$pb.TagNumber(5)
@@ -541,7 +542,7 @@ class JoinWaitingRoomResponse extends $pb.GeneratedMessage {
 class CreateWaitingRoomRequest extends $pb.GeneratedMessage {
   factory CreateWaitingRoomRequest({
     $core.String? hostId,
-    $core.double? betAmt,
+    $fixnum.Int64? betAmt,
   }) {
     final $result = create();
     if (hostId != null) {
@@ -558,7 +559,7 @@ class CreateWaitingRoomRequest extends $pb.GeneratedMessage {
 
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'CreateWaitingRoomRequest', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
     ..aOS(1, _omitFieldNames ? '' : 'hostId')
-    ..a<$core.double>(2, _omitFieldNames ? '' : 'betAmt', $pb.PbFieldType.OD, protoName: 'betAmt')
+    ..aInt64(2, _omitFieldNames ? '' : 'betAmt', protoName: 'betAmt')
     ..hasRequiredFields = false
   ;
 
@@ -593,9 +594,9 @@ class CreateWaitingRoomRequest extends $pb.GeneratedMessage {
   void clearHostId() => clearField(1);
 
   @$pb.TagNumber(2)
-  $core.double get betAmt => $_getN(1);
+  $fixnum.Int64 get betAmt => $_getI64(1);
   @$pb.TagNumber(2)
-  set betAmt($core.double v) { $_setDouble(1, v); }
+  set betAmt($fixnum.Int64 v) { $_setInt64(1, v); }
   @$pb.TagNumber(2)
   $core.bool hasBetAmt() => $_has(1);
   @$pb.TagNumber(2)
@@ -659,7 +660,7 @@ class WaitingRoom extends $pb.GeneratedMessage {
     $core.String? id,
     $core.String? hostId,
     $core.Iterable<Player>? players,
-    $core.double? betAmt,
+    $fixnum.Int64? betAmt,
   }) {
     final $result = create();
     if (id != null) {
@@ -684,7 +685,7 @@ class WaitingRoom extends $pb.GeneratedMessage {
     ..aOS(1, _omitFieldNames ? '' : 'id')
     ..aOS(2, _omitFieldNames ? '' : 'hostId')
     ..pc<Player>(3, _omitFieldNames ? '' : 'players', $pb.PbFieldType.PM, subBuilder: Player.create)
-    ..a<$core.double>(4, _omitFieldNames ? '' : 'betAmt', $pb.PbFieldType.OD)
+    ..aInt64(4, _omitFieldNames ? '' : 'betAmt')
     ..hasRequiredFields = false
   ;
 
@@ -731,9 +732,9 @@ class WaitingRoom extends $pb.GeneratedMessage {
   $core.List<Player> get players => $_getList(2);
 
   @$pb.TagNumber(4)
-  $core.double get betAmt => $_getN(3);
+  $fixnum.Int64 get betAmt => $_getI64(3);
   @$pb.TagNumber(4)
-  set betAmt($core.double v) { $_setDouble(3, v); }
+  set betAmt($fixnum.Int64 v) { $_setInt64(3, v); }
   @$pb.TagNumber(4)
   $core.bool hasBetAmt() => $_has(3);
   @$pb.TagNumber(4)
@@ -821,7 +822,7 @@ class Player extends $pb.GeneratedMessage {
   factory Player({
     $core.String? uid,
     $core.String? nick,
-    $core.double? betAmt,
+    $fixnum.Int64? betAmt,
     $core.int? number,
     $core.int? score,
     $core.bool? ready,
@@ -854,7 +855,7 @@ class Player extends $pb.GeneratedMessage {
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'Player', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
     ..aOS(1, _omitFieldNames ? '' : 'uid')
     ..aOS(2, _omitFieldNames ? '' : 'nick')
-    ..a<$core.double>(3, _omitFieldNames ? '' : 'betAmt', $pb.PbFieldType.OD)
+    ..aInt64(3, _omitFieldNames ? '' : 'betAmt')
     ..a<$core.int>(4, _omitFieldNames ? '' : 'number', $pb.PbFieldType.O3)
     ..a<$core.int>(5, _omitFieldNames ? '' : 'score', $pb.PbFieldType.O3)
     ..aOB(6, _omitFieldNames ? '' : 'ready')
@@ -901,9 +902,9 @@ class Player extends $pb.GeneratedMessage {
   void clearNick() => clearField(2);
 
   @$pb.TagNumber(3)
-  $core.double get betAmt => $_getN(2);
+  $fixnum.Int64 get betAmt => $_getI64(2);
   @$pb.TagNumber(3)
-  set betAmt($core.double v) { $_setDouble(2, v); }
+  set betAmt($fixnum.Int64 v) { $_setInt64(2, v); }
   @$pb.TagNumber(3)
   $core.bool hasBetAmt() => $_has(2);
   @$pb.TagNumber(3)

@@ -132,7 +132,7 @@ func (wr *WaitingRoom) length() int {
 }
 
 // NewWaitingRoom creates and initializes a new waiting room.
-func NewWaitingRoom(hostPlayer *Player, betAmount float64) (*WaitingRoom, error) {
+func NewWaitingRoom(hostPlayer *Player, betAmount int64) (*WaitingRoom, error) {
 	id, err := botlib.GenerateRandomString(16)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate waiting room ID: %w", err)

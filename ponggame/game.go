@@ -14,27 +14,6 @@ import (
 
 const maxScore = 3
 
-func (gm *GameManager) StartGameStream(req *StartGameStreamRequest) (*Player, error) {
-	player := gm.PlayerSessions.GetPlayer(req.ClientID)
-	if player == nil {
-		return nil, fmt.Errorf("player not found for client ID %s", req.ClientID)
-	}
-	if player.NotifierStream == nil {
-		return nil, fmt.Errorf("player notifier nil %s", req.ClientID)
-	}
-	if player.GameStream != nil {
-		return nil, fmt.Errorf("game stream is already set for id %s", req.ClientID)
-	}
-	if !req.IsF2P && player.BetAmt < req.MinBet {
-		return nil, fmt.Errorf("player needs to place bet higher or equal to: %.8f DCR", req.MinBet)
-	}
-
-	player.GameStream = req.Stream
-	player.Ready = true
-
-	return player, nil
-}
-
 // HandleWaitingRoomDisconnection handles player disconnection from a waiting room.
 func (gm *GameManager) HandleWaitingRoomDisconnection(clientID zkidentity.ShortID, log slog.Logger) {
 	wr := gm.GetWaitingRoomFromPlayer(clientID)

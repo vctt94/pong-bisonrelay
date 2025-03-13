@@ -16,7 +16,7 @@ type Player struct {
 	ID *zkidentity.ShortID
 
 	Nick           string
-	BetAmt         float64
+	BetAmt         int64
 	PlayerNumber   int32 // 1 for player 1, 2 for player 2
 	Score          int
 	GameStream     pong.PongGame_StartGameStreamServer
@@ -49,7 +49,7 @@ type GameInstance struct {
 	Winner      *zkidentity.ShortID
 
 	// betAmt sum of total bets
-	betAmt float64
+	betAmt int64
 
 	log slog.Logger
 }
@@ -61,7 +61,7 @@ type WaitingRoom struct {
 	ID           string
 	HostID       *clientintf.UserID
 	Players      []*Player
-	BetAmount    float64
+	BetAmount    int64
 	ReservedTips []*types.ReceivedTip
 }
 
