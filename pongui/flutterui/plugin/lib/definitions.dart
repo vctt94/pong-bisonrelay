@@ -2,15 +2,9 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
-import 'dart:typed_data';
 
-import 'package:convert/convert.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:golib_plugin/mock.dart';
-import 'package:golib_plugin/util.dart';
 import 'package:json_annotation/json_annotation.dart';
-import 'package:blake_hash/blake_hash.dart';
 import 'package:golib_plugin/grpc/generated/pong.pbgrpc.dart';
 
 part 'definitions.g.dart';
@@ -90,11 +84,11 @@ class LocalPlayer {
   @JsonKey(name: 'nick')
   final String? nick;
   @JsonKey(name: 'bet_amt')
-  final double betAmount;
+  final int betAmount;
   @JsonKey(name: 'ready')
-  final bool ready;
+  bool ready;
 
-  const LocalPlayer(
+  LocalPlayer(
     this.uid,
     this.nick,
     this.betAmount, {
@@ -109,7 +103,7 @@ class LocalPlayer {
     return LocalPlayer(
       player.uid,
       player.nick,
-      player.betAmt,
+      player.betAmt.toInt(),
       ready: player.ready,
     );
   }
@@ -122,7 +116,7 @@ class LocalWaitingRoom {
   @JsonKey(name: 'host_id')
   final String host;
   @JsonKey(name: 'bet_amt')
-  final double betAmt;
+  final int betAmt;
   @JsonKey(name: 'players', defaultValue: [])
   final List<LocalPlayer> players;
 
@@ -141,12 +135,12 @@ class LocalWaitingRoom {
     return LocalWaitingRoom(
       wr.id,
       wr.hostId,
-      wr.betAmt,
+      wr.betAmt.toInt(),
       players: wr.players
           .map((player) => LocalPlayer(
                 player.uid,
                 player.nick,
-                player.betAmt,
+                player.betAmt.toInt(),
                 ready: player.ready,
               ))
           .toList(),
@@ -301,7 +295,7 @@ class CreateWaitingRoomArgs {
   @JsonKey(name: 'client_id')
   final String clientId;
   @JsonKey(name: 'bet_amt')
-  final double betAmt;
+  final int betAmt;
 
   CreateWaitingRoomArgs(this.clientId, this.betAmt);
 

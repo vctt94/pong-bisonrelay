@@ -90,6 +90,19 @@ class GrpcPongClient {
   //   }
   // }
 
+  // Call UnreadyGameStream on the PongGame service
+  Future<UnreadyGameStreamResponse> unreadyGameStream(String clientId) async {
+    final request = UnreadyGameStreamRequest()..clientId = clientId;
+
+    try {
+      final response = await _client.unreadyGameStream(request);
+      return response;
+    } catch (e) {
+      print('Error during UnreadyGameStream: $e');
+      rethrow;
+    }
+  }
+
   // Optionally, clean up the gRPC connection
   Future<void> shutdown() async {
     await _channel.shutdown();

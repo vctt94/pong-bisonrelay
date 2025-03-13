@@ -201,11 +201,21 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.Type == tea.KeySpace {
-			m.mode = gameMode
-			err := m.makeClientReady()
-			if err != nil {
-				m.notification = fmt.Sprintf("Error signaling readiness: %v", err)
-				return m, nil
+			if m.pc.IsReady {
+				// If already ready, set to unready
+				err := m.makeClientUnready()
+				if err != nil {
+					m.notification = fmt.Sprintf("Error signaling unreadiness: %v", err)
+					return m, nil
+				}
+			} else {
+				// If not ready, set to ready
+				m.mode = gameMode
+				err := m.makeClientReady()
+				if err != nil {
+					m.notification = fmt.Sprintf("Error signaling readiness: %v", err)
+					return m, nil
+				}
 			}
 			return m, nil
 		}
@@ -279,6 +289,10 @@ func (m *appstate) makeClientReady() error {
 	return m.pc.SignalReady()
 }
 
+func (m *appstate) makeClientUnready() error {
+	return m.pc.SignalUnready()
+}
+
 func (m *appstate) handleGameInput(msg tea.KeyMsg) tea.Cmd {
 	return func() tea.Msg {
 		var input string
@@ -349,6 +363,14 @@ func (m *appstate) View() string {
 		b.WriteString("[Q] - Leave current room\n")
 		b.WriteString("[Esc] - Exit\n")
 		b.WriteString("====================\n\n")
+
+		if !m.isGameRunning && m.currentWR != nil {
+			if m.pc.IsReady {
+				b.WriteString("[Space] - Toggle ready status (currently READY)\n")
+			} else {
+				b.WriteString("[Space] - Toggle ready status (currently NOT READY)\n")
+			}
+		}
 	}
 
 	// Switch based on the current mode
@@ -578,7 +600,7 @@ func realMain() error {
 		as.Lock()
 		as.waitingRooms = append(as.waitingRooms, wr)
 		as.currentWR = wr
-		as.betAmount = wr.BetAmt
+		as.betAmount = float64(wr.BetAmt) / 1e11
 		as.mode = gameMode
 		as.Unlock()
 		as.notification = fmt.Sprintf("New waiting room created: %s", wr.Id)
@@ -592,11 +614,11 @@ func realMain() error {
 		}()
 	}))
 
-	ntfns.Register(client.OnBetAmtChangedNtfn(func(playerID string, betAmt float64, ts time.Time) {
+	ntfns.Register(client.OnBetAmtChangedNtfn(func(playerID string, betAmt int64, ts time.Time) {
 		// Update bet amount for the player in the local state (e.g., as.Players).
 		if clientID == playerID {
 			as.notification = "bet amount updated"
-			as.betAmount = betAmt
+			as.betAmount = float64(betAmt) / 1e11
 			as.msgCh <- client.UpdatedMsg{}
 		}
 		for i, p := range as.players {

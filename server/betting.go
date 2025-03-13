@@ -176,8 +176,8 @@ func (s *Server) ReceiveTipLoop(ctx context.Context) error {
 			// Update the player's bet amount with the tip value.
 			s.gameManager.PlayerSessions.Lock()
 			// Convert to dcr from mAtoms and add to player tip amount.
-			player.BetAmt += float64(tip.AmountMatoms) / 1e11
-			s.log.Debugf("Player %s bet amount updated to %.8f", player.ID.String(), player.BetAmt)
+			player.BetAmt += tip.AmountMatoms
+			s.log.Debugf("Player %s bet amount updated to %.8f", player.ID.String(), float64(player.BetAmt)/1e11)
 			if player.NotifierStream != nil {
 				player.NotifierStream.Send(&pong.NtfnStreamResponse{
 					NotificationType: pong.NotificationType_BET_AMOUNT_UPDATE,

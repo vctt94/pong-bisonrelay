@@ -24,7 +24,7 @@ func (_ OnWRCreatedNtfn) typ() string { return onWRCreatedfnType }
 const onBetAmtChangedFnType = "onBetAmtChanged"
 
 // onBetAmtChangedNtfn is the handler for changes in the bet amount.
-type OnBetAmtChangedNtfn func(string, float64, time.Time)
+type OnBetAmtChangedNtfn func(string, int64, time.Time)
 
 func (_ OnBetAmtChangedNtfn) typ() string { return onBetAmtChangedFnType }
 
@@ -359,7 +359,7 @@ func (nmgr *NotificationManager) notifyOnWRCreated(wr *pong.WaitingRoom, ts time
 	// nmgr.addUINtfn(id, id.Nick(), UINtfnPM, pm.Message, ts)
 }
 
-func (nmgr *NotificationManager) notifyBetAmtChanged(playerID string, betAmt float64, ts time.Time) {
+func (nmgr *NotificationManager) notifyBetAmtChanged(playerID string, betAmt int64, ts time.Time) {
 	nmgr.handlers[onBetAmtChangedFnType].(*handlersFor[OnBetAmtChangedNtfn]).
 		visit(func(h OnBetAmtChangedNtfn) { h(playerID, betAmt, ts) })
 

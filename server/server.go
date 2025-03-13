@@ -126,18 +126,22 @@ func (s *Server) StartGameStream(req *pong.StartGameStreamRequest, stream pong.P
 
 	s.log.Debugf("Client %s called StartGameStream", req.ClientId)
 
-	gameStreamReq := &ponggame.StartGameStreamRequest{
-		ClientID: clientID,
-		Stream:   stream,
-		MinBet:   s.minBetAmt,
-		IsF2P:    s.isF2P,
-		Log:      s.log,
+	player := s.gameManager.PlayerSessions.GetPlayer(clientID)
+	if player == nil {
+		return fmt.Errorf("player not found for client ID %s", clientID)
+	}
+	if player.NotifierStream == nil {
+		return fmt.Errorf("player notifier nil %s", clientID)
+	}
+	if player.GameStream != nil {
+		return fmt.Errorf("game stream is already set for id %s", clientID)
+	}
+	if !s.isF2P && float64(player.BetAmt)/1e11 < s.minBetAmt {
+		return fmt.Errorf("player needs to place bet higher or equal to: %.8f DCR", clientID)
 	}
 
-	player, err := s.gameManager.StartGameStream(gameStreamReq)
-	if err != nil {
-		return err
-	}
+	player.GameStream = stream
+	player.Ready = true
 
 	// Notify all players in the waiting room that this player is ready
 	if player.WR != nil {
@@ -380,9 +384,9 @@ func (s *Server) JoinWaitingRoom(ctx context.Context, req *pong.JoinWaitingRoomR
 	}
 
 	// Calculate total from tips
-	totalBet := 0.0
+	totalBet := int64(0)
 	for _, tip := range tips {
-		totalBet += float64(tip.AmountMatoms) / 1e11
+		totalBet += tip.AmountMatoms
 	}
 
 	// Validate bet amount matches
@@ -433,7 +437,7 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 	if !s.isF2P && req.BetAmt == 0 {
 		return nil, fmt.Errorf("bet needs to be higher than 0")
 	}
-	if !s.isF2P && req.BetAmt < s.minBetAmt {
+	if !s.isF2P && float64(req.BetAmt)/1e11 < s.minBetAmt {
 		return nil, fmt.Errorf("bet needs to be higher than %.8f", s.minBetAmt)
 	}
 	if hostPlayer.WR != nil {
@@ -449,9 +453,9 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 	}
 
 	// Calculate total from tips
-	totalBet := 0.0
+	totalBet := int64(0)
 	for _, tip := range tips {
-		totalBet += float64(tip.AmountMatoms) / 1e11
+		totalBet += tip.AmountMatoms
 	}
 
 	// Validate bet amount matches
