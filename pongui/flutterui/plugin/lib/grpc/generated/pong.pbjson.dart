@@ -39,6 +39,28 @@ final $typed_data.Uint8List notificationTypeDescriptor = $convert.base64Decode(
     'MKD09OX1BMQVlFUl9SRUFEWRAIEhEKDU9OX1dSX1JFTU9WRUQQCRISCg5QTEFZRVJfTEVGVF9X'
     'UhAK');
 
+@$core.Deprecated('Use unreadyGameStreamRequestDescriptor instead')
+const UnreadyGameStreamRequest$json = {
+  '1': 'UnreadyGameStreamRequest',
+  '2': [
+    {'1': 'client_id', '3': 1, '4': 1, '5': 9, '10': 'clientId'},
+  ],
+};
+
+/// Descriptor for `UnreadyGameStreamRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List unreadyGameStreamRequestDescriptor = $convert.base64Decode(
+    'ChhVbnJlYWR5R2FtZVN0cmVhbVJlcXVlc3QSGwoJY2xpZW50X2lkGAEgASgJUghjbGllbnRJZA'
+    '==');
+
+@$core.Deprecated('Use unreadyGameStreamResponseDescriptor instead')
+const UnreadyGameStreamResponse$json = {
+  '1': 'UnreadyGameStreamResponse',
+};
+
+/// Descriptor for `UnreadyGameStreamResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List unreadyGameStreamResponseDescriptor = $convert.base64Decode(
+    'ChlVbnJlYWR5R2FtZVN0cmVhbVJlc3BvbnNl');
+
 @$core.Deprecated('Use startNtfnStreamRequestDescriptor instead')
 const StartNtfnStreamRequest$json = {
   '1': 'StartNtfnStreamRequest',
@@ -64,6 +86,7 @@ const NtfnStreamResponse$json = {
     {'1': 'player_id', '3': 7, '4': 1, '5': 9, '10': 'playerId'},
     {'1': 'room_id', '3': 8, '4': 1, '5': 9, '10': 'roomId'},
     {'1': 'wr', '3': 9, '4': 1, '5': 11, '6': '.pong.WaitingRoom', '10': 'wr'},
+    {'1': 'ready', '3': 10, '4': 1, '5': 8, '10': 'ready'},
   ],
 };
 
@@ -74,7 +97,8 @@ final $typed_data.Uint8List ntfnStreamResponseDescriptor = $convert.base64Decode
     'cnRlZBIXCgdnYW1lX2lkGAMgASgJUgZnYW1lSWQSGAoHbWVzc2FnZRgEIAEoCVIHbWVzc2FnZR'
     'IWCgZiZXRBbXQYBSABKAFSBmJldEFtdBIjCg1wbGF5ZXJfbnVtYmVyGAYgASgFUgxwbGF5ZXJO'
     'dW1iZXISGwoJcGxheWVyX2lkGAcgASgJUghwbGF5ZXJJZBIXCgdyb29tX2lkGAggASgJUgZyb2'
-    '9tSWQSIQoCd3IYCSABKAsyES5wb25nLldhaXRpbmdSb29tUgJ3cg==');
+    '9tSWQSIQoCd3IYCSABKAsyES5wb25nLldhaXRpbmdSb29tUgJ3chIUCgVyZWFkeRgKIAEoCFIF'
+    'cmVhZHk=');
 
 @$core.Deprecated('Use waitingRoomsRequestDescriptor instead')
 const WaitingRoomsRequest$json = {

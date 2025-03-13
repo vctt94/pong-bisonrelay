@@ -26,6 +26,7 @@ type PongGameClient interface {
 	SendInput(ctx context.Context, in *PlayerInput, opts ...grpc.CallOption) (*GameUpdate, error)
 	StartGameStream(ctx context.Context, in *StartGameStreamRequest, opts ...grpc.CallOption) (PongGame_StartGameStreamClient, error)
 	StartNtfnStream(ctx context.Context, in *StartNtfnStreamRequest, opts ...grpc.CallOption) (PongGame_StartNtfnStreamClient, error)
+	UnreadyGameStream(ctx context.Context, in *UnreadyGameStreamRequest, opts ...grpc.CallOption) (*UnreadyGameStreamResponse, error)
 	// waiting room
 	GetWaitingRoom(ctx context.Context, in *WaitingRoomRequest, opts ...grpc.CallOption) (*WaitingRoomResponse, error)
 	GetWaitingRooms(ctx context.Context, in *WaitingRoomsRequest, opts ...grpc.CallOption) (*WaitingRoomsResponse, error)
@@ -115,6 +116,15 @@ func (x *pongGameStartNtfnStreamClient) Recv() (*NtfnStreamResponse, error) {
 	return m, nil
 }
 
+func (c *pongGameClient) UnreadyGameStream(ctx context.Context, in *UnreadyGameStreamRequest, opts ...grpc.CallOption) (*UnreadyGameStreamResponse, error) {
+	out := new(UnreadyGameStreamResponse)
+	err := c.cc.Invoke(ctx, "/pong.PongGame/UnreadyGameStream", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *pongGameClient) GetWaitingRoom(ctx context.Context, in *WaitingRoomRequest, opts ...grpc.CallOption) (*WaitingRoomResponse, error) {
 	out := new(WaitingRoomResponse)
 	err := c.cc.Invoke(ctx, "/pong.PongGame/GetWaitingRoom", in, out, opts...)
@@ -168,6 +178,7 @@ type PongGameServer interface {
 	SendInput(context.Context, *PlayerInput) (*GameUpdate, error)
 	StartGameStream(*StartGameStreamRequest, PongGame_StartGameStreamServer) error
 	StartNtfnStream(*StartNtfnStreamRequest, PongGame_StartNtfnStreamServer) error
+	UnreadyGameStream(context.Context, *UnreadyGameStreamRequest) (*UnreadyGameStreamResponse, error)
 	// waiting room
 	GetWaitingRoom(context.Context, *WaitingRoomRequest) (*WaitingRoomResponse, error)
 	GetWaitingRooms(context.Context, *WaitingRoomsRequest) (*WaitingRoomsResponse, error)
@@ -189,6 +200,9 @@ func (UnimplementedPongGameServer) StartGameStream(*StartGameStreamRequest, Pong
 }
 func (UnimplementedPongGameServer) StartNtfnStream(*StartNtfnStreamRequest, PongGame_StartNtfnStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method StartNtfnStream not implemented")
+}
+func (UnimplementedPongGameServer) UnreadyGameStream(context.Context, *UnreadyGameStreamRequest) (*UnreadyGameStreamResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UnreadyGameStream not implemented")
 }
 func (UnimplementedPongGameServer) GetWaitingRoom(context.Context, *WaitingRoomRequest) (*WaitingRoomResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWaitingRoom not implemented")
@@ -276,6 +290,24 @@ type pongGameStartNtfnStreamServer struct {
 
 func (x *pongGameStartNtfnStreamServer) Send(m *NtfnStreamResponse) error {
 	return x.ServerStream.SendMsg(m)
+}
+
+func _PongGame_UnreadyGameStream_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnreadyGameStreamRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PongGameServer).UnreadyGameStream(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pong.PongGame/UnreadyGameStream",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PongGameServer).UnreadyGameStream(ctx, req.(*UnreadyGameStreamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _PongGame_GetWaitingRoom_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -378,6 +410,10 @@ var PongGame_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SendInput",
 			Handler:    _PongGame_SendInput_Handler,
+		},
+		{
+			MethodName: "UnreadyGameStream",
+			Handler:    _PongGame_UnreadyGameStream_Handler,
 		},
 		{
 			MethodName: "GetWaitingRoom",

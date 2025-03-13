@@ -17,6 +17,88 @@ import 'pong.pbenum.dart';
 
 export 'pong.pbenum.dart';
 
+class UnreadyGameStreamRequest extends $pb.GeneratedMessage {
+  factory UnreadyGameStreamRequest({
+    $core.String? clientId,
+  }) {
+    final $result = create();
+    if (clientId != null) {
+      $result.clientId = clientId;
+    }
+    return $result;
+  }
+  UnreadyGameStreamRequest._() : super();
+  factory UnreadyGameStreamRequest.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
+  factory UnreadyGameStreamRequest.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'UnreadyGameStreamRequest', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'clientId')
+    ..hasRequiredFields = false
+  ;
+
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
+  'Will be removed in next major version')
+  UnreadyGameStreamRequest clone() => UnreadyGameStreamRequest()..mergeFromMessage(this);
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
+  'Will be removed in next major version')
+  UnreadyGameStreamRequest copyWith(void Function(UnreadyGameStreamRequest) updates) => super.copyWith((message) => updates(message as UnreadyGameStreamRequest)) as UnreadyGameStreamRequest;
+
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static UnreadyGameStreamRequest create() => UnreadyGameStreamRequest._();
+  UnreadyGameStreamRequest createEmptyInstance() => create();
+  static $pb.PbList<UnreadyGameStreamRequest> createRepeated() => $pb.PbList<UnreadyGameStreamRequest>();
+  @$core.pragma('dart2js:noInline')
+  static UnreadyGameStreamRequest getDefault() => _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<UnreadyGameStreamRequest>(create);
+  static UnreadyGameStreamRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get clientId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set clientId($core.String v) { $_setString(0, v); }
+  @$pb.TagNumber(1)
+  $core.bool hasClientId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearClientId() => clearField(1);
+}
+
+class UnreadyGameStreamResponse extends $pb.GeneratedMessage {
+  factory UnreadyGameStreamResponse() => create();
+  UnreadyGameStreamResponse._() : super();
+  factory UnreadyGameStreamResponse.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
+  factory UnreadyGameStreamResponse.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'UnreadyGameStreamResponse', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
+    ..hasRequiredFields = false
+  ;
+
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
+  'Will be removed in next major version')
+  UnreadyGameStreamResponse clone() => UnreadyGameStreamResponse()..mergeFromMessage(this);
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
+  'Will be removed in next major version')
+  UnreadyGameStreamResponse copyWith(void Function(UnreadyGameStreamResponse) updates) => super.copyWith((message) => updates(message as UnreadyGameStreamResponse)) as UnreadyGameStreamResponse;
+
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static UnreadyGameStreamResponse create() => UnreadyGameStreamResponse._();
+  UnreadyGameStreamResponse createEmptyInstance() => create();
+  static $pb.PbList<UnreadyGameStreamResponse> createRepeated() => $pb.PbList<UnreadyGameStreamResponse>();
+  @$core.pragma('dart2js:noInline')
+  static UnreadyGameStreamResponse getDefault() => _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<UnreadyGameStreamResponse>(create);
+  static UnreadyGameStreamResponse? _defaultInstance;
+}
+
 class StartNtfnStreamRequest extends $pb.GeneratedMessage {
   factory StartNtfnStreamRequest({
     $core.String? clientId,
@@ -78,6 +160,7 @@ class NtfnStreamResponse extends $pb.GeneratedMessage {
     $core.String? playerId,
     $core.String? roomId,
     WaitingRoom? wr,
+    $core.bool? ready,
   }) {
     final $result = create();
     if (notificationType != null) {
@@ -107,6 +190,9 @@ class NtfnStreamResponse extends $pb.GeneratedMessage {
     if (wr != null) {
       $result.wr = wr;
     }
+    if (ready != null) {
+      $result.ready = ready;
+    }
     return $result;
   }
   NtfnStreamResponse._() : super();
@@ -123,6 +209,7 @@ class NtfnStreamResponse extends $pb.GeneratedMessage {
     ..aOS(7, _omitFieldNames ? '' : 'playerId')
     ..aOS(8, _omitFieldNames ? '' : 'roomId')
     ..aOM<WaitingRoom>(9, _omitFieldNames ? '' : 'wr', subBuilder: WaitingRoom.create)
+    ..aOB(10, _omitFieldNames ? '' : 'ready')
     ..hasRequiredFields = false
   ;
 
@@ -229,6 +316,15 @@ class NtfnStreamResponse extends $pb.GeneratedMessage {
   void clearWr() => clearField(9);
   @$pb.TagNumber(9)
   WaitingRoom ensureWr() => $_ensure(8);
+
+  @$pb.TagNumber(10)
+  $core.bool get ready => $_getBF(9);
+  @$pb.TagNumber(10)
+  set ready($core.bool v) { $_setBool(9, v); }
+  @$pb.TagNumber(10)
+  $core.bool hasReady() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearReady() => clearField(10);
 }
 
 /// Waiting Room Messages

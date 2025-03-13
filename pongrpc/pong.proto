@@ -9,6 +9,7 @@ service PongGame {
   rpc SendInput (PlayerInput) returns (GameUpdate) {}
   rpc StartGameStream(StartGameStreamRequest) returns (stream GameUpdateBytes);
   rpc StartNtfnStream(StartNtfnStreamRequest) returns (stream NtfnStreamResponse);
+  rpc UnreadyGameStream(UnreadyGameStreamRequest) returns (UnreadyGameStreamResponse);
   
   // waiting room
   rpc GetWaitingRoom(WaitingRoomRequest) returns (WaitingRoomResponse);
@@ -33,6 +34,12 @@ enum NotificationType {
   PLAYER_LEFT_WR = 10;
 }
 
+message UnreadyGameStreamRequest {
+  string client_id = 1;
+}
+
+message UnreadyGameStreamResponse {}
+
 message StartNtfnStreamRequest {
   string client_id = 1;
 }
@@ -47,6 +54,7 @@ message NtfnStreamResponse {
   string player_id = 7;
   string room_id = 8;
   WaitingRoom wr=9;
+  bool ready = 10;
 }
 
 // Waiting Room Messages

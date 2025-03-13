@@ -134,15 +134,33 @@ func (s *Server) StartGameStream(req *pong.StartGameStreamRequest, stream pong.P
 		Log:      s.log,
 	}
 
-	_, err := s.gameManager.StartGameStream(gameStreamReq)
+	player, err := s.gameManager.StartGameStream(gameStreamReq)
 	if err != nil {
 		return err
 	}
 
+	// Notify all players in the waiting room that this player is ready
+	if player.WR != nil {
+		// Marshal the waiting room state to include in notifications
+		pwr, err := player.WR.Marshal()
+		if err != nil {
+			return err
+		}
+		for _, p := range player.WR.Players {
+			p.NotifierStream.Send(&pong.NtfnStreamResponse{
+				NotificationType: pong.NotificationType_ON_PLAYER_READY,
+				Message:          fmt.Sprintf("Player %s is ready", player.Nick),
+				PlayerId:         player.ID.String(),
+				Wr:               pwr,
+				Ready:            true,
+			})
+		}
+	}
+
 	// Wait for context to end and handle disconnection
 	<-ctx.Done()
-	s.handleDisconnect(clientID)
-	return ctx.Err()
+	s.log.Debugf("Client %s disconnected from game stream", clientID)
+	return nil
 }
 
 func (s *Server) handleDisconnect(clientID zkidentity.ShortID) {
@@ -222,6 +240,7 @@ func (s *Server) StartNtfnStream(req *pong.StartNtfnStreamRequest, stream pong.P
 	}
 	// Wait for disconnection
 	<-ctx.Done()
+	s.log.Debugf("Client %s disconnected", clientID)
 	s.handleDisconnect(clientID)
 	return ctx.Err()
 }
@@ -554,6 +573,53 @@ func (s *Server) LeaveWaitingRoom(ctx context.Context, req *pong.LeaveWaitingRoo
 	}, nil
 }
 
+// UnreadyGameStream handles a request from a client who wants to signal they are no longer ready
+func (s *Server) UnreadyGameStream(ctx context.Context, req *pong.UnreadyGameStreamRequest) (*pong.UnreadyGameStreamResponse, error) {
+	var clientID zkidentity.ShortID
+	clientID.FromString(req.ClientId)
+
+	s.log.Debugf("Client %s called UnreadyGameStream", req.ClientId)
+
+	// Find the player
+	player := s.gameManager.PlayerSessions.GetPlayer(clientID)
+	if player == nil {
+		return nil, fmt.Errorf("player not found: %s", req.ClientId)
+	}
+
+	// Check if the player is in a waiting room
+	if player.WR != nil {
+		player.Ready = false
+
+		// First get the cancel function and call it before deleting
+		if cancel, ok := s.activeGameStreams.Load(clientID); ok {
+			if cancelFn, isCancel := cancel.(context.CancelFunc); isCancel {
+				cancelFn()
+			}
+		}
+
+		// Then delete the entry
+		s.activeGameStreams.Delete(clientID)
+		player.GameStream = nil
+
+		// Notify other players in the waiting room
+		pwr, err := player.WR.Marshal()
+		if err == nil {
+			for _, p := range player.WR.Players {
+				p.NotifierStream.Send(&pong.NtfnStreamResponse{
+					NotificationType: pong.NotificationType_ON_PLAYER_READY,
+					Message:          fmt.Sprintf("Player %s is not ready", player.Nick),
+					PlayerId:         p.ID.String(),
+					RoomId:           player.WR.ID,
+					Wr:               pwr,
+					Ready:            false,
+				})
+			}
+		}
+	}
+
+	return &pong.UnreadyGameStreamResponse{}, nil
+}
+
 // Shutdown forcefully shuts down the server, closing HTTP server, database, waiting rooms, and games.
 func (s *Server) Shutdown(ctx context.Context) error {
 	// Stop HTTP server first
@@ -563,6 +629,16 @@ func (s *Server) Shutdown(ctx context.Context) error {
 			s.log.Errorf("Error shutting down HTTP server: %v", err)
 		}
 	}
+
+	// Forcefully terminate all active games
+	s.log.Info("Terminating all active games...")
+	s.gameManager.Lock()
+	for id, game := range s.gameManager.Games {
+		s.log.Debugf("Forcefully terminating game: %s", id)
+		// Close the frame channel to signal goroutines to exit
+		game.Cleanup()
+	}
+	s.gameManager.Unlock()
 
 	// Cancel all active streams before cleaning up resources
 	s.log.Info("Canceling all active streams...")
@@ -578,6 +654,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		}
 		return true
 	})
+
+	// Give a moment for goroutines to clean up
+	time.Sleep(200 * time.Millisecond)
 
 	// Clean up game resources before closing database
 	s.log.Info("Shutting down waiting rooms and games...")
