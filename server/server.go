@@ -137,7 +137,7 @@ func (s *Server) StartGameStream(req *pong.StartGameStreamRequest, stream pong.P
 		return fmt.Errorf("game stream is already set for id %s", clientID)
 	}
 	if !s.isF2P && float64(player.BetAmt)/1e11 < s.minBetAmt {
-		return fmt.Errorf("player needs to place bet higher or equal to: %.8f DCR", clientID)
+		return fmt.Errorf("player needs to place bet higher or equal to: %.8f DCR", s.minBetAmt)
 	}
 
 	player.GameStream = stream
@@ -234,7 +234,7 @@ func (s *Server) StartNtfnStream(req *pong.StartNtfnStreamRequest, stream pong.P
 	// Update player's bet amount and notify
 	if player.BetAmt != totalDcrAmount {
 		player.BetAmt = totalDcrAmount
-		s.log.Debugf("Pending payments applied to client %s, total amount: %.8f", clientID, totalDcrAmount)
+		s.log.Debugf("Pending payments applied to client %s, total amount: %.8f", clientID, float64(totalDcrAmount)/1e11)
 
 		s.users[clientID].NotifierStream.Send(&pong.NtfnStreamResponse{
 			NotificationType: pong.NotificationType_BET_AMOUNT_UPDATE,
@@ -391,7 +391,8 @@ func (s *Server) JoinWaitingRoom(ctx context.Context, req *pong.JoinWaitingRoomR
 
 	// Validate bet amount matches
 	if totalBet != wr.BetAmount {
-		return nil, fmt.Errorf("bet amount mismatch. Available: %.8f, Required: %.8f", totalBet, wr.BetAmount)
+		return nil, fmt.Errorf("bet amount mismatch. Available: %.8f, Required: %.8f",
+			float64(totalBet)/1e11, float64(wr.BetAmount)/1e11)
 	}
 
 	wr.AddPlayer(player)
@@ -432,7 +433,8 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 		return nil, fmt.Errorf("player not found: %s", req.HostId)
 	}
 	if hostPlayer.BetAmt != req.BetAmt {
-		return nil, fmt.Errorf("server and request mismatch. request amt: %.8f, server amt: %.8f", req.BetAmt, hostPlayer.BetAmt)
+		return nil, fmt.Errorf("server and request mismatch. request amt: %.8f, server amt: %.8f",
+			float64(req.BetAmt)/1e11, float64(hostPlayer.BetAmt)/1e11)
 	}
 	if !s.isF2P && req.BetAmt == 0 {
 		return nil, fmt.Errorf("bet needs to be higher than 0")
@@ -460,7 +462,8 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 
 	// Validate bet amount matches
 	if totalBet != req.BetAmt {
-		return nil, fmt.Errorf("bet amount mismatch. Available: %.8f, Requested: %.8f", totalBet, req.BetAmt)
+		return nil, fmt.Errorf("bet amount mismatch. Available: %.8f, Requested: %.8f",
+			float64(totalBet)/1e11, float64(req.BetAmt)/1e11)
 	}
 
 	// Create waiting room with reserved tips

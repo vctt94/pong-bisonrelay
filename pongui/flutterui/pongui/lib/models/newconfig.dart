@@ -7,7 +7,7 @@ import 'package:pongui/config.dart';
 class NewConfigModel extends ChangeNotifier {
   String rpcUser = 'defaultuser';
   String rpcPass = 'defaultpass';
-  String serverAddr = 'localhost:50051';
+  String serverAddr = '104.131.180.29:50051';
   String grpcCertPath = '';
   String rpcCertPath = '';
   String rpcClientCertPath = '';

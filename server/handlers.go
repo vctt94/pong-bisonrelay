@@ -80,7 +80,7 @@ func (s *Server) handleFetchTotalUnprocessedTips(ctx context.Context, clientID z
 		totalDcrAmount += tip.AmountMatoms
 	}
 
-	s.log.Infof("Fetched %d unprocessed tips for client %s, total amount: %.8f", len(tips), clientID.String(), totalDcrAmount)
+	s.log.Infof("Fetched %d unprocessed tips for client %s, total amount: %.8f", len(tips), clientID.String(), float64(totalDcrAmount)/1e11)
 	return totalDcrAmount, tips, nil
 }
 
