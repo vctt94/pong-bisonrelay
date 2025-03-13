@@ -35,7 +35,7 @@ class TopStatusCard extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            "Bet: ${pongModel.betAmt}",
+                            "Bet: ${pongModel.betAmt / 1e11}",
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                           Text(

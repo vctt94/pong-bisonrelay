@@ -60,7 +60,7 @@ Map<String, dynamic> _$GetUserNickArgsToJson(GetUserNickArgs instance) =>
 LocalPlayer _$LocalPlayerFromJson(Map<String, dynamic> json) => LocalPlayer(
       json['uid'] as String,
       json['nick'] as String?,
-      (json['bet_amt'] as num).toDouble(),
+      (json['bet_amt'] as num).toInt(),
       ready: json['ready'] as bool? ?? false,
     );
 
@@ -76,7 +76,7 @@ LocalWaitingRoom _$LocalWaitingRoomFromJson(Map<String, dynamic> json) =>
     LocalWaitingRoom(
       json['id'] as String,
       json['host_id'] as String,
-      (json['bet_amt'] as num).toDouble(),
+      (json['bet_amt'] as num).toInt(),
       players: (json['players'] as List<dynamic>?)
               ?.map((e) => LocalPlayer.fromJson(e as Map<String, dynamic>))
               .toList() ??
@@ -241,7 +241,7 @@ CreateWaitingRoomArgs _$CreateWaitingRoomArgsFromJson(
         Map<String, dynamic> json) =>
     CreateWaitingRoomArgs(
       json['client_id'] as String,
-      (json['bet_amt'] as num).toDouble(),
+      (json['bet_amt'] as num).toInt(),
     );
 
 Map<String, dynamic> _$CreateWaitingRoomArgsToJson(

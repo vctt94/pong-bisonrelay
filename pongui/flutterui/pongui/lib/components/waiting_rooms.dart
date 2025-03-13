@@ -94,7 +94,7 @@ class WaitingRoomList extends StatelessWidget {
                       Icon(Icons.attach_money, size: 16, color: Colors.amber),
                       const SizedBox(width: 4),
                       Text(
-                        'Bet: ${wr.betAmt} DCR',
+                        'Bet: ${wr.betAmt / 1e11} DCR',
                         style: const TextStyle(color: Colors.white70),
                       ),
                     ],

@@ -20,7 +20,7 @@ class PongModel extends ChangeNotifier {
   bool isReady = false;
   bool gameStarted = false;
   bool isConnected = false;
-  double betAmt = 0;
+  int betAmt = 0;
   String errorMessage = '';
   List<LocalWaitingRoom> waitingRooms = [];
   LocalWaitingRoom? currentWR;
@@ -87,7 +87,8 @@ class PongModel extends ChangeNotifier {
       switch (ntfn.notificationType) {
         case NotificationType.BET_AMOUNT_UPDATE:
           if (ntfn.playerId == clientId) {
-            betAmt = ntfn.betAmt;
+            print("Bet amount updated: ${ntfn.betAmt}");
+            betAmt = ntfn.betAmt.toInt();
           }
           break;
 
@@ -137,6 +138,27 @@ class PongModel extends ChangeNotifier {
           currentWR = LocalWaitingRoom.fromProto(ntfn.wr);
           notificationModel.showNotification(ntfn.message);
           notifyListeners();
+          break;
+
+        case NotificationType.ON_PLAYER_READY:
+          // Update the waiting room with the player's ready status
+          if (currentWR != null) {
+            // Find the player in the current waiting room and update their ready status
+            for (var i = 0; i < currentWR!.players.length; i++) {
+              if (currentWR!.players[i].uid == ntfn.playerId) {
+                currentWR!.players[i].ready = ntfn.ready;
+                break;
+              }
+            }
+
+            // Show notification
+            String playerName = ntfn.playerId;
+            String readyStatus = ntfn.ready ? "ready" : "not ready";
+            notificationModel.showNotification(
+              "Player $playerName is now $readyStatus",
+            );
+            notifyListeners();
+          }
           break;
 
         default:
@@ -213,19 +235,35 @@ class PongModel extends ChangeNotifier {
       notifyListeners();
       throw Exception(error);
     }
-    grpcClient.startGameStreamRequest(clientId).listen((gameUpdate) {
-      var data = utf8.decode(gameUpdate.data);
-      var parsedData = json.decode(data) as Map<String, dynamic>;
-      gameStarted = true;
-      gameState = parsedData;
-      errorMessage = '';
-      notifyListeners();
-    }, onError: (error) {
-      developer.log("Error in game stream: $error");
-      errorMessage = "Error in game stream: ${error.message}";
-      print("Error: $error");
-      notifyListeners();
-    });
+
+    if (!isReady) {
+      // Player is getting ready
+      grpcClient.startGameStreamRequest(clientId).listen((gameUpdate) {
+        var data = utf8.decode(gameUpdate.data);
+        var parsedData = json.decode(data) as Map<String, dynamic>;
+        gameStarted = true;
+        gameState = parsedData;
+        errorMessage = '';
+        notifyListeners();
+      }, onError: (error) {
+        developer.log("Error in game stream: $error");
+        errorMessage = "Error in game stream: ${error.message}";
+        print("Error: $error");
+        notifyListeners();
+      });
+    } else {
+      // Player is unreadying
+      try {
+        grpcClient.unreadyGameStream(clientId);
+      } catch (error) {
+        developer.log("Error in unready game stream: $error");
+        errorMessage = "Error in unready game stream: $error";
+        print("Error: $error");
+        notifyListeners();
+        return;
+      }
+    }
+
     isReady = !isReady;
     notifyListeners();
   }

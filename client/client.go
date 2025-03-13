@@ -43,7 +43,7 @@ type PongClient struct {
 
 	IsReady bool
 
-	BetAmt       float64
+	BetAmt       int64 // bet amt in mAtoms
 	playerNumber int32
 	cfg          *PongClientCfg
 	conn         *grpc.ClientConn
@@ -127,7 +127,7 @@ func (pc *PongClient) StartNotifier(ctx context.Context) error {
 					}
 				case pong.NotificationType_ON_PLAYER_READY:
 					if ntfn.PlayerId == pc.ID {
-						pc.IsReady = true
+						pc.IsReady = ntfn.Ready
 						pc.UpdatesCh <- true
 					}
 				default:
@@ -158,15 +158,8 @@ func (pc *PongClient) SignalReady() error {
 		for {
 			update, err := pc.stream.Recv()
 			if err != nil {
-				if errors.Is(err, io.EOF) || strings.Contains(err.Error(), "transport is closing") ||
-					strings.Contains(err.Error(), "connection is being forcefully terminated") {
-
-					// Try to reconnect
-					reconnectErr := pc.reconnect()
-					if reconnectErr != nil {
-						pc.ErrorsCh <- fmt.Errorf("failed to reconnect: %v", reconnectErr)
-					}
-					return // This goroutine ends, but a new one will be started by reconnect()
+				if errors.Is(err, io.EOF) || strings.Contains(err.Error(), "transport is closing") {
+					return
 				}
 
 				pc.ErrorsCh <- fmt.Errorf("game stream error: %v", err)
@@ -217,7 +210,7 @@ func (pc *PongClient) GetWRPlayers() ([]*pong.Player, error) {
 	return wr.Players, nil
 }
 
-func (pc *PongClient) CreateWaitingRoom(clientId string, betAmt float64) (*pong.WaitingRoom, error) {
+func (pc *PongClient) CreateWaitingRoom(clientId string, betAmt int64) (*pong.WaitingRoom, error) {
 	ctx := context.Background()
 	res, err := pc.gc.CreateWaitingRoom(ctx, &pong.CreateWaitingRoomRequest{
 		HostId: clientId,
@@ -412,4 +405,28 @@ func (pc *PongClient) Cleanup() {
 	if pc.conn != nil {
 		pc.conn.Close()
 	}
+}
+
+// SignalUnready tells the server that the player is no longer ready to play
+func (pc *PongClient) SignalUnready() error {
+
+	ctx := context.Background()
+
+	// Call the unready RPC method
+	_, err := pc.gc.UnreadyGameStream(ctx, &pong.UnreadyGameStreamRequest{
+		ClientId: pc.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("error signaling not ready: %w", err)
+	}
+
+	// If we have an active game stream, close it
+	if pc.stream != nil {
+		pc.stream = nil
+	}
+
+	// Notify UI of state change
+	pc.UpdatesCh <- UpdatedMsg{}
+
+	return nil
 }

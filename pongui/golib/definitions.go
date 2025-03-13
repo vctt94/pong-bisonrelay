@@ -28,8 +28,8 @@ type initClient struct {
 }
 
 type createWaitingRoom struct {
-	ClientID string  `json:"client_id"`
-	BetAmt   float64 `json:"bet_amt"`
+	ClientID string `json:"client_id"`
+	BetAmt   int64  `json:"bet_amt"`
 }
 
 type localInfo struct {
@@ -39,7 +39,7 @@ type localInfo struct {
 
 type waitingRoom struct {
 	ID      string    `json:"id"`
-	BetAmt  float64   `json:"bet_amt"`
+	BetAmt  int64     `json:"bet_amt"`
 	HostID  string    `json:"host_id"`
 	Players []*player `json:"players"`
 }
@@ -47,7 +47,7 @@ type waitingRoom struct {
 type player struct {
 	UID    client.UserID `json:"uid"`
 	Nick   string        `json:"nick"`
-	BetAmt float64       `json:"bet_amt"`
+	BetAmt int64         `json:"bet_amt"`
 	Ready  bool          `json:"ready"`
 }
 
