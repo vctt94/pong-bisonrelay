@@ -267,7 +267,6 @@ func (m *appstate) createRoom() error {
 	}
 
 	m.mode = gameMode
-	m.msgCh <- client.UpdatedMsg{}
 
 	return nil
 }
@@ -344,7 +343,7 @@ func (m *appstate) View() string {
 		}
 
 		b.WriteString(fmt.Sprintf("👤 Player ID: %s\n", m.pc.ID))
-		b.WriteString(fmt.Sprintf("💵 Bet Amount: %.8f\n", m.betAmount))
+		b.WriteString(fmt.Sprintf("💵 Bet Amount: %.8f\n", float64(m.betAmount)/1e11))
 		b.WriteString(fmt.Sprintf("✅ Status Ready: %t\n", m.pc.IsReady))
 
 		// Display the current room or show a placeholder if not in a room
@@ -481,7 +480,7 @@ func (m *appstate) View() string {
 		b.WriteString("\n[List Rooms Mode]\n")
 		if len(m.waitingRooms) > 0 {
 			for i, room := range m.waitingRooms {
-				b.WriteString(fmt.Sprintf("%d: Room ID %s - Bet Price: %.8f\n", i+1, room.Id, room.BetAmt))
+				b.WriteString(fmt.Sprintf("%d: Room ID %s - Bet Price: %.8f\n", i+1, room.Id, float64(room.BetAmt)/1e11))
 			}
 		} else {
 			b.WriteString("No rooms available.\n")
@@ -503,7 +502,7 @@ func (m *appstate) View() string {
 				if i == m.selectedRoomIndex {
 					indicator = ">" // Mark the selected room
 				}
-				b.WriteString(fmt.Sprintf("%s %d: Room ID %s - Bet Price: %.8f\n", indicator, i+1, room.Id, room.BetAmt))
+				b.WriteString(fmt.Sprintf("%s %d: Room ID %s - Bet Price: %.8f\n", indicator, i+1, room.Id, float64(room.BetAmt)/1e11))
 			}
 		} else {
 			b.WriteString("No rooms available.\n")
@@ -599,9 +598,13 @@ func realMain() error {
 	ntfns.RegisterSync(client.OnWRCreatedNtfn(func(wr *pong.WaitingRoom, ts time.Time) {
 		as.Lock()
 		as.waitingRooms = append(as.waitingRooms, wr)
-		as.currentWR = wr
-		as.betAmount = float64(wr.BetAmt) / 1e11
-		as.mode = gameMode
+		for _, p := range as.players {
+			if p.Uid == clientID {
+				as.currentWR = wr
+				as.betAmount = float64(wr.BetAmt) / 1e11
+				as.mode = gameMode
+			}
+		}
 		as.Unlock()
 		as.notification = fmt.Sprintf("New waiting room created: %s", wr.Id)
 
