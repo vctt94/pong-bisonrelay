@@ -162,23 +162,6 @@ func (s *Server) handleGameEnd(ctx context.Context, game *ponggame.GameInstance,
 	// Convert total to matoms for storage
 	totalDcrAmount := float64(totalAmountMatoms) / 1e11
 
-	// Store send progress with ALL tips (both players')
-	err := s.db.StoreSendTipProgress(ctx, winner[:], totalAmountMatoms, tips, serverdb.StatusSending)
-	if err != nil {
-		s.log.Errorf("Failed to store send progress: %v", err)
-		return
-	}
-
-	// Process the reserved tips
-	for _, tip := range tips {
-		tipID := make([]byte, 8)
-		binary.BigEndian.PutUint64(tipID, tip.SequenceId)
-		err := s.db.UpdateTipStatus(ctx, tip.Uid, tipID, serverdb.StatusSending)
-		if err != nil {
-			s.log.Errorf("Failed to update tip status for player %s: %v", tip.Uid, err)
-		}
-	}
-
 	// Notify players of game outcome
 	for _, player := range players {
 		message := "Game ended in a draw."
@@ -204,6 +187,22 @@ func (s *Server) handleGameEnd(ctx context.Context, game *ponggame.GameInstance,
 
 	// Transfer actual reserved tip amounts to winner
 	if winner != nil {
+		// Store send progress with ALL tips (both players')
+		err := s.db.StoreSendTipProgress(ctx, winner[:], totalAmountMatoms, tips, serverdb.StatusSending)
+		if err != nil {
+			s.log.Errorf("Failed to store send progress: %v", err)
+			return
+		}
+		// Process the reserved tips
+		for _, tip := range tips {
+			tipID := make([]byte, 8)
+			binary.BigEndian.PutUint64(tipID, tip.SequenceId)
+			err := s.db.UpdateTipStatus(ctx, tip.Uid, tipID, serverdb.StatusSending)
+			if err != nil {
+				s.log.Errorf("Failed to update tip status for player %s: %v", tip.Uid, err)
+			}
+		}
+
 		// Process the reserved tips
 		for _, tip := range tips {
 			tipID := make([]byte, 8)
@@ -214,7 +213,7 @@ func (s *Server) handleGameEnd(ctx context.Context, game *ponggame.GameInstance,
 			}
 		}
 		resp := &types.TipUserResponse{}
-		err := s.paymentClient.TipUser(ctx, &types.TipUserRequest{
+		err = s.paymentClient.TipUser(ctx, &types.TipUserRequest{
 			User:        winner.String(),
 			DcrAmount:   totalDcrAmount,
 			MaxAttempts: 3,
