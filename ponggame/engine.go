@@ -89,17 +89,17 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 
 	// Calculates and writes frames
 	go func() {
-		clock := time.NewTicker(time.Duration(e.TPS) * time.Millisecond)
-		defer clock.Stop()
 
-		logFrequency := 100 // Adjust this value as needed to reduce log frequency
+		logFrequency := 100
 		tickCounter := 0
+
 		for {
 			select {
 			case <-ctx.Done():
 				e.log.Debug("exiting")
 				return
-			case <-clock.C:
+			default:
+				currentTime := time.Now()
 				e.tick()
 
 				if errors.Is(e.Err, engine.ErrP1Win) {
@@ -165,6 +165,14 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 					}
 				case <-ctx.Done():
 					return
+				}
+
+				// Sleep to maintain target frame rate - fixed type conversion
+				targetFrameTime := float64(time.Second) / e.FPS
+				elapsedTime := float64(time.Since(currentTime))
+				sleepTime := time.Duration(targetFrameTime - elapsedTime)
+				if sleepTime > 0 {
+					time.Sleep(sleepTime)
 				}
 			}
 		}
