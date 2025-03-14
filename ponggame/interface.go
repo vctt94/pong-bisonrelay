@@ -32,6 +32,7 @@ func (p *Player) ResetPlayer() {
 	p.PlayerNumber = 0
 	p.BetAmt = 0
 	p.Ready = false
+	p.WR = nil
 }
 
 type GameInstance struct {
