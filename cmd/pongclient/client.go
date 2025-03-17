@@ -343,7 +343,7 @@ func (m *appstate) View() string {
 		}
 
 		b.WriteString(fmt.Sprintf("👤 Player ID: %s\n", m.pc.ID))
-		b.WriteString(fmt.Sprintf("💵 Bet Amount: %.8f\n", float64(m.betAmount)/1e11))
+		b.WriteString(fmt.Sprintf("💵 Bet Amount: %.8f\n", m.betAmount))
 		b.WriteString(fmt.Sprintf("✅ Status Ready: %t\n", m.pc.IsReady))
 
 		// Display the current room or show a placeholder if not in a room
