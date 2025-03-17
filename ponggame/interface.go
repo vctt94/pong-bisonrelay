@@ -32,6 +32,7 @@ func (p *Player) ResetPlayer() {
 	p.PlayerNumber = 0
 	p.BetAmt = 0
 	p.Ready = false
+	p.WR = nil
 }
 
 type GameInstance struct {
@@ -96,11 +97,17 @@ type CanvasEngine struct {
 	P1YVelocity, P2YVelocity     float64
 	BallXVelocity, BallYVelocity float64
 
+	// Velocity multiplier that increases over time
+	VelocityMultiplier float64
+	VelocityIncrease   float64
+
 	// Error of the current tick
 	Err error
 
 	// Engine debug state
 	log slog.Logger
+
+	mu sync.Mutex
 }
 
 // StartGameStreamRequest encapsulates the data needed to start a game stream.
