@@ -20,6 +20,7 @@ func New(g engine.Game) *CanvasEngine {
 	e.Game = g
 	e.FPS = DEFAULT_FPS
 	e.TPS = 1000.0 / e.FPS
+	e.VelocityIncrease = DEFAULT_VEL_INCR
 
 	return e
 }

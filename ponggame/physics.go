@@ -8,12 +8,28 @@ import (
 )
 
 const (
-	DEFAULT_FPS    = 60
-	INPUT_BUF_SIZE = 2 << 8
+	DEFAULT_FPS      = 60
+	DEFAULT_VEL_INCR = 0.0005
+	INPUT_BUF_SIZE   = 2 << 8
+
+	baseline                 = 0
+	default_padding          = 0
+	canvas_border_correction = 1
+
+	default_ball_x_vel_ratio = 0.25
+	min_ball_y_vel_ratio     = 0.1
+	max_y_vel_ratio          = 0.20
+
+	magic_p = 3
+
+	player_input_dist = 2
 )
 
 // tick calculates the next frame
 func (e *CanvasEngine) tick() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	switch e.detectColl() {
 
 	case
@@ -61,24 +77,7 @@ func (e *CanvasEngine) tick() {
 	e.advance().deOutOfBoundsPlayers()
 }
 
-// Constants
-
-const (
-	baseline                 = 0
-	default_padding          = 0
-	canvas_border_correction = 1
-
-	default_ball_x_vel_ratio = 0.25
-	min_ball_y_vel_ratio     = 0.1
-	max_y_vel_ratio          = 0.20
-
-	magic_p = 3
-
-	player_input_dist = 2
-)
-
 // State
-
 func (e *CanvasEngine) ballDirP1() bool {
 	return e.BallX <= e.Game.Width/2
 }
@@ -140,7 +139,7 @@ func (e *CanvasEngine) detectColl() engine.Collision {
 }
 
 func (e *CanvasEngine) isCollP1() bool {
-	x := e.BallX <= (e.P1X + e.Game.P1.Width + magic_p)
+	x := e.BallX <= (e.P1X + e.Game.P1.Width + 1)
 	y1 := e.P1Y <= e.BallY
 	y2 := (e.P1Y + e.Game.P1.Height) >= e.BallY
 	y := y1 && y2
@@ -214,6 +213,10 @@ func (e *CanvasEngine) resetBall() *CanvasEngine {
 	// Center ball
 	e.BallX = e.Game.Width / 2.0
 	e.BallY = e.Game.Height / 2.0
+
+	// Reset velocity multiplier to 1.0 at the start of each round
+	e.VelocityMultiplier = 1.0
+
 	// Random direction
 	if rand.Intn(10) < 5 {
 		e.BallXVelocity = -default_ball_x_vel_ratio * e.Game.Width
@@ -243,8 +246,17 @@ func (e *CanvasEngine) advance() *CanvasEngine {
 
 // advanceBall advances the ball one tick or frame
 func (e *CanvasEngine) advanceBall() *CanvasEngine {
-	e.BallX += e.BallXVelocity / e.FPS
-	e.BallY += e.BallYVelocity / e.FPS
+	// Increase velocity multiplier gradually over time
+	// Adjust the rate of increase (0.0001) to control how quickly the ball speeds up
+	if e.VelocityIncrease > 0 {
+		e.VelocityMultiplier += e.VelocityIncrease
+	} else {
+		e.VelocityMultiplier += DEFAULT_VEL_INCR
+	}
+
+	// Apply the velocity multiplier to the ball movement
+	e.BallX += (e.BallXVelocity * e.VelocityMultiplier) / e.FPS
+	e.BallY += (e.BallYVelocity * e.VelocityMultiplier) / e.FPS
 	return e
 }
 
