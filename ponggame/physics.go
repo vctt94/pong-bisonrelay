@@ -283,24 +283,32 @@ func (e *CanvasEngine) advancePlayers() *CanvasEngine {
 }
 
 func (e *CanvasEngine) p1Up() *CanvasEngine {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.P1YVelocity = player_input_dist
 	e.P1Y += player_input_dist
 	return e
 }
 
 func (e *CanvasEngine) p1Down() *CanvasEngine {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.P1YVelocity = player_input_dist
 	e.P1Y -= player_input_dist
 	return e
 }
 
 func (e *CanvasEngine) p2Up() *CanvasEngine {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.P2YVelocity = player_input_dist
 	e.P2Y += player_input_dist
 	return e
 }
 
 func (e *CanvasEngine) p2Down() *CanvasEngine {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.P2YVelocity = player_input_dist
 	e.P2Y -= player_input_dist
 	return e
