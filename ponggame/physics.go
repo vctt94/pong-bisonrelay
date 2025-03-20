@@ -22,8 +22,6 @@ const (
 	initial_ball_y_vel       = 0.20
 
 	magic_p = 3
-
-	player_input_dist = 2
 )
 
 // tick calculates the next frame
