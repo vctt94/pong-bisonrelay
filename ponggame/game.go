@@ -200,8 +200,8 @@ func (gm *GameManager) startNewGame(ctx context.Context, players []*Player, id s
 	canvasEngine := New(game)
 	canvasEngine.SetLogger(gm.Log).SetFPS(DEFAULT_FPS)
 
-	framesch := make(chan []byte, 100)
-	inputch := make(chan []byte, 100)
+	framesch := make(chan []byte, INPUT_BUF_SIZE)
+	inputch := make(chan []byte, INPUT_BUF_SIZE)
 	roundResult := make(chan int32)
 	instanceCtx, cancel := context.WithCancel(ctx)
 	// sum of all bets
