@@ -18,7 +18,8 @@ const (
 
 	default_ball_x_vel_ratio = 0.25
 	min_ball_y_vel_ratio     = 0.1
-	max_y_vel_ratio          = 0.20
+	max_y_vel_ratio          = 1.5
+	initial_ball_y_vel       = 0.20
 
 	magic_p = 3
 
@@ -74,7 +75,7 @@ func (e *CanvasEngine) tick() {
 	default:
 	}
 
-	e.advance().deOutOfBoundsPlayers()
+	e.advanceBall().deOutOfBoundsPlayers()
 }
 
 // State
@@ -140,16 +141,20 @@ func (e *CanvasEngine) detectColl() engine.Collision {
 
 func (e *CanvasEngine) isCollP1() bool {
 	x := e.BallX <= (e.P1X + e.Game.P1.Width + 1)
-	y1 := e.P1Y <= e.BallY
-	y2 := (e.P1Y + e.Game.P1.Height) >= e.BallY
+
+	y1 := e.BallY <= (e.P1Y + e.Game.P1.Height)
+	y2 := (e.BallY + e.Game.Ball.Height) >= e.P1Y
+
 	y := y1 && y2
 	return x && y
 }
 
 func (e *CanvasEngine) isCollP2() bool {
-	x := (e.BallX + e.Game.Ball.Height) >= e.P2X
-	y1 := e.P2Y <= e.BallY
-	y2 := (e.P2Y + e.Game.P2.Height) >= e.BallY
+	x := (e.BallX + e.Game.Ball.Width) >= e.P2X
+
+	y1 := e.BallY <= (e.P2Y + e.Game.P2.Height)
+	y2 := (e.BallY + e.Game.Ball.Height) >= e.P2Y
+
 	y := y1 && y2
 	return x && y
 }
@@ -220,11 +225,11 @@ func (e *CanvasEngine) resetBall() *CanvasEngine {
 	// Random direction
 	if rand.Intn(10) < 5 {
 		e.BallXVelocity = -default_ball_x_vel_ratio * e.Game.Width
-		y := min_ball_y_vel_ratio*e.Game.Height + rand.Float64()*((max_y_vel_ratio*e.Game.Height)-(min_ball_y_vel_ratio*e.Game.Height))
+		y := min_ball_y_vel_ratio*e.Game.Height + rand.Float64()*((initial_ball_y_vel*e.Game.Height)-(min_ball_y_vel_ratio*e.Game.Height))
 		e.BallYVelocity = -y
 	} else {
 		e.BallXVelocity = default_ball_x_vel_ratio * e.Game.Width
-		y := min_ball_y_vel_ratio*e.Game.Height + rand.Float64()*((max_y_vel_ratio*e.Game.Height)-(min_ball_y_vel_ratio*e.Game.Height))
+		y := min_ball_y_vel_ratio*e.Game.Height + rand.Float64()*((initial_ball_y_vel*e.Game.Height)-(min_ball_y_vel_ratio*e.Game.Height))
 		e.BallYVelocity = y
 	}
 	return e
@@ -234,14 +239,14 @@ func (e *CanvasEngine) resetPlayers() *CanvasEngine {
 	// P1
 	e.P1X = 0 + default_padding
 	e.P1Y = e.Game.Height/2 - e.Game.P1.Height/2
+	e.P1YVelocity = 0
+
 	// P2
 	e.P2X = e.Game.Width - +e.Game.P1.Width - default_padding
 	e.P2Y = e.Game.Height/2 - e.Game.P2.Height/2
-	return e
-}
+	e.P2YVelocity = 0
 
-func (e *CanvasEngine) advance() *CanvasEngine {
-	return e.advanceBall().advancePlayers()
+	return e
 }
 
 // advanceBall advances the ball one tick or frame
@@ -260,57 +265,35 @@ func (e *CanvasEngine) advanceBall() *CanvasEngine {
 	return e
 }
 
-// advancePlayers advances the players one tick or frame
-func (e *CanvasEngine) advancePlayers() *CanvasEngine {
-	switch {
-	case e.ballDirP1():
-		e.P2YVelocity = 0
-
-	case e.ballDirP2():
-		switch y := (e.P2Y + (e.Game.P2.Height / 2)) - e.BallY; {
-		case y > 0:
-			e.P2YVelocity = max_y_vel_ratio * e.Game.Height
-			// e.P2Y -= e.P2YVelocity / e.FPS
-		case y < 0:
-			e.P2YVelocity = max_y_vel_ratio * e.Game.Height
-			// e.P2Y += e.P2YVelocity / e.FPS
-		case y > -0.9 && y < 0.9:
-			e.P2YVelocity = 0
-		}
-	}
-
-	return e
-}
-
 func (e *CanvasEngine) p1Up() *CanvasEngine {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.P1YVelocity = player_input_dist
-	e.P1Y += player_input_dist
+	e.P1YVelocity = max_y_vel_ratio * e.Game.Height
+	e.P1Y -= e.P1YVelocity / e.FPS // Use velocity with timing, moving up (negative Y)
 	return e
 }
 
 func (e *CanvasEngine) p1Down() *CanvasEngine {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.P1YVelocity = player_input_dist
-	e.P1Y -= player_input_dist
+	e.P1YVelocity = max_y_vel_ratio * e.Game.Height
+	e.P1Y += e.P1YVelocity / e.FPS // Use velocity with timing, moving down (positive Y)
 	return e
 }
 
 func (e *CanvasEngine) p2Up() *CanvasEngine {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.P2YVelocity = player_input_dist
-	e.P2Y += player_input_dist
+	e.P2YVelocity = max_y_vel_ratio * e.Game.Height
+	e.P2Y -= e.P2YVelocity / e.FPS // Use velocity with timing, moving up (negative Y)
 	return e
 }
 
 func (e *CanvasEngine) p2Down() *CanvasEngine {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.P2YVelocity = player_input_dist
-	e.P2Y -= player_input_dist
+	e.P2YVelocity = max_y_vel_ratio * e.Game.Height
+	e.P2Y += e.P2YVelocity / e.FPS // Use velocity with timing, moving down (positive Y)
 	return e
 }
 

@@ -87,6 +87,7 @@ func NewServer(id *zkidentity.ShortID, cfg ServerConfig) *Server {
 			PlayerSessions: &ponggame.PlayerSessions{Sessions: make(map[zkidentity.ShortID]*ponggame.Player)},
 			Debug:          cfg.DebugGameManagerLevel,
 			Log:            logGM,
+			PlayerGameMap:  make(map[zkidentity.ShortID]*ponggame.GameInstance),
 		},
 	}
 	s.gameManager.OnWaitingRoomRemoved = s.handleWaitingRoomRemoved
@@ -252,10 +253,6 @@ func (s *Server) StartNtfnStream(req *pong.StartNtfnStreamRequest, stream pong.P
 func (s *Server) SendInput(ctx context.Context, req *pong.PlayerInput) (*pong.GameUpdate, error) {
 	var clientID zkidentity.ShortID
 	clientID.FromString(req.PlayerId)
-
-	s.log.Debugf("Received input from player %s", clientID)
-
-	// Delegate to GameManager
 	return s.gameManager.HandlePlayerInput(clientID, req)
 }
 
