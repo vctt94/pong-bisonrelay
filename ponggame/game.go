@@ -102,15 +102,17 @@ func (gm *GameManager) HandlePlayerInput(clientID zkidentity.ShortID, req *pong.
 		return nil, fmt.Errorf("failed to serialize input: %w", err)
 	}
 
-	game.Lock()
-	defer game.Unlock()
-
 	if !game.Running {
 		return nil, fmt.Errorf("game has ended for client ID %s", clientID)
 	}
 
 	// Send inputBytes to game.inputch
-	game.Inputch <- inputBytes
+	select {
+	case game.Inputch <- inputBytes:
+	default:
+		// Channel is full, consider logging or handling this case
+		gm.Log.Debugf("Input channel full for game %s, dropping input", game.Id)
+	}
 
 	return &pong.GameUpdate{}, nil
 }
@@ -165,17 +167,9 @@ func (gm *GameManager) RemoveWaitingRoom(roomID string) {
 }
 
 func (gm *GameManager) GetPlayerGame(clientID zkidentity.ShortID) *GameInstance {
-	gm.Lock()
-	defer gm.Unlock()
-	for _, game := range gm.Games {
-		for _, player := range game.Players {
-			if *player.ID == clientID {
-				return game
-			}
-		}
-	}
-
-	return nil
+	gm.RLock()
+	defer gm.RUnlock()
+	return gm.PlayerGameMap[clientID]
 }
 
 func (s *GameManager) StartGame(ctx context.Context, players []*Player) (*GameInstance, error) {
@@ -207,7 +201,7 @@ func (gm *GameManager) startNewGame(ctx context.Context, players []*Player, id s
 	canvasEngine.SetLogger(gm.Log).SetFPS(DEFAULT_FPS)
 
 	framesch := make(chan []byte, 100)
-	inputch := make(chan []byte, 10)
+	inputch := make(chan []byte, 100)
 	roundResult := make(chan int32)
 	instanceCtx, cancel := context.WithCancel(ctx)
 	// sum of all bets
@@ -226,6 +220,8 @@ func (gm *GameManager) startNewGame(ctx context.Context, players []*Player, id s
 		log:         gm.Log,
 	}
 
+	gm.PlayerGameMap[*players[0].ID] = instance
+	gm.PlayerGameMap[*players[1].ID] = instance
 	return instance
 }
 

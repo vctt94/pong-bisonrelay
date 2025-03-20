@@ -73,6 +73,7 @@ type GameManager struct {
 	Games          map[string]*GameInstance
 	WaitingRooms   []*WaitingRoom
 	PlayerSessions *PlayerSessions
+	PlayerGameMap  map[zkidentity.ShortID]*GameInstance
 
 	Log slog.Logger
 

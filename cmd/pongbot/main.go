@@ -43,6 +43,8 @@ var (
 )
 
 func realMain() error {
+	flag.Parse()
+
 	appdata := utils.AppDataDir("pongbot", false)
 	cfg, err := config.LoadBotConfig(appdata, "pongbot.conf")
 	if err != nil {
