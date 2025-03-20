@@ -39,6 +39,8 @@ var (
 )
 
 func realMain() error {
+	flag.Parse()
+
 	cfg, err := botlib.LoadBotConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)

@@ -207,20 +207,16 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 				if in.PlayerNumber == int32(1) {
 					switch k := in.Input; k {
 					case "ArrowUp":
-						e.log.Debugf("key %s", k)
-						e.p1Down() // The Canvas origin is top left
-					case "ArrowDown":
-						e.log.Debugf("key %s", k)
 						e.p1Up()
+					case "ArrowDown":
+						e.p1Down()
 					}
 				} else {
 					switch k := in.Input; k {
 					case "ArrowUp":
-						e.log.Debugf("key %s", k)
-						e.p2Down() // The Canvas origin is top left
-					case "ArrowDown":
-						e.log.Debugf("key %s", k)
 						e.p2Up()
+					case "ArrowDown":
+						e.p2Down()
 					}
 				}
 			case <-ctx.Done():

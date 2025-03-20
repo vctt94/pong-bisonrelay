@@ -183,6 +183,8 @@ func (s *Server) handleGameEnd(ctx context.Context, game *ponggame.GameInstance,
 			Message:          message,
 			GameId:           game.Id,
 		})
+		// delete player from gameManager PlayerGameMap
+		delete(s.gameManager.PlayerGameMap, *player.ID)
 	}
 
 	// Transfer actual reserved tip amounts to winner
