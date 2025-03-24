@@ -10,7 +10,6 @@ import (
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/vctt94/pong-bisonrelay/botlib"
 	"github.com/vctt94/pong-bisonrelay/ponggame"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 	"github.com/vctt94/pong-bisonrelay/server/internal/mocks"
@@ -198,7 +197,7 @@ func TestConcurrentWaitingRoomCreation(t *testing.T) {
 
 			// Generate a unique Host ID for each goroutine
 			var hostID zkidentity.ShortID
-			strID, err := botlib.GenerateRandomString(64)
+			strID, err := GenerateRandomString(64)
 			if err != nil {
 				t.Errorf("Failed to GenerateRandomString for Host ID: %v", err)
 				return

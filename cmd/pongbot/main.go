@@ -7,13 +7,17 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
-	"github.com/decred/slog"
-	"github.com/vctt94/pong-bisonrelay/botlib"
+	"github.com/vctt94/bisonbotkit"
+	"github.com/vctt94/bisonbotkit/config"
+	"github.com/vctt94/bisonbotkit/logging"
+	"github.com/vctt94/bisonbotkit/utils"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 	"github.com/vctt94/pong-bisonrelay/server"
 	"golang.org/x/sync/errgroup"
@@ -39,13 +43,14 @@ var (
 )
 
 func realMain() error {
-	cfg, err := botlib.LoadBotConfig()
+	appdata := utils.AppDataDir("pongbot", false)
+	cfg, err := config.LoadBotConfig(appdata, "pongbot.conf")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 	// Apply overrides from flags
 	if *flagDataDir != "" {
-		cfg.DataDir = botlib.CleanAndExpandPath(*flagDataDir)
+		cfg.DataDir = utils.CleanAndExpandPath(*flagDataDir)
 	}
 	if *flagIsF2P {
 		cfg.IsF2P = *flagIsF2P
@@ -66,13 +71,13 @@ func realMain() error {
 		cfg.HttpPort = *flagHttpPort
 	}
 	if *flagServerCertPath != "" {
-		cfg.ServerCertPath = botlib.CleanAndExpandPath(*flagServerCertPath)
+		cfg.ServerCertPath = utils.CleanAndExpandPath(*flagServerCertPath)
 	}
 	if *flagClientCertPath != "" {
-		cfg.ClientCertPath = botlib.CleanAndExpandPath(*flagClientCertPath)
+		cfg.ClientCertPath = utils.CleanAndExpandPath(*flagClientCertPath)
 	}
 	if *flagClientKeyPath != "" {
-		cfg.ClientKeyPath = botlib.CleanAndExpandPath(*flagClientKeyPath)
+		cfg.ClientKeyPath = utils.CleanAndExpandPath(*flagClientKeyPath)
 	}
 	if *flagRPCUser != "" {
 		cfg.RPCUser = *flagRPCUser
@@ -83,17 +88,25 @@ func realMain() error {
 	if *flagDebug != "" {
 		cfg.Debug = *flagDebug
 	}
-	debugLevel := server.GetDebugLevel(cfg.Debug)
-	debugGameManager := server.GetDebugLevel(cfg.Debug)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	bknd := slog.NewBackend(os.Stderr)
-	log := bknd.Logger("[Bot]")
-	log.SetLevel(debugLevel)
+	logBackend, err := logging.NewLogBackend(logging.LogConfig{
+		LogFile:        filepath.Join(appdata, "logs", "pongbot.log"),
+		DebugLevel:     cfg.Debug,
+		MaxLogFiles:    10,
+		MaxBufferLines: 1000,
+	})
+	log := logBackend.Logger("Bot")
 
-	botlib.SetupSignalHandler(cancel, log)
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		log.Infof("Received shutdown signal")
+		cancel()
+	}()
 
 	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create data directory: %v", err)
@@ -106,18 +119,15 @@ func realMain() error {
 		return fmt.Errorf("failed to listen on gRPC port: %v", err)
 	}
 
-	c, err := botlib.NewJSONRPCClient(cfg, log)
+	bot, err := bisonbotkit.NewBot(cfg, logBackend)
 	if err != nil {
 		return fmt.Errorf("failed to create JSON-RPC client: %w", err)
 	}
-	g.Go(func() error { return c.Run(gctx) })
-
-	chat := types.NewChatServiceClient(c)
-	payment := types.NewPaymentsServiceClient(c)
+	g.Go(func() error { return bot.Run(gctx) })
 
 	req := &types.PublicIdentityReq{}
 	var publicIdentity types.PublicIdentity
-	if err := chat.UserPublicIdentity(ctx, req, &publicIdentity); err != nil {
+	if err := bot.Chat.UserPublicIdentity(ctx, req, &publicIdentity); err != nil {
 		return fmt.Errorf("failed to get public identity: %w", err)
 	}
 
@@ -125,16 +135,19 @@ func realMain() error {
 	var zkShortID zkidentity.ShortID
 	copy(zkShortID[:], clientID)
 
-	srv := server.NewServer(&zkShortID, server.ServerConfig{
-		DebugGameManagerLevel: debugGameManager,
-		Debug:                 debugLevel,
-		PaymentClient:         payment,
-		ChatClient:            chat,
-		ServerDir:             cfg.DataDir,
-		IsF2P:                 cfg.IsF2P,
-		MinBetAmt:             cfg.MinBetAmt,
-		HTTPPort:              cfg.HttpPort,
+	srv, err := server.NewServer(&zkShortID, server.ServerConfig{
+
+		PaymentClient: bot.Payment,
+		ChatClient:    bot.Chat,
+		ServerDir:     cfg.DataDir,
+		IsF2P:         cfg.IsF2P,
+		MinBetAmt:     cfg.MinBetAmt,
+		HTTPPort:      cfg.HttpPort,
+		LogBackend:    logBackend,
 	})
+	if err != nil {
+		return fmt.Errorf("failed to create server: %w", err)
+	}
 
 	g.Go(func() error { return srv.Run(gctx) })
 	g.Go(func() error { return srv.SendTipProgressLoop(gctx) })
@@ -142,8 +155,11 @@ func realMain() error {
 
 	certPath := filepath.Join(cfg.DataDir, "server.cert")
 	keyPath := filepath.Join(cfg.DataDir, "server.key")
-	if err := botlib.EnsureTLSCert(certPath, keyPath, cfg.GRPCHost); err != nil {
-		return fmt.Errorf("failed to ensure TLS cert: %w", err)
+	if _, err := os.Stat(certPath); os.IsNotExist(err) {
+		return fmt.Errorf("failed to load TLS credentials: %w", err)
+	}
+	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+		return fmt.Errorf("failed to load TLS credentials: %w", err)
 	}
 
 	creds, err := credentials.NewServerTLSFromFile(certPath, keyPath)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"time"
 
 	"github.com/decred/slog"
@@ -26,12 +25,8 @@ func New(g engine.Game) *CanvasEngine {
 }
 
 // SetDebug sets the Canvas engines debug state
-func (e *CanvasEngine) SetDebug(debug slog.Level) *CanvasEngine {
-	bknd := slog.NewBackend(os.Stderr)
-	log := bknd.Logger("[Engine]")
-	log.SetLevel(debug)
+func (e *CanvasEngine) SetLogger(log slog.Logger) *CanvasEngine {
 	e.log = log
-	e.log.Debugf("set debug %s", debug.String())
 	return e
 }
 

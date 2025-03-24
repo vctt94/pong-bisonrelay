@@ -1,28 +1,31 @@
 module github.com/vctt94/pong-bisonrelay
 
-go 1.22
+go 1.23.4
 
-toolchain go1.22.2
+toolchain go1.24.1
 
 require (
 	github.com/charmbracelet/bubbles v0.20.0
 	github.com/charmbracelet/bubbletea v1.1.1
-	github.com/companyzero/bisonrelay v0.2.1
+	github.com/companyzero/bisonrelay v0.2.2
 	github.com/davecgh/go-spew v1.1.1
 	github.com/decred/slog v1.2.0
-	github.com/jrick/logrotate v1.0.0
+	github.com/jrick/logrotate v1.1.2
 	github.com/ndabAP/ping-pong v0.0.0-20231119080825-15ed4850b548
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58
 	github.com/prometheus/procfs v0.12.0
 	github.com/stretchr/testify v1.10.0
+	github.com/vctt94/bisonbotkit v0.0.0-00010101000000-000000000000
 	go.etcd.io/bbolt v1.3.8
 	golang.org/x/mobile v0.0.0-20240604190613-2782386b8afd
-	golang.org/x/sync v0.8.0
+	golang.org/x/sync v0.11.0
 	google.golang.org/grpc v1.62.0
 	google.golang.org/protobuf v1.33.0
 )
 
 replace github.com/companyzero/bisonrelay => github.com/vctt94/bisonrelay v0.0.0-20241105192107-e02453230ee8
+
+replace github.com/vctt94/bisonbotkit => ../bisonbotkit
 
 require (
 	decred.org/cspp/v2 v2.2.0 // indirect

@@ -1,0 +1,16 @@
+datadir=~
+isf2p=false
+minbetamt=0.00000000
+rpcurl=wss://127.0.0.1:9754/ws
+grpchost=127.0.0.1
+grpcport=9105
+httpport=9100
+servercertpath=/home/vctt/.brclient/rpc.cert
+clientcertpath=~/client.cert
+clientkeypath=~/client.key
+rpcuser=user
+rpcpass=pass
+debug=info
+logfile=~/logs/pongbot.log
+maxlogfiles=5
+maxbufferlines=1000
