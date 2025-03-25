@@ -565,12 +565,13 @@ func realMain() error {
 
 	g, gctx := errgroup.WithContext(ctx)
 
+	useStdout := false
 	logBackend, err := logging.NewLogBackend(logging.LogConfig{
 		LogFile:        filepath.Join(*datadir, "logs", "pongclient.log"),
 		DebugLevel:     cfg.Debug,
 		MaxLogFiles:    10,
 		MaxBufferLines: 1000,
-		UseStdout:      false,
+		UseStdout:      &useStdout,
 	})
 	log := logBackend.Logger("Bot")
 	c, err := botclient.NewClient(cfg, logBackend)

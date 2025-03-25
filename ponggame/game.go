@@ -8,6 +8,7 @@ import (
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/decred/slog"
 	"github.com/ndabAP/ping-pong/engine"
+	"github.com/vctt94/bisonbotkit/utils"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 )
 
@@ -180,7 +181,7 @@ func (gm *GameManager) GetPlayerGame(clientID zkidentity.ShortID) *GameInstance 
 func (s *GameManager) StartGame(ctx context.Context, players []*Player) (*GameInstance, error) {
 	s.Lock()
 	defer s.Unlock()
-	gameID, err := GenerateRandomString(16)
+	gameID, err := utils.GenerateRandomString(16)
 	if err != nil {
 		return nil, err
 	}

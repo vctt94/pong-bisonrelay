@@ -2,9 +2,7 @@ package ponggame
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
-	"math/rand"
 
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"google.golang.org/grpc/metadata"
@@ -43,13 +41,4 @@ func GetRemainingPlayerInGame(game *GameInstance, disconnectedID zkidentity.Shor
 		}
 	}
 	return nil
-}
-
-// GenerateRandomString generates a random string of the specified length.
-func GenerateRandomString(length int) (string, error) {
-	bytes := make([]byte, length)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("failed to generate random string: %w", err)
-	}
-	return hex.EncodeToString(bytes)[:length], nil
 }
