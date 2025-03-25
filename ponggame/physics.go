@@ -87,15 +87,16 @@ func (e *CanvasEngine) tick() {
 	collision := e.detectColl()
 	e.mu.RUnlock()
 
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	// Process collision result
 	switch collision {
 	case engine.CollP1Top,
 		engine.CollP1Bottom,
 		engine.CollP2Top,
 		engine.CollP2Bottom:
-		e.mu.Lock()
 		e.handlePaddleEdgeHit().deOutOfBoundsBall()
-		e.mu.Unlock()
 	case
 		engine.CollP1,
 		engine.CollP2:
@@ -132,9 +133,7 @@ func (e *CanvasEngine) tick() {
 	}
 
 	// Update ball position
-	e.mu.Lock()
 	e.advanceBall().deOutOfBoundsPlayers()
-	e.mu.Unlock()
 }
 
 // Collisions
