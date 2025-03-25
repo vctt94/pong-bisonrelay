@@ -113,7 +113,7 @@ func (s *Server) handleGameLifecycle(ctx context.Context, players []*ponggame.Pl
 		}
 		// remove game from gameManager after it ended
 		delete(s.gameManager.Games, game.Id)
-		s.log.Infof("Game %s cleaned up", game.Id)
+		s.log.Debugf("Game %s cleaned up", game.Id)
 	}()
 
 	game.Run()
