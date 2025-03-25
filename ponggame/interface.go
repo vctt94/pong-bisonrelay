@@ -12,6 +12,14 @@ import (
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 )
 
+// Rect represents a bounding box with center position and half-dimensions
+type Rect struct {
+	Cx    float64 // Center X
+	Cy    float64 // Center Y
+	HalfW float64 // Half-width
+	HalfH float64 // Half-height
+}
+
 type Player struct {
 	ID *zkidentity.ShortID
 
