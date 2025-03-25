@@ -82,18 +82,20 @@ func (e *CanvasEngine) bottomRect() Rect {
 
 // tick calculates the next frame
 func (e *CanvasEngine) tick() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
+	// Only lock when actually updating shared state
+	e.mu.RLock()
+	collision := e.detectColl()
+	e.mu.RUnlock()
 
-	switch e.detectColl() {
-
-	case
-		engine.CollP1Top,
+	// Process collision result
+	switch collision {
+	case engine.CollP1Top,
 		engine.CollP1Bottom,
 		engine.CollP2Top,
 		engine.CollP2Bottom:
+		e.mu.Lock()
 		e.handlePaddleEdgeHit().deOutOfBoundsBall()
-
+		e.mu.Unlock()
 	case
 		engine.CollP1,
 		engine.CollP2:
@@ -129,7 +131,10 @@ func (e *CanvasEngine) tick() {
 	default:
 	}
 
+	// Update ball position
+	e.mu.Lock()
 	e.advanceBall().deOutOfBoundsPlayers()
+	e.mu.Unlock()
 }
 
 // Collisions

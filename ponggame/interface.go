@@ -126,7 +126,7 @@ type CanvasEngine struct {
 	// Engine debug state
 	log slog.Logger
 
-	mu sync.Mutex
+	mu sync.RWMutex
 }
 
 // StartGameStreamRequest encapsulates the data needed to start a game stream.
