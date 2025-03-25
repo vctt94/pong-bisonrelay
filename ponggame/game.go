@@ -232,12 +232,6 @@ func (gm *GameManager) startNewGame(ctx context.Context, players []*Player, id s
 func (g *GameInstance) Run() {
 	g.Running = true
 	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				g.log.Warnf("Recovered from panic in NewRound: %v", r)
-			}
-		}()
-
 		// Run a new round only if the game is still running
 		if g.Running {
 			g.engine.NewRound(g.ctx, g.Framesch, g.Inputch, g.roundResult)
@@ -286,7 +280,7 @@ func (g *GameInstance) shouldEndGame() bool {
 	for _, player := range g.Players {
 		// Check if any player has reached the max score
 		if player.Score >= maxScore {
-			g.log.Debugf("Game ending: Player %s reached the maximum score of %d", player.ID, maxScore)
+			g.log.Infof("Game ending: Player %s reached the maximum score of %d", player.ID, player.Score)
 			g.Winner = player.ID
 			g.Running = false
 			return true
@@ -295,7 +289,7 @@ func (g *GameInstance) shouldEndGame() bool {
 
 	// Add other conditions as needed, e.g., time limit or disconnection
 	if g.isTimeout() {
-		g.log.Debug("Game ending: Timeout reached")
+		g.log.Info("Game ending: Timeout reached")
 		return true
 	}
 
