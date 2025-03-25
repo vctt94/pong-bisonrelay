@@ -291,6 +291,11 @@ func (s *Server) sendGameUpdates(ctx context.Context, player *ponggame.Player, g
 			if !ok {
 				return // Game has ended, exit
 			}
+			if player.GameStream == nil {
+				// XXX something going on with the stream, should try a reconnect.
+				s.log.Errorf("player %s has no game stream", player.ID)
+				continue
+			}
 			err := player.GameStream.Send(&pong.GameUpdateBytes{Data: frame})
 			if err != nil {
 				s.handleDisconnect(*player.ID)
