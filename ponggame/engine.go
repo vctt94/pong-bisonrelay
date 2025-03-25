@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"time"
 
 	"github.com/decred/slog"
@@ -26,12 +25,8 @@ func New(g engine.Game) *CanvasEngine {
 }
 
 // SetDebug sets the Canvas engines debug state
-func (e *CanvasEngine) SetDebug(debug slog.Level) *CanvasEngine {
-	bknd := slog.NewBackend(os.Stderr)
-	log := bknd.Logger("[Engine]")
-	log.SetLevel(debug)
+func (e *CanvasEngine) SetLogger(log slog.Logger) *CanvasEngine {
 	e.log = log
-	e.log.Debugf("set debug %s", debug.String())
 	return e
 }
 
@@ -82,7 +77,7 @@ type GameUpdate struct {
 // NewRound resets the ball, players and starts a new round. It accepts
 // a frames channel to write into and input channel to read from
 func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inputch <-chan []byte, roundResult chan<- int32) {
-	e.log.Debugf("new round")
+	e.log.Info("new round")
 
 	time.Sleep(time.Millisecond * 1500) // 1.5 seconds
 
@@ -104,7 +99,7 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 				e.tick()
 
 				if errors.Is(e.Err, engine.ErrP1Win) {
-					e.log.Debug("p1 wins")
+					e.log.Info("p1 wins")
 					e.P1Score += 1
 
 					// Send the winner's ID through the roundResult channel
@@ -116,7 +111,7 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 
 					return
 				} else if errors.Is(e.Err, engine.ErrP2Win) {
-					e.log.Debug("p2 wins")
+					e.log.Info("p2 wins")
 					e.P2Score += 1
 
 					// Send the winner's ID through the roundResult channel
@@ -207,19 +202,15 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 				if in.PlayerNumber == int32(1) {
 					switch k := in.Input; k {
 					case "ArrowUp":
-						e.log.Debugf("key %s", k)
 						e.p1Down() // The Canvas origin is top left
 					case "ArrowDown":
-						e.log.Debugf("key %s", k)
 						e.p1Up()
 					}
 				} else {
 					switch k := in.Input; k {
 					case "ArrowUp":
-						e.log.Debugf("key %s", k)
 						e.p2Down() // The Canvas origin is top left
 					case "ArrowDown":
-						e.log.Debugf("key %s", k)
 						e.p2Up()
 					}
 				}

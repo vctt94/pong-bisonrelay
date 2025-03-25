@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/decred/slog"
+	"github.com/vctt94/bisonbotkit/logging"
 	"github.com/vctt94/pong-bisonrelay/ponggame"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 	"github.com/vctt94/pong-bisonrelay/server/serverdb"
@@ -27,18 +27,18 @@ type ServerConfig struct {
 
 	MinBetAmt             float64
 	IsF2P                 bool
-	Debug                 slog.Level
-	DebugGameManagerLevel slog.Level
+	DebugLevel            string
+	DebugGameManagerLevel string
 	PaymentClient         types.PaymentsServiceClient
 	ChatClient            types.ChatServiceClient
 	HTTPPort              string
+	LogBackend            *logging.LogBackend
 }
 
 type Server struct {
 	pong.UnimplementedPongGameServer
 	sync.RWMutex
 
-	debug              slog.Level
 	log                slog.Logger
 	isF2P              bool
 	minBetAmt          float64
@@ -53,26 +53,31 @@ type Server struct {
 	activeNtfnStreams sync.Map
 	activeGameStreams sync.Map
 	db                serverdb.ServerDB
+
+	appdata string
 }
 
-func NewServer(id *zkidentity.ShortID, cfg ServerConfig) *Server {
-	bknd := slog.NewBackend(os.Stderr)
-	log := bknd.Logger("[Server]")
-	log.SetLevel(cfg.Debug)
-
-	logGM := bknd.Logger("[GM]")
-	logGM.SetLevel(cfg.DebugGameManagerLevel)
+func NewServer(id *zkidentity.ShortID, cfg ServerConfig) (*Server, error) {
 
 	dbPath := filepath.Join(cfg.ServerDir, "server.db")
 	db, err := serverdb.NewBoltDB(dbPath)
 	if err != nil {
-		log.Errorf("Failed to open database: %v\n", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
+	if cfg.LogBackend == nil {
+		return nil, fmt.Errorf("log is nil")
+	}
+	bknd, err := logging.NewLogBackend(logging.LogConfig{
+		LogFile:        filepath.Join(cfg.ServerDir, "logs", "gamemanager.log"),
+		DebugLevel:     cfg.DebugGameManagerLevel,
+		MaxLogFiles:    10,
+		MaxBufferLines: 1000,
+	})
+	logGM := bknd.Logger("[GM]")
 	s := &Server{
-		log:                log,
-		debug:              cfg.Debug,
+		appdata:            cfg.ServerDir,
+		log:                cfg.LogBackend.Logger("[Server]"),
 		db:                 db,
 		paymentClient:      cfg.PaymentClient,
 		chatClient:         cfg.ChatClient,
@@ -85,7 +90,6 @@ func NewServer(id *zkidentity.ShortID, cfg ServerConfig) *Server {
 			Games:          make(map[string]*ponggame.GameInstance),
 			WaitingRooms:   []*ponggame.WaitingRoom{},
 			PlayerSessions: &ponggame.PlayerSessions{Sessions: make(map[zkidentity.ShortID]*ponggame.Player)},
-			Debug:          cfg.DebugGameManagerLevel,
 			Log:            logGM,
 		},
 	}
@@ -110,7 +114,7 @@ func NewServer(id *zkidentity.ShortID, cfg ServerConfig) *Server {
 		}()
 	}
 
-	return s
+	return s, nil
 }
 
 func (s *Server) StartGameStream(req *pong.StartGameStreamRequest, stream pong.PongGame_StartGameStreamServer) error {

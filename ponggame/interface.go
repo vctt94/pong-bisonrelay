@@ -74,8 +74,7 @@ type GameManager struct {
 	WaitingRooms   []*WaitingRoom
 	PlayerSessions *PlayerSessions
 
-	Debug slog.Level
-	Log   slog.Logger
+	Log slog.Logger
 
 	// Callback for waiting room removal notifications
 	OnWaitingRoomRemoved func(*pong.WaitingRoom)

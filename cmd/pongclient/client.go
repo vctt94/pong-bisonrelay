@@ -8,21 +8,24 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/vctt94/pong-bisonrelay/botlib"
 	"github.com/vctt94/pong-bisonrelay/client"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/companyzero/bisonrelay/clientrpc/jsonrpc"
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/decred/slog"
+	"github.com/vctt94/bisonbotkit/botclient"
+	"github.com/vctt94/bisonbotkit/config"
+	"github.com/vctt94/bisonbotkit/logging"
+	"github.com/vctt94/bisonbotkit/utils"
 )
 
 type ID = zkidentity.ShortID
@@ -253,6 +256,7 @@ func (m *appstate) waitForMsg() tea.Cmd {
 func (m *appstate) listWaitingRooms() error {
 	wr, err := m.pc.GetWaitingRooms()
 	if err != nil {
+		m.log.Errorf("Failed to get waiting rooms: %v", err)
 		return err
 	}
 	m.waitingRooms = wr
@@ -263,33 +267,40 @@ func (m *appstate) createRoom() error {
 	var err error
 	_, err = m.pc.CreateWaitingRoom(m.pc.ID, m.pc.BetAmt)
 	if err != nil {
+		m.log.Errorf("Error creating room: %v", err)
 		return err
 	}
-
 	m.mode = gameMode
-
 	return nil
 }
-func (m *appstate) joinRoom(roomID string) error {
 
-	// Send request to join the specified room
+func (m *appstate) joinRoom(roomID string) error {
 	res, err := m.pc.JoinWaitingRoom(roomID)
 	if err != nil {
+		m.log.Errorf("Failed to join room %s: %v", roomID, err)
 		return err
 	}
-
 	m.currentWR = res.Wr
 	m.mode = gameMode
-
 	return nil
 }
 
 func (m *appstate) makeClientReady() error {
-	return m.pc.SignalReady()
+	err := m.pc.SignalReady()
+	if err != nil {
+		m.log.Errorf("Failed to signal ready state: %v", err)
+		return err
+	}
+	return nil
 }
 
 func (m *appstate) makeClientUnready() error {
-	return m.pc.SignalUnready()
+	err := m.pc.SignalUnready()
+	if err != nil {
+		m.log.Errorf("Failed to signal unready state: %v", err)
+		return err
+	}
+	return nil
 }
 
 func (m *appstate) handleGameInput(msg tea.KeyMsg) tea.Cmd {
@@ -304,7 +315,7 @@ func (m *appstate) handleGameInput(msg tea.KeyMsg) tea.Cmd {
 		if input != "" {
 			err := m.pc.SendInput(input)
 			if err != nil {
-				m.log.Debugf("Error sending game input: %v", err)
+				m.log.Errorf("Error sending game input: %v", err)
 				return err
 			}
 		}
@@ -319,6 +330,7 @@ func (m *appstate) leaveRoom() error {
 
 	err := m.pc.LeaveWaitingRoom(m.currentWR.Id)
 	if err != nil {
+		m.log.Errorf("Failed to leave room %s: %v", m.currentWR.Id, err)
 		return err
 	}
 
@@ -521,7 +533,10 @@ func (m *appstate) View() string {
 
 func realMain() error {
 	flag.Parse()
-	cfg, err := botlib.LoadClientConfig(*datadir)
+	if *datadir == "" {
+		*datadir = utils.AppDataDir("pongclient", false)
+	}
+	cfg, err := config.LoadClientConfig(*datadir, "pongclient.conf")
 	if err != nil {
 		fmt.Println("Error loading configuration:", err)
 		os.Exit(1)
@@ -556,31 +571,27 @@ func realMain() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	bknd := slog.NewBackend(os.Stderr)
-	log := bknd.Logger("EXMP")
-	log.SetLevel(slog.LevelDebug)
-
 	g, gctx := errgroup.WithContext(ctx)
 
-	log.SetLevel(slog.LevelInfo)
-
-	c, err := jsonrpc.NewWSClient(
-		jsonrpc.WithWebsocketURL(cfg.RPCURL),
-		jsonrpc.WithServerTLSCertPath(cfg.ServerCertPath),
-		jsonrpc.WithClientTLSCert(cfg.ClientCertPath, cfg.ClientKeyPath),
-		jsonrpc.WithClientLog(log),
-		jsonrpc.WithClientBasicAuth(cfg.RPCUser, cfg.RPCPass),
-	)
+	useStdout := false
+	logBackend, err := logging.NewLogBackend(logging.LogConfig{
+		LogFile:        filepath.Join(*datadir, "logs", "pongclient.log"),
+		DebugLevel:     cfg.Debug,
+		MaxLogFiles:    10,
+		MaxBufferLines: 1000,
+		UseStdout:      &useStdout,
+	})
+	log := logBackend.Logger("Bot")
+	c, err := botclient.NewClient(cfg, logBackend)
 	if err != nil {
 		return err
 	}
-	g.Go(func() error { return c.Run(gctx) })
+	g.Go(func() error { return c.RPCClient.Run(gctx) })
 
 	var zkShortID zkidentity.ShortID
-	chat := types.NewChatServiceClient(c)
 	req := &types.PublicIdentityReq{}
 	var publicIdentity types.PublicIdentity
-	err = chat.UserPublicIdentity(ctx, req, &publicIdentity)
+	err = c.Chat.UserPublicIdentity(ctx, req, &publicIdentity)
 	if err != nil {
 		return fmt.Errorf("failed to get user public identity: %v", err)
 	}
@@ -683,7 +694,6 @@ func realMain() error {
 
 	pc, err := client.NewPongClient(clientID, &client.PongClientCfg{
 		ServerAddr:    cfg.ServerAddr,
-		ChatClient:    chat,
 		Notifications: ntfns,
 		Log:           log,
 		GRPCCertPath:  cfg.GRPCServerCert,
@@ -692,6 +702,8 @@ func realMain() error {
 		return fmt.Errorf("failed to create pong client: %v", err)
 	}
 	as.pc = pc
+
+	log.Infof("Connected to server at %s with ID %s", cfg.ServerAddr, clientID)
 
 	// Test the connection immediately after creating the client
 	_, err = pc.GetWaitingRooms()

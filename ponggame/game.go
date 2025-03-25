@@ -8,7 +8,7 @@ import (
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/decred/slog"
 	"github.com/ndabAP/ping-pong/engine"
-	"github.com/vctt94/pong-bisonrelay/botlib"
+	"github.com/vctt94/bisonbotkit/utils"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 )
 
@@ -181,7 +181,7 @@ func (gm *GameManager) GetPlayerGame(clientID zkidentity.ShortID) *GameInstance 
 func (s *GameManager) StartGame(ctx context.Context, players []*Player) (*GameInstance, error) {
 	s.Lock()
 	defer s.Unlock()
-	gameID, err := botlib.GenerateRandomString(16)
+	gameID, err := utils.GenerateRandomString(16)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +192,7 @@ func (s *GameManager) StartGame(ctx context.Context, players []*Player) (*GameIn
 	return newGameInstance, nil
 }
 
-func (s *GameManager) startNewGame(ctx context.Context, players []*Player, id string) *GameInstance {
+func (gm *GameManager) startNewGame(ctx context.Context, players []*Player, id string) *GameInstance {
 	game := engine.NewGame(
 		80, 40,
 		engine.NewPlayer(1, 5),
@@ -204,7 +204,7 @@ func (s *GameManager) startNewGame(ctx context.Context, players []*Player, id st
 	players[1].PlayerNumber = 2
 
 	canvasEngine := New(game)
-	canvasEngine.SetDebug(s.Debug).SetFPS(DEFAULT_FPS)
+	canvasEngine.SetLogger(gm.Log).SetFPS(DEFAULT_FPS)
 
 	framesch := make(chan []byte, 100)
 	inputch := make(chan []byte, 10)
@@ -223,7 +223,7 @@ func (s *GameManager) startNewGame(ctx context.Context, players []*Player, id st
 		cancel:      cancel,
 		Players:     players,
 		betAmt:      betAmt,
-		log:         s.Log,
+		log:         gm.Log,
 	}
 
 	return instance
@@ -232,12 +232,6 @@ func (s *GameManager) startNewGame(ctx context.Context, players []*Player, id st
 func (g *GameInstance) Run() {
 	g.Running = true
 	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				g.log.Warnf("Recovered from panic in NewRound: %v", r)
-			}
-		}()
-
 		// Run a new round only if the game is still running
 		if g.Running {
 			g.engine.NewRound(g.ctx, g.Framesch, g.Inputch, g.roundResult)
@@ -286,7 +280,7 @@ func (g *GameInstance) shouldEndGame() bool {
 	for _, player := range g.Players {
 		// Check if any player has reached the max score
 		if player.Score >= maxScore {
-			g.log.Debugf("Game ending: Player %s reached the maximum score of %d", player.ID, maxScore)
+			g.log.Infof("Game ending: Player %s reached the maximum score of %d", player.ID, player.Score)
 			g.Winner = player.ID
 			g.Running = false
 			return true
@@ -295,7 +289,7 @@ func (g *GameInstance) shouldEndGame() bool {
 
 	// Add other conditions as needed, e.g., time limit or disconnection
 	if g.isTimeout() {
-		g.log.Debug("Game ending: Timeout reached")
+		g.log.Info("Game ending: Timeout reached")
 		return true
 	}
 

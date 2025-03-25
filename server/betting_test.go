@@ -10,7 +10,6 @@ import (
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/stretchr/testify/mock"
-	"github.com/vctt94/pong-bisonrelay/botlib"
 	"github.com/vctt94/pong-bisonrelay/server/internal/mocks"
 	"github.com/vctt94/pong-bisonrelay/server/serverdb"
 )
@@ -232,7 +231,7 @@ func TestReceiveTipLoop_PlayerSessionUpdate(t *testing.T) {
 	srv := setupTestServer(t)
 
 	var playerUID zkidentity.ShortID
-	strID, err := botlib.GenerateRandomString(64)
+	strID, err := GenerateRandomString(64)
 	if err != nil {
 		t.Errorf("Failed to GenerateRandomString for Host ID: %v", err)
 		return

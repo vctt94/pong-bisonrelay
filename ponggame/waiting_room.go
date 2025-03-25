@@ -7,7 +7,7 @@ import (
 
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
-	"github.com/vctt94/pong-bisonrelay/botlib"
+	"github.com/vctt94/bisonbotkit/utils"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 )
 
@@ -133,7 +133,7 @@ func (wr *WaitingRoom) length() int {
 
 // NewWaitingRoom creates and initializes a new waiting room.
 func NewWaitingRoom(hostPlayer *Player, betAmount int64) (*WaitingRoom, error) {
-	id, err := botlib.GenerateRandomString(16)
+	id, err := utils.GenerateRandomString(16)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate waiting room ID: %w", err)
 	}
