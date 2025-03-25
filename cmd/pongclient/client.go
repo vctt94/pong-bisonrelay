@@ -581,7 +581,7 @@ func realMain() error {
 		MaxBufferLines: 1000,
 		UseStdout:      &useStdout,
 	})
-	log := logBackend.Logger("Bot")
+	log := logBackend.Logger("BotClient")
 	c, err := botclient.NewClient(cfg, logBackend)
 	if err != nil {
 		return err

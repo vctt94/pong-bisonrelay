@@ -109,7 +109,7 @@ func (s *Server) handleGameLifecycle(ctx context.Context, players []*ponggame.Pl
 				continue
 			}
 			playerSession.BetAmt = totalDcrAmount
-			s.log.Debugf("Reset player %s with updated bet amount: %.8f", player.ID, totalDcrAmount)
+			s.log.Debugf("Reset player %s with updated bet amount: %.8f", player.ID, float64(totalDcrAmount)/1e11)
 		}
 		// remove game from gameManager after it ended
 		delete(s.gameManager.Games, game.Id)

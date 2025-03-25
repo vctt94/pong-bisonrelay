@@ -74,10 +74,10 @@ func NewServer(id *zkidentity.ShortID, cfg ServerConfig) (*Server, error) {
 		MaxLogFiles:    10,
 		MaxBufferLines: 1000,
 	})
-	logGM := bknd.Logger("[GM]")
+	logGM := bknd.Logger("GM")
 	s := &Server{
 		appdata:            cfg.ServerDir,
-		log:                cfg.LogBackend.Logger("[Server]"),
+		log:                cfg.LogBackend.Logger("Server"),
 		db:                 db,
 		paymentClient:      cfg.PaymentClient,
 		chatClient:         cfg.ChatClient,
