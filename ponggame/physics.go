@@ -92,7 +92,7 @@ func (e *CanvasEngine) tick() {
 		engine.CollP1Bottom,
 		engine.CollP2Top,
 		engine.CollP2Bottom:
-		e.inverseBallXYVelocity().deOutOfBoundsBall()
+		e.handlePaddleEdgeHit().deOutOfBoundsBall()
 
 	case
 		engine.CollP1,
@@ -348,5 +348,29 @@ func (e *CanvasEngine) deOutOfBoundsBall() *CanvasEngine {
 	if e.BallPos.X+e.Game.Ball.Width >= e.P2Pos.X {
 		e.BallPos.X = e.P2Pos.X - magic_p
 	}
+	return e
+}
+
+func (e *CanvasEngine) handlePaddleEdgeHit() *CanvasEngine {
+	// First, invert the X direction as we always want the ball to bounce back
+	e.BallVel.X *= -1
+
+	// Calculate current ball speed (magnitude of velocity)
+	currentSpeed := math.Sqrt(e.BallVel.X*e.BallVel.X + e.BallVel.Y*e.BallVel.Y)
+
+	// For edge hits, we want a steeper angle but maintain similar speed
+	// Use a 60-degree angle (approximately 0.866 for x and 0.5 for y components)
+	normalizedX := math.Abs(e.BallVel.X) / currentSpeed
+
+	// Determine the direction of Y velocity based on which edge was hit
+	yDirection := 1.0
+	if e.BallVel.Y < 0 {
+		yDirection = -1.0
+	}
+
+	// Set new velocities while maintaining approximate original speed
+	e.BallVel.X = normalizedX * currentSpeed * math.Copysign(1, e.BallVel.X)
+	e.BallVel.Y = 0.5 * currentSpeed * yDirection // Use 0.5 for a consistent but not too extreme angle
+
 	return e
 }
