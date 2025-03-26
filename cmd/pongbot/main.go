@@ -9,14 +9,12 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/vctt94/bisonbotkit"
-	"github.com/vctt94/bisonbotkit/config"
 	"github.com/vctt94/bisonbotkit/logging"
 	"github.com/vctt94/bisonbotkit/utils"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
@@ -43,58 +41,10 @@ var (
 	flagDebug          = flag.String("debug", "", "Debug level")
 )
 
-type PongBotConfig struct {
-	*config.BotConfig // Embed the base BotConfig
-
-	// Additional pong-specific fields
-	IsF2P     bool
-	MinBetAmt float64
-	GRPCHost  string
-	GRPCPort  string
-	HttpPort  string
-}
-
-// Load config function
-func LoadPongBotConfig(dataDir, configFile string) (*PongBotConfig, error) {
-	// First load the base bot config
-	baseConfig, err := config.LoadBotConfig(dataDir, configFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load base config: %w", err)
-	}
-	fmt.Println("baseConfig", baseConfig)
-
-	minBetAmt, err := strconv.ParseFloat(baseConfig.ExtraConfig["minbetamt"], 64)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse minbetamt: %w", err)
-	}
-	// Create the combined config
-	cfg := &PongBotConfig{
-		BotConfig: baseConfig,
-		IsF2P:     false,
-		MinBetAmt: minBetAmt,
-		GRPCHost:  baseConfig.ExtraConfig["grpchost"],
-		GRPCPort:  baseConfig.ExtraConfig["grpcport"],
-		HttpPort:  baseConfig.ExtraConfig["httpport"],
-	}
-
-	// Load the config file if it exists
-	configPath := filepath.Join(dataDir, configFile)
-	if _, err := os.Stat(configPath); err == nil {
-		_, err := os.ReadFile(configPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read config file: %w", err)
-		}
-
-	}
-
-	return cfg, nil
-}
-
 func realMain() error {
 	flag.Parse()
 
 	var appdata string
-	// Apply overrides from flags
 	if *flagDataDir != "" {
 		appdata = utils.CleanAndExpandPath(*flagDataDir)
 	} else {
@@ -107,6 +57,13 @@ func realMain() error {
 	if cfg == nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
+	// Create channels for tip events
+	tipChan := make(chan types.ReceivedTip)
+	tipProgressChan := make(chan types.TipProgressEvent)
+
+	// Assign channels to the bot config
+	cfg.BotConfig.TipReceivedChan = tipChan
+	cfg.BotConfig.TipProgressChan = tipProgressChan
 
 	logBackend, err := logging.NewLogBackend(logging.LogConfig{
 		LogFile:        filepath.Join(appdata, "logs", "pongbot.log"),
@@ -114,17 +71,14 @@ func realMain() error {
 		MaxLogFiles:    10,
 		MaxBufferLines: 1000,
 	})
-	log := logBackend.Logger("Bot")
+	if err != nil {
+		return fmt.Errorf("NewLogBackend failed: %w", err)
+	}
 
-	cfg.BotConfig.TipProgressChan = make(chan types.TipProgressEvent)
-	cfg.BotConfig.TipReceivedChan = make(chan types.ReceivedTip)
+	log := logBackend.Logger("Bot")
 	cfg.TipLog = logBackend.Logger("tipprogress")
 	cfg.PMLog = logBackend.Logger("pm")
 	cfg.TipReceivedLog = logBackend.Logger("tipreceived")
-
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
 
 	if *flagIsF2P {
 		cfg.IsF2P = *flagIsF2P
@@ -177,11 +131,6 @@ func realMain() error {
 		return fmt.Errorf("failed to listen on gRPC port: %v", err)
 	}
 
-	tipChan := make(chan types.ReceivedTip)
-	cfg.BotConfig.TipReceivedChan = tipChan
-	tipProgressChan := make(chan types.TipProgressEvent)
-	cfg.BotConfig.TipProgressChan = tipProgressChan
-
 	bot, err := bisonbotkit.NewBot(cfg.BotConfig, logBackend)
 	if err != nil {
 		return fmt.Errorf("failed to create JSON-RPC client: %w", err)
@@ -223,7 +172,7 @@ func realMain() error {
 		for {
 			select {
 			case tip := <-tipChan:
-				if err := srv.ReceiveTipLoop(ctx, &tip); err != nil {
+				if err := srv.HandleReceiveTip(ctx, &tip); err != nil {
 					log.Errorf("Error processing received tip: %v", err)
 				}
 			case <-gctx.Done():
@@ -236,7 +185,7 @@ func realMain() error {
 		for {
 			select {
 			case tip := <-tipProgressChan:
-				if err := srv.SendTipProgressLoop(ctx, &tip); err != nil {
+				if err := srv.HandleTipProgress(ctx, &tip); err != nil {
 					log.Errorf("Error processing tip progress: %v", err)
 				}
 			case <-gctx.Done():

@@ -14,7 +14,7 @@ import (
 
 // SendTipProgressLoop continuously establishes a stream for tip progress events.
 // If the connection is lost, it reconnects and requests any events that have not yet been acknowledged.
-func (s *Server) SendTipProgressLoop(ctx context.Context, tip *types.TipProgressEvent) error {
+func (s *Server) HandleTipProgress(ctx context.Context, tip *types.TipProgressEvent) error {
 	// Only process tip receipt acknowledgement after the tip send progress is completed.
 	var err error
 	if tip.Completed {
@@ -73,7 +73,7 @@ func (s *Server) SendTipProgressLoop(ctx context.Context, tip *types.TipProgress
 
 // ReceiveTipLoop continuously establishes a stream for incoming tips.
 // It stores new tips and updates player bet amounts when appropriate.
-func (s *Server) ReceiveTipLoop(ctx context.Context, tip *types.ReceivedTip) error {
+func (s *Server) HandleReceiveTip(ctx context.Context, tip *types.ReceivedTip) error {
 	// Check if the tip already exists in the database.
 	dbTip, err := s.db.FetchTip(ctx, tip.SequenceId)
 	if err != nil {
