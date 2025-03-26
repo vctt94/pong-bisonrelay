@@ -11,6 +11,7 @@ import (
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/decred/slog"
+	"github.com/vctt94/bisonbotkit"
 	"github.com/vctt94/bisonbotkit/logging"
 	"github.com/vctt94/pong-bisonrelay/ponggame"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
@@ -24,6 +25,8 @@ const (
 
 type ServerConfig struct {
 	ServerDir string
+
+	Bot *bisonbotkit.Bot
 
 	MinBetAmt             float64
 	IsF2P                 bool
@@ -39,15 +42,14 @@ type Server struct {
 	pong.UnimplementedPongGameServer
 	sync.RWMutex
 
+	bot                *bisonbotkit.Bot
 	log                slog.Logger
 	isF2P              bool
 	minBetAmt          float64
 	waitingRoomCreated chan struct{}
 
-	paymentClient types.PaymentsServiceClient
-	chatClient    types.ChatServiceClient
-	users         map[zkidentity.ShortID]*ponggame.Player
-	gameManager   *ponggame.GameManager
+	users       map[zkidentity.ShortID]*ponggame.Player
+	gameManager *ponggame.GameManager
 
 	httpServer        *http.Server
 	activeNtfnStreams sync.Map
@@ -77,10 +79,9 @@ func NewServer(id *zkidentity.ShortID, cfg ServerConfig) (*Server, error) {
 	logGM := bknd.Logger("GM")
 	s := &Server{
 		appdata:            cfg.ServerDir,
+		bot:                cfg.Bot,
 		log:                cfg.LogBackend.Logger("Server"),
 		db:                 db,
-		paymentClient:      cfg.PaymentClient,
-		chatClient:         cfg.ChatClient,
 		isF2P:              cfg.IsF2P,
 		minBetAmt:          cfg.MinBetAmt,
 		waitingRoomCreated: make(chan struct{}, 1),
@@ -198,7 +199,7 @@ func (s *Server) handleDisconnect(clientID zkidentity.ShortID) {
 		if s.gameManager.GetPlayerGame(clientID) == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			if err := s.handleReturnUnprocessedTips(ctx, clientID, s.paymentClient, s.log); err != nil {
+			if err := s.handleReturnUnprocessedTips(ctx, clientID); err != nil {
 				s.log.Errorf("Error returning unprocessed tips for client %s: %v", clientID.String(), err)
 			}
 		}
@@ -261,8 +262,6 @@ func (s *Server) SendInput(ctx context.Context, req *pong.PlayerInput) (*pong.Ga
 }
 
 func (s *Server) ManageWaitingRoom(ctx context.Context, wr *ponggame.WaitingRoom) error {
-	defer s.gameManager.RemoveWaitingRoom(wr.ID)
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -274,6 +273,7 @@ func (s *Server) ManageWaitingRoom(ctx context.Context, wr *ponggame.WaitingRoom
 			if ready {
 				s.log.Infof("Game starting with players: %v and %v", players[0].ID, players[1].ID)
 
+				s.gameManager.RemoveWaitingRoom(wr.ID)
 				go s.handleGameLifecycle(ctx, players, wr.ReservedTips) // Start game lifecycle in a goroutine
 				return nil
 			}
@@ -306,6 +306,8 @@ func (s *Server) sendGameUpdates(ctx context.Context, player *ponggame.Player, g
 }
 
 func (s *Server) Run(ctx context.Context) error {
+	go s.bot.Run(ctx)
+
 	for {
 		select {
 		case <-ctx.Done():

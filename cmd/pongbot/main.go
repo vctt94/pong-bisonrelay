@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -42,18 +43,89 @@ var (
 	flagDebug          = flag.String("debug", "", "Debug level")
 )
 
+type PongBotConfig struct {
+	*config.BotConfig // Embed the base BotConfig
+
+	// Additional pong-specific fields
+	IsF2P     bool
+	MinBetAmt float64
+	GRPCHost  string
+	GRPCPort  string
+	HttpPort  string
+}
+
+// Load config function
+func LoadPongBotConfig(dataDir, configFile string) (*PongBotConfig, error) {
+	// First load the base bot config
+	baseConfig, err := config.LoadBotConfig(dataDir, configFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load base config: %w", err)
+	}
+	fmt.Println("baseConfig", baseConfig)
+
+	minBetAmt, err := strconv.ParseFloat(baseConfig.ExtraConfig["minbetamt"], 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse minbetamt: %w", err)
+	}
+	// Create the combined config
+	cfg := &PongBotConfig{
+		BotConfig: baseConfig,
+		IsF2P:     false,
+		MinBetAmt: minBetAmt,
+		GRPCHost:  baseConfig.ExtraConfig["grpchost"],
+		GRPCPort:  baseConfig.ExtraConfig["grpcport"],
+		HttpPort:  baseConfig.ExtraConfig["httpport"],
+	}
+
+	// Load the config file if it exists
+	configPath := filepath.Join(dataDir, configFile)
+	if _, err := os.Stat(configPath); err == nil {
+		_, err := os.ReadFile(configPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read config file: %w", err)
+		}
+
+	}
+
+	return cfg, nil
+}
+
 func realMain() error {
 	flag.Parse()
 
-	appdata := utils.AppDataDir("pongbot", false)
-	cfg, err := config.LoadBotConfig(appdata, "pongbot.conf")
+	var appdata string
+	// Apply overrides from flags
+	if *flagDataDir != "" {
+		appdata = utils.CleanAndExpandPath(*flagDataDir)
+	} else {
+		appdata = utils.AppDataDir("pongbot", false)
+	}
+	cfg, err := LoadPongBotConfig(appdata, "pongbot.conf")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
-	// Apply overrides from flags
-	if *flagDataDir != "" {
-		cfg.DataDir = utils.CleanAndExpandPath(*flagDataDir)
+	if cfg == nil {
+		return fmt.Errorf("failed to load config: %w", err)
 	}
+
+	logBackend, err := logging.NewLogBackend(logging.LogConfig{
+		LogFile:        filepath.Join(appdata, "logs", "pongbot.log"),
+		DebugLevel:     cfg.Debug,
+		MaxLogFiles:    10,
+		MaxBufferLines: 1000,
+	})
+	log := logBackend.Logger("Bot")
+
+	cfg.BotConfig.TipProgressChan = make(chan types.TipProgressEvent)
+	cfg.BotConfig.TipReceivedChan = make(chan types.ReceivedTip)
+	cfg.TipLog = logBackend.Logger("tipprogress")
+	cfg.PMLog = logBackend.Logger("pm")
+	cfg.TipReceivedLog = logBackend.Logger("tipreceived")
+
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
 	if *flagIsF2P {
 		cfg.IsF2P = *flagIsF2P
 	}
@@ -94,22 +166,6 @@ func realMain() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	logBackend, err := logging.NewLogBackend(logging.LogConfig{
-		LogFile:        filepath.Join(appdata, "logs", "pongbot.log"),
-		DebugLevel:     cfg.Debug,
-		MaxLogFiles:    10,
-		MaxBufferLines: 1000,
-	})
-	log := logBackend.Logger("Bot")
-
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-sigChan
-		log.Infof("Received shutdown signal")
-		cancel()
-	}()
-
 	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create data directory: %v", err)
 	}
@@ -121,15 +177,27 @@ func realMain() error {
 		return fmt.Errorf("failed to listen on gRPC port: %v", err)
 	}
 
-	bot, err := bisonbotkit.NewBot(cfg, logBackend)
+	tipChan := make(chan types.ReceivedTip)
+	cfg.BotConfig.TipReceivedChan = tipChan
+	tipProgressChan := make(chan types.TipProgressEvent)
+	cfg.BotConfig.TipProgressChan = tipProgressChan
+
+	bot, err := bisonbotkit.NewBot(cfg.BotConfig, logBackend)
 	if err != nil {
 		return fmt.Errorf("failed to create JSON-RPC client: %w", err)
 	}
-	g.Go(func() error { return bot.Run(gctx) })
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		log.Infof("Received shutdown signal")
+		cancel()
+	}()
 
 	req := &types.PublicIdentityReq{}
 	var publicIdentity types.PublicIdentity
-	if err := bot.Chat.UserPublicIdentity(ctx, req, &publicIdentity); err != nil {
+	if err := bot.UserPublicIdentity(ctx, req, &publicIdentity); err != nil {
 		return fmt.Errorf("failed to get public identity: %w", err)
 	}
 
@@ -138,22 +206,44 @@ func realMain() error {
 	copy(zkShortID[:], clientID)
 
 	srv, err := server.NewServer(&zkShortID, server.ServerConfig{
-
-		PaymentClient: bot.Payment,
-		ChatClient:    bot.Chat,
-		ServerDir:     cfg.DataDir,
-		IsF2P:         cfg.IsF2P,
-		MinBetAmt:     cfg.MinBetAmt,
-		HTTPPort:      cfg.HttpPort,
-		LogBackend:    logBackend,
+		Bot:        bot,
+		ServerDir:  cfg.DataDir,
+		IsF2P:      cfg.IsF2P,
+		MinBetAmt:  cfg.MinBetAmt,
+		HTTPPort:   cfg.HttpPort,
+		LogBackend: logBackend,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create server: %w", err)
 	}
 
 	g.Go(func() error { return srv.Run(gctx) })
-	g.Go(func() error { return srv.SendTipProgressLoop(gctx) })
-	g.Go(func() error { return srv.ReceiveTipLoop(gctx) })
+
+	g.Go(func() error {
+		for {
+			select {
+			case tip := <-tipChan:
+				if err := srv.ReceiveTipLoop(ctx, &tip); err != nil {
+					log.Errorf("Error processing received tip: %v", err)
+				}
+			case <-gctx.Done():
+				return nil
+			}
+		}
+	})
+
+	g.Go(func() error {
+		for {
+			select {
+			case tip := <-tipProgressChan:
+				if err := srv.SendTipProgressLoop(ctx, &tip); err != nil {
+					log.Errorf("Error processing tip progress: %v", err)
+				}
+			case <-gctx.Done():
+				return nil
+			}
+		}
+	})
 
 	certPath := filepath.Join(cfg.DataDir, "server.cert")
 	keyPath := filepath.Join(cfg.DataDir, "server.key")
@@ -182,15 +272,33 @@ func realMain() error {
 
 	pong.RegisterPongGameServer(grpcServer, srv)
 
-	log.Infof("server listening at %v", lis.Addr())
-	go func() {
-		<-ctx.Done()
-		log.Info("shutting down gRPC server gracefully")
+	g.Go(func() error {
+		<-gctx.Done()
+		log.Info("Stopping gRPC server...")
 		grpcServer.GracefulStop()
-	}()
+		return nil
+	})
 
-	if err := grpcServer.Serve(lis); err != nil {
-		return fmt.Errorf("failed to serve gRPC server: %v", err)
+	g.Go(func() error {
+		log.Infof("server listening at %v", lis.Addr())
+		if err := grpcServer.Serve(lis); err != nil && err != grpc.ErrServerStopped {
+			return fmt.Errorf("failed to serve gRPC server: %v", err)
+		}
+		return nil
+	})
+
+	// Wait for shutdown signal
+	<-gctx.Done()
+	log.Info("Shutting down servers...")
+
+	// Make sure to call bot.Close() during shutdown
+	bot.Close()
+	log.Info("Server shutdown complete")
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+		// proceed
 	}
 
 	return g.Wait()
