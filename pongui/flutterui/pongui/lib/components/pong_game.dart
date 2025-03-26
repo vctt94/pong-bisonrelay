@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pongui/grpc/grpc_client.dart';
+import 'package:golib_plugin/grpc/generated/pong.pb.dart';
 
 class PongGame {
   final GrpcPongClient grpcClient; // gRPC client instance
@@ -11,7 +11,7 @@ class PongGame {
 
   PongGame(this.clientId, this.grpcClient);
 
-  Widget buildWidget(Map<String, dynamic> gameState, FocusNode focusNode) {
+  Widget buildWidget(GameUpdate gameState, FocusNode focusNode) {
     return GestureDetector(
       onPanUpdate: handlePaddleMovement,
       onTap: () => focusNode.requestFocus(),
@@ -69,15 +69,15 @@ class PongGame {
 }
 
 class PongPainter extends CustomPainter {
-  final Map<String, dynamic> gameState;
+  final GameUpdate gameState;
 
   PongPainter(this.gameState);
 
   @override
   void paint(Canvas canvas, Size size) {
     // Extract game dimensions
-    double gameWidth = (gameState['gameWidth'] as num?)?.toDouble() ?? 80.0;
-    double gameHeight = (gameState['gameHeight'] as num?)?.toDouble() ?? 40.0;
+    double gameWidth = gameState.gameWidth;
+    double gameHeight = gameState.gameHeight;
 
     // Calculate scaling factors
     double scaleX = size.width / gameWidth;
@@ -96,9 +96,9 @@ class PongPainter extends CustomPainter {
 
     // Extract and scale paddle 1 properties
     double paddle1X = 0.0; // Paddle 1 is on the left edge
-    double paddle1Y = (gameState['p1Y'] as num?)?.toDouble() ?? 0.0;
-    double paddle1Width = (gameState['p1Width'] as num?)?.toDouble() ?? 1.0;
-    double paddle1Height = (gameState['p1Height'] as num?)?.toDouble() ?? 5.0;
+    double paddle1Y = gameState.p1Y;
+    double paddle1Width = gameState.p1Width;
+    double paddle1Height = gameState.p1Height;
 
     // Scale paddle 1 properties
     paddle1X *= scaleX;
@@ -107,10 +107,10 @@ class PongPainter extends CustomPainter {
     paddle1Height *= scaleY;
 
     // Extract and scale paddle 2 properties
-    double paddle2X = (gameState['p2X'] as num?)?.toDouble() ?? gameWidth - 1.0;
-    double paddle2Y = (gameState['p2Y'] as num?)?.toDouble() ?? 0.0;
-    double paddle2Width = (gameState['p2Width'] as num?)?.toDouble() ?? 1.0;
-    double paddle2Height = (gameState['p2Height'] as num?)?.toDouble() ?? 5.0;
+    double paddle2X = gameState.p2X;
+    double paddle2Y = gameState.p2Y;
+    double paddle2Width = gameState.p2Width;
+    double paddle2Height = gameState.p2Height;
 
     // Scale paddle 2 properties
     paddle2X *= scaleX;
@@ -119,10 +119,10 @@ class PongPainter extends CustomPainter {
     paddle2Height *= scaleY;
 
     // Extract and scale ball properties
-    double ballX = (gameState['ballX'] as num?)?.toDouble() ?? gameWidth / 2;
-    double ballY = (gameState['ballY'] as num?)?.toDouble() ?? gameHeight / 2;
-    double ballWidth = (gameState['ballWidth'] as num?)?.toDouble() ?? 1.0;
-    double ballHeight = (gameState['ballHeight'] as num?)?.toDouble() ?? 1.0;
+    double ballX = gameState.ballX;
+    double ballY = gameState.ballY;
+    double ballWidth = gameState.ballWidth;
+    double ballHeight = gameState.ballHeight;
 
     // Scale ball properties
     ballX *= scaleX;
@@ -149,8 +149,8 @@ class PongPainter extends CustomPainter {
     );
 
     // Draw scores
-    int p1Score = (gameState['p1Score'] as num?)?.toInt() ?? 0;
-    int p2Score = (gameState['p2Score'] as num?)?.toInt() ?? 0;
+    int p1Score = gameState.p1Score;
+    int p2Score = gameState.p2Score;
 
     // Create text painters for scores
     final p1ScoreTextPainter = TextPainter(
@@ -185,6 +185,6 @@ class PongPainter extends CustomPainter {
   @override
   bool shouldRepaint(PongPainter oldDelegate) {
     // Repaint whenever the game state changes
-    return oldDelegate.gameState != gameState;
+    return true;
   }
 }

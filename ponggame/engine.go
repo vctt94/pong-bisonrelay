@@ -2,11 +2,11 @@ package ponggame
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"time"
 
 	"github.com/decred/slog"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 
@@ -46,34 +46,6 @@ func (e *CanvasEngine) Error() error {
 	return e.Err
 }
 
-type GameUpdate struct {
-	GameWidth     float64 `protobuf:"varint,13,opt,name=gameWidth,proto3" json:"gameWidth,omitempty"`
-	GameHeight    float64 `protobuf:"varint,14,opt,name=gameHeight,proto3" json:"gameHeight,omitempty"`
-	P1Width       float64 `protobuf:"varint,15,opt,name=p1Width,proto3" json:"p1Width,omitempty"`
-	P1Height      float64 `protobuf:"varint,16,opt,name=p1Height,proto3" json:"p1Height,omitempty"`
-	P2Width       float64 `protobuf:"varint,17,opt,name=p2Width,proto3" json:"p2Width,omitempty"`
-	P2Height      float64 `protobuf:"varint,18,opt,name=p2Height,proto3" json:"p2Height,omitempty"`
-	BallWidth     float64 `protobuf:"varint,19,opt,name=ballWidth,proto3" json:"ballWidth,omitempty"`
-	BallHeight    float64 `protobuf:"varint,20,opt,name=ballHeight,proto3" json:"ballHeight,omitempty"`
-	P1Score       int32   `protobuf:"varint,21,opt,name=p1Score,proto3" json:"p1Score,omitempty"`
-	P2Score       int32   `protobuf:"varint,22,opt,name=p2Score,proto3" json:"p2Score,omitempty"`
-	BallX         float64 `protobuf:"varint,1,opt,name=ballX,proto3" json:"ballX,omitempty"`
-	BallY         float64 `protobuf:"varint,2,opt,name=ballY,proto3" json:"ballY,omitempty"`
-	P1X           float64 `protobuf:"varint,3,opt,name=p1X,proto3" json:"p1X,omitempty"`
-	P1Y           float64 `protobuf:"varint,4,opt,name=p1Y,proto3" json:"p1Y,omitempty"`
-	P2X           float64 `protobuf:"varint,5,opt,name=p2X,proto3" json:"p2X,omitempty"`
-	P2Y           float64 `protobuf:"varint,6,opt,name=p2Y,proto3" json:"p2Y,omitempty"`
-	P1YVelocity   float64 `protobuf:"varint,7,opt,name=p1YVelocity,proto3" json:"p1YVelocity,omitempty"`
-	P2YVelocity   float64 `protobuf:"varint,8,opt,name=p2YVelocity,proto3" json:"p2YVelocity,omitempty"`
-	BallXVelocity float64 `protobuf:"varint,9,opt,name=ballXVelocity,proto3" json:"ballXVelocity,omitempty"`
-	BallYVelocity float64 `protobuf:"varint,10,opt,name=ballYVelocity,proto3" json:"ballYVelocity,omitempty"`
-	Fps           float64 `protobuf:"fixed32,11,opt,name=fps,proto3" json:"fps,omitempty"`
-	Tps           float64 `protobuf:"fixed32,12,opt,name=tps,proto3" json:"tps,omitempty"`
-	// Optional: if you want to send error messages or debug information
-	Error string `protobuf:"bytes,23,opt,name=error,proto3" json:"error,omitempty"`
-	Debug bool   `protobuf:"varint,24,opt,name=debug,proto3" json:"debug,omitempty"`
-}
-
 // NewRound resets the ball, players and starts a new round. It accepts
 // a frames channel to write into and input channel to read from
 func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inputch <-chan []byte, roundResult chan<- int32) {
@@ -85,10 +57,6 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 
 	// Calculates and writes frames
 	go func() {
-
-		logFrequency := 100
-		tickCounter := 0
-
 		for {
 			select {
 			case <-ctx.Done():
@@ -124,7 +92,7 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 					return
 				}
 
-				gameUpdateFrame := GameUpdate{
+				gameUpdateFrame := &pong.GameUpdate{
 					GameWidth:     e.Game.Width,
 					GameHeight:    e.Game.Height,
 					P1Width:       e.Game.P1.Width,
@@ -148,17 +116,13 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 					Fps:           e.FPS,
 					Tps:           e.TPS,
 				}
-				jsonTick, err := json.Marshal(gameUpdateFrame)
+
+				protoTick, err := proto.Marshal(gameUpdateFrame)
 				if err != nil {
-					e.log.Errorf("Err: %w", err)
+					e.log.Errorf("Error marshaling protobuf: %v", err)
 				}
 				select {
-				case framesch <- jsonTick:
-					tickCounter++
-					if tickCounter%logFrequency == 0 {
-						e.log.Debugf("tick: %s", string(jsonTick))
-						tickCounter = 0
-					}
+				case framesch <- protoTick:
 				case <-ctx.Done():
 					return
 				}
@@ -190,8 +154,8 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 					return
 				}
 
-				in := pong.PlayerInput{}
-				err := json.Unmarshal(key, &in)
+				in := &pong.PlayerInput{}
+				err := proto.Unmarshal(key, in)
 				if err != nil {
 					e.log.Errorf("Failed to unmarshal input: %v", err)
 					// Decide whether to continue or exit; here we'll continue

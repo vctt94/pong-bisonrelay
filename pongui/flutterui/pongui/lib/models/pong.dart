@@ -6,6 +6,7 @@ import 'package:golib_plugin/definitions.dart';
 import 'package:golib_plugin/golib_plugin.dart';
 import 'package:pongui/components/pong_game.dart';
 import 'package:pongui/config.dart';
+import 'package:golib_plugin/grpc/generated/pong.pb.dart';
 import 'package:golib_plugin/grpc/generated/pong.pbgrpc.dart';
 import 'package:pongui/grpc/grpc_client.dart';
 import 'package:pongui/models/notifications.dart';
@@ -24,7 +25,7 @@ class PongModel extends ChangeNotifier {
   String errorMessage = '';
   List<LocalWaitingRoom> waitingRooms = [];
   LocalWaitingRoom? currentWR;
-  Map<String, dynamic> gameState = {};
+  GameUpdate? gameState;
 
   PongModel(Config cfg, this.notificationModel) {
     _initPongClient(cfg);
@@ -238,11 +239,10 @@ class PongModel extends ChangeNotifier {
 
     if (!isReady) {
       // Player is getting ready
-      grpcClient.startGameStreamRequest(clientId).listen((gameUpdate) {
-        var data = utf8.decode(gameUpdate.data);
-        var parsedData = json.decode(data) as Map<String, dynamic>;
+      grpcClient.startGameStreamRequest(clientId).listen((gameUpdateBytes) {
+        final update = GameUpdate.fromBuffer(gameUpdateBytes.data);
         gameStarted = true;
-        gameState = parsedData;
+        gameState = update;
         errorMessage = '';
         notifyListeners();
       }, onError: (error) {

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"math"
@@ -16,6 +15,7 @@ import (
 	"github.com/vctt94/pong-bisonrelay/client"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -253,7 +253,8 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case *pong.GameUpdateBytes:
 		var gameUpdate pong.GameUpdate
-		if err := json.Unmarshal(msg.Data, &gameUpdate); err != nil {
+		// Use Protocol Buffers unmarshaling instead of JSON
+		if err := proto.Unmarshal(msg.Data, &gameUpdate); err != nil {
 			m.err = err
 			return m, nil
 		}

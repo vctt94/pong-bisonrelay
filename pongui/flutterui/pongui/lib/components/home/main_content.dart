@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:golib_plugin/grpc/generated/pong.pb.dart';
 import 'package:pongui/components/waiting_rooms.dart';
 import 'package:pongui/models/pong.dart';
 
@@ -14,9 +15,13 @@ class MainContent extends StatelessWidget {
   Widget build(BuildContext context) {
     // GAME STARTED
     if (pongModel.gameStarted) {
+      if (pongModel.gameState == null) {
+        return const Center(child: CircularProgressIndicator());
+      }
+
       return Center(
         child: pongModel.pongGame.buildWidget(
-          pongModel.gameState,
+          pongModel.gameState!,
           FocusNode(),
         ),
       );
