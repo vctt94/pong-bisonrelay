@@ -40,6 +40,7 @@ const (
 	listRooms
 	createRoom
 	joinRoom
+	viewLogs
 )
 
 var (
@@ -71,6 +72,7 @@ type appstate struct {
 
 	isGameRunning bool
 	log           slog.Logger
+	logBackend    *logging.LogBackend
 	players       []*pong.Player
 
 	// player current bet amt
@@ -81,6 +83,9 @@ type appstate struct {
 	waitingRooms []*pong.WaitingRoom
 
 	notification string
+
+	logBuffer   []string
+	logViewport viewport.Model
 }
 
 func (m *appstate) listenForUpdates() tea.Cmd {
@@ -108,14 +113,14 @@ func (m *appstate) listenForErrors() tea.Cmd {
 
 func (m *appstate) Init() tea.Cmd {
 	m.msgCh = make(chan tea.Msg)
-
-	// Initialize the viewport with zero dimensions; we'll set them upon receiving the window size
 	m.viewport = viewport.New(0, 0)
+	m.logViewport = viewport.New(0, 0)
+	m.logBuffer = make([]string, 0)
 
 	return tea.Batch(
 		m.listenForUpdates(),
 		m.listenForErrors(),
-		tea.EnterAltScreen, // Optional: Use the alternate screen buffer
+		tea.EnterAltScreen,
 	)
 }
 
@@ -125,12 +130,20 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Lock()
 		m.viewport.Width = msg.Width
 		m.viewport.Height = msg.Height
+		m.logViewport.Width = msg.Width
+		m.logViewport.Height = msg.Height - 6
 		m.Unlock()
 		return m, nil
 	case client.UpdatedMsg:
 		// Simply return the model to refresh the view
 		return m, m.waitForMsg()
 	case tea.KeyMsg:
+		// Add Ctrl+C handling
+		if msg.Type == tea.KeyCtrlC {
+			m.cancel()
+			return m, tea.Quit
+		}
+
 		switch msg.String() {
 		case "l":
 			// Switch to list rooms mode
@@ -193,12 +206,24 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
+		case "v":
+			if m.mode == gameIdle {
+				m.mode = viewLogs
+				// Get the last logs directly from the LogBackend
+				if lines := m.logBackend.LastLogLines(100); len(lines) > 0 {
+					m.logBuffer = lines
+					m.logViewport.SetContent(strings.Join(lines, "\n"))
+					m.logViewport.GotoBottom()
+				}
+				return m, nil
+			}
+		case "esc":
+			if m.mode == viewLogs {
+				m.mode = gameIdle
+				return m, nil
+			}
 		}
 
-		if m.mode == gameIdle && msg.Type == tea.KeyEsc {
-			m.cancel()
-			return m, tea.Quit
-		}
 		if msg.Type == tea.KeyF2 {
 			m.mode = gameMode
 			return m, nil
@@ -242,7 +267,6 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notification = msg
 			return m, nil
 		}
-
 	}
 	return m, m.waitForMsg()
 }
@@ -372,7 +396,8 @@ func (m *appstate) View() string {
 		b.WriteString("[C] - Create room\n")
 		b.WriteString("[J] - Join room\n")
 		b.WriteString("[Q] - Leave current room\n")
-		b.WriteString("[Esc] - Exit\n")
+		b.WriteString("[V] - View logs\n")
+		b.WriteString("[Ctrl+C] - Exit\n")
 		b.WriteString("====================\n\n")
 
 		if !m.isGameRunning && m.currentWR != nil {
@@ -520,6 +545,19 @@ func (m *appstate) View() string {
 			b.WriteString("No rooms available.\n")
 		}
 
+	case viewLogs:
+		b.WriteString("=============== Log Viewer ===============\n\n")
+		if len(m.logBuffer) == 0 {
+			b.WriteString("No logs available.\n")
+		} else {
+			// Set viewport height to leave room for header and footer
+			m.logViewport.Height = m.viewport.Height - 6
+			m.logViewport.Width = m.viewport.Width
+			b.WriteString(m.logViewport.View())
+		}
+		b.WriteString("\n\n")
+		b.WriteString("Press 'Esc' to return • ↑/↓ to scroll • PgUp/PgDn for pages • Home/End for top/bottom")
+
 	default:
 		b.WriteString("\nUnknown mode.\n")
 	}
@@ -581,7 +619,7 @@ func realMain() error {
 		MaxBufferLines: 1000,
 		UseStdout:      &useStdout,
 	})
-	log := logBackend.Logger("Bot")
+	log := logBackend.Logger("BotClient")
 	c, err := botclient.NewClient(cfg, logBackend)
 	if err != nil {
 		return err
@@ -599,10 +637,11 @@ func realMain() error {
 	clientID := hex.EncodeToString(publicIdentity.Identity[:])
 	copy(zkShortID[:], clientID)
 	as := &appstate{
-		ctx:    ctx,
-		cancel: cancel,
-		log:    log,
-		mode:   gameIdle,
+		ctx:        ctx,
+		cancel:     cancel,
+		log:        log,
+		logBackend: logBackend,
+		mode:       gameIdle,
 	}
 	// Setup notification handlers.
 	ntfns := client.NewNotificationManager()

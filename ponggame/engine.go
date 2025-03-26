@@ -135,16 +135,16 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 					BallHeight:    e.Game.Ball.Height,
 					P1Score:       int32(e.P1Score),
 					P2Score:       int32(e.P2Score),
-					BallX:         e.BallX,
-					BallY:         e.BallY,
-					P1X:           e.P1X,
-					P1Y:           e.P1Y,
-					P2X:           e.P2X,
-					P2Y:           e.P2Y,
-					P1YVelocity:   e.P1YVelocity,
-					P2YVelocity:   e.P2YVelocity,
-					BallXVelocity: e.BallXVelocity,
-					BallYVelocity: e.BallYVelocity,
+					BallX:         e.BallPos.X,
+					BallY:         e.BallPos.Y,
+					P1X:           e.P1Pos.X,
+					P1Y:           e.P1Pos.Y,
+					P2X:           e.P2Pos.X,
+					P2Y:           e.P2Pos.Y,
+					P1YVelocity:   e.P1Vel.Y,
+					P2YVelocity:   e.P2Vel.Y,
+					BallXVelocity: e.BallVel.X,
+					BallYVelocity: e.BallVel.Y,
 					Fps:           e.FPS,
 					Tps:           e.TPS,
 				}
@@ -202,16 +202,16 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 				if in.PlayerNumber == int32(1) {
 					switch k := in.Input; k {
 					case "ArrowUp":
-						e.p1Down() // The Canvas origin is top left
-					case "ArrowDown":
 						e.p1Up()
+					case "ArrowDown":
+						e.p1Down()
 					}
 				} else {
 					switch k := in.Input; k {
 					case "ArrowUp":
-						e.p2Down() // The Canvas origin is top left
-					case "ArrowDown":
 						e.p2Up()
+					case "ArrowDown":
+						e.p2Down()
 					}
 				}
 			case <-ctx.Done():

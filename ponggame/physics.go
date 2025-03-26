@@ -12,33 +12,91 @@ const (
 	DEFAULT_VEL_INCR = 0.0005
 	INPUT_BUF_SIZE   = 2 << 8
 
-	baseline                 = 0
-	default_padding          = 0
 	canvas_border_correction = 1
 
 	default_ball_x_vel_ratio = 0.25
 	min_ball_y_vel_ratio     = 0.1
-	max_y_vel_ratio          = 0.20
+	y_vel_ratio              = 2
+	initial_ball_y_vel       = 0.20
 
-	magic_p = 3
-
-	player_input_dist = 2
+	magic_p = 1
 )
+
+// Helper function to check AABB intersection
+func intersects(a, b Rect) bool {
+	if math.Abs(a.Cx-b.Cx) > (a.HalfW + b.HalfW) {
+		return false
+	}
+	if math.Abs(a.Cy-b.Cy) > (a.HalfH + b.HalfH) {
+		return false
+	}
+	return true
+}
+
+// Bounding box helpers for game objects
+func (e *CanvasEngine) ballRect() Rect {
+	return Rect{
+		Cx:    e.BallPos.X + e.Game.Ball.Width*0.5,
+		Cy:    e.BallPos.Y + e.Game.Ball.Height*0.5,
+		HalfW: e.Game.Ball.Width * 0.5,
+		HalfH: e.Game.Ball.Height * 0.5,
+	}
+}
+
+func (e *CanvasEngine) p1Rect() Rect {
+	return Rect{
+		Cx:    e.P1Pos.X + e.Game.P1.Width*0.5,
+		Cy:    e.P1Pos.Y + e.Game.P1.Height*0.5,
+		HalfW: e.Game.P1.Width * 0.5,
+		HalfH: e.Game.P1.Height * 0.5,
+	}
+}
+
+func (e *CanvasEngine) p2Rect() Rect {
+	return Rect{
+		Cx:    e.P2Pos.X + e.Game.P2.Width*0.5,
+		Cy:    e.P2Pos.Y + e.Game.P2.Height*0.5,
+		HalfW: e.Game.P2.Width * 0.5,
+		HalfH: e.Game.P2.Height * 0.5,
+	}
+}
+
+// Wall rectangles
+func (e *CanvasEngine) topRect() Rect {
+	return Rect{
+		Cx:    e.Game.Width * 0.5,
+		Cy:    canvas_border_correction * 0.5,
+		HalfW: e.Game.Width * 0.5,
+		HalfH: canvas_border_correction * 0.5,
+	}
+}
+
+func (e *CanvasEngine) bottomRect() Rect {
+	return Rect{
+		Cx:    e.Game.Width * 0.5,
+		Cy:    e.Game.Height - canvas_border_correction*0.5,
+		HalfW: e.Game.Width * 0.5,
+		HalfH: canvas_border_correction * 0.5,
+	}
+}
 
 // tick calculates the next frame
 func (e *CanvasEngine) tick() {
+	// Only lock when actually updating shared state
+	e.mu.RLock()
+	collision := e.detectColl()
+	e.mu.RUnlock()
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	switch e.detectColl() {
-
-	case
-		engine.CollP1Top,
+	// Process collision result
+	switch collision {
+	case engine.CollP1Top,
 		engine.CollP1Bottom,
 		engine.CollP2Top,
 		engine.CollP2Bottom:
-		e.inverseBallXYVelocity().deOutOfBoundsBall()
-
+		e.handlePaddleEdgeHit().deOutOfBoundsBall()
 	case
 		engine.CollP1,
 		engine.CollP2:
@@ -74,132 +132,73 @@ func (e *CanvasEngine) tick() {
 	default:
 	}
 
-	e.advance().deOutOfBoundsPlayers()
-}
-
-// State
-func (e *CanvasEngine) ballDirP1() bool {
-	return e.BallX <= e.Game.Width/2
-}
-
-func (e *CanvasEngine) ballDirP2() bool {
-	return e.BallX >= e.Game.Width/2
+	// Update ball position
+	e.advanceBall().deOutOfBoundsPlayers()
 }
 
 // Collisions
 
 // detectColl detects and returns a possible collision
 func (e *CanvasEngine) detectColl() engine.Collision {
-	switch {
-	case e.isCollBottomLeft():
-		return engine.CollBottomLeft
+	br := e.ballRect()
+	p1r := e.p1Rect()
+	p2r := e.p2Rect()
+	topr := e.topRect()
+	bottomr := e.bottomRect()
 
-	case e.isCollTopLeft():
-		return engine.CollTopLeft
-
-	case e.isCollBottomRight():
-		return engine.CollBottomRight
-
-	case e.isCollTopRight():
-		return engine.CollTopRight
-
-	case e.isCollP1Bottom():
-		return engine.CollP1Bottom
-
-	case e.isCollP1Top():
-		return engine.CollP1Top
-
-	case e.isCollP2Bottom():
-		return engine.CollP2Bottom
-
-	case e.isCollP2Top():
-		return engine.CollP2Top
-
-	case e.isCollP1():
+	// Check paddle collisions first
+	if intersects(br, p1r) {
+		// Determine if it's a top/bottom collision by comparing centers
+		if math.Abs(br.Cy-p1r.Cy) > p1r.HalfH*0.8 { // Using 0.8 as threshold
+			if br.Cy < p1r.Cy {
+				return engine.CollP1Top
+			}
+			return engine.CollP1Bottom
+		}
 		return engine.CollP1
-
-	case e.isCollP2():
-		return engine.CollP2
-
-	case e.isCollBottom():
-		return engine.CollBottom
-
-	case e.isCollTop():
-		return engine.CollTop
-
-	case e.isCollLeft():
-		return engine.CollLeft
-
-	case e.isCollRight():
-		return engine.CollRight
-
-	default:
-		return engine.CollNone
 	}
-}
 
-func (e *CanvasEngine) isCollP1() bool {
-	x := e.BallX <= (e.P1X + e.Game.P1.Width + 1)
-	y1 := e.P1Y <= e.BallY
-	y2 := (e.P1Y + e.Game.P1.Height) >= e.BallY
-	y := y1 && y2
-	return x && y
-}
+	if intersects(br, p2r) {
+		// Similar top/bottom check for P2
+		if math.Abs(br.Cy-p2r.Cy) > p2r.HalfH*0.8 {
+			if br.Cy < p2r.Cy {
+				return engine.CollP2Top
+			}
+			return engine.CollP2Bottom
+		}
+		return engine.CollP2
+	}
 
-func (e *CanvasEngine) isCollP2() bool {
-	x := (e.BallX + e.Game.Ball.Height) >= e.P2X
-	y1 := e.P2Y <= e.BallY
-	y2 := (e.P2Y + e.Game.P2.Height) >= e.BallY
-	y := y1 && y2
-	return x && y
-}
+	// Check wall collisions
+	if intersects(br, topr) {
+		if br.Cx <= p1r.Cx+p1r.HalfW {
+			return engine.CollTopLeft
+		}
+		if br.Cx >= p2r.Cx-p2r.HalfW {
+			return engine.CollTopRight
+		}
+		return engine.CollTop
+	}
 
-func (e *CanvasEngine) isCollTop() bool {
-	return e.BallY <= baseline+e.Game.Ball.Height+canvas_border_correction
-}
+	if intersects(br, bottomr) {
+		if br.Cx <= p1r.Cx+p1r.HalfW {
+			return engine.CollBottomLeft
+		}
+		if br.Cx >= p2r.Cx-p2r.HalfW {
+			return engine.CollBottomRight
+		}
+		return engine.CollBottom
+	}
 
-func (e *CanvasEngine) isCollBottom() bool {
-	return e.BallY+e.Game.Ball.Height >= e.Game.Height-canvas_border_correction
-}
+	// Check side walls (scoring)
+	if br.Cx-br.HalfW <= 0 {
+		return engine.CollLeft
+	}
+	if br.Cx+br.HalfW >= e.Game.Width {
+		return engine.CollRight
+	}
 
-func (e *CanvasEngine) isCollLeft() bool {
-	return e.BallX-e.Game.Ball.Height-canvas_border_correction <= 0
-}
-
-func (e *CanvasEngine) isCollRight() bool {
-	return e.BallX+e.Game.Ball.Height+canvas_border_correction >= e.Game.Width
-}
-
-func (e *CanvasEngine) isCollP1Top() bool {
-	return e.isCollP1() && e.isCollTop()
-}
-
-func (e *CanvasEngine) isCollP2Top() bool {
-	return e.isCollP2() && e.isCollTop()
-}
-
-func (e *CanvasEngine) isCollP1Bottom() bool {
-	return e.isCollP1() && e.isCollBottom()
-}
-
-func (e *CanvasEngine) isCollP2Bottom() bool {
-	return e.isCollP2() && e.isCollBottom()
-}
-
-func (e *CanvasEngine) isCollTopLeft() bool {
-	return e.isCollTop() && e.isCollLeft()
-}
-
-func (e *CanvasEngine) isCollBottomLeft() bool {
-	return e.isCollBottom() && e.isCollLeft()
-}
-
-func (e *CanvasEngine) isCollTopRight() bool {
-	return e.isCollTop() && e.isCollRight()
-}
-
-func (e *CanvasEngine) isCollBottomRight() bool {
-	return e.isCollBottom() && e.isCollRight()
+	return engine.CollNone
 }
 
 // Mutations
@@ -211,43 +210,48 @@ func (e *CanvasEngine) reset() *CanvasEngine {
 
 func (e *CanvasEngine) resetBall() *CanvasEngine {
 	// Center ball
-	e.BallX = e.Game.Width / 2.0
-	e.BallY = e.Game.Height / 2.0
+	e.BallPos = Vec2{
+		X: e.Game.Width / 2.0,
+		Y: e.Game.Height / 2.0,
+	}
 
 	// Reset velocity multiplier to 1.0 at the start of each round
 	e.VelocityMultiplier = 1.0
 
 	// Random direction
+	xVel := default_ball_x_vel_ratio * e.Game.Width
+	yVel := min_ball_y_vel_ratio*e.Game.Height +
+		rand.Float64()*((initial_ball_y_vel*e.Game.Height)-(min_ball_y_vel_ratio*e.Game.Height))
+
 	if rand.Intn(10) < 5 {
-		e.BallXVelocity = -default_ball_x_vel_ratio * e.Game.Width
-		y := min_ball_y_vel_ratio*e.Game.Height + rand.Float64()*((max_y_vel_ratio*e.Game.Height)-(min_ball_y_vel_ratio*e.Game.Height))
-		e.BallYVelocity = -y
+		e.BallVel = Vec2{-xVel, -yVel}
 	} else {
-		e.BallXVelocity = default_ball_x_vel_ratio * e.Game.Width
-		y := min_ball_y_vel_ratio*e.Game.Height + rand.Float64()*((max_y_vel_ratio*e.Game.Height)-(min_ball_y_vel_ratio*e.Game.Height))
-		e.BallYVelocity = y
+		e.BallVel = Vec2{xVel, yVel}
 	}
 	return e
 }
 
 func (e *CanvasEngine) resetPlayers() *CanvasEngine {
 	// P1
-	e.P1X = 0 + default_padding
-	e.P1Y = e.Game.Height/2 - e.Game.P1.Height/2
-	// P2
-	e.P2X = e.Game.Width - +e.Game.P1.Width - default_padding
-	e.P2Y = e.Game.Height/2 - e.Game.P2.Height/2
-	return e
-}
+	e.P1Pos = Vec2{
+		X: 0,
+		Y: e.Game.Height/2 - e.Game.P1.Height/2,
+	}
+	e.P1Vel = Vec2{0, 0}
 
-func (e *CanvasEngine) advance() *CanvasEngine {
-	return e.advanceBall().advancePlayers()
+	// P2
+	e.P2Pos = Vec2{
+		X: e.Game.Width - e.Game.P1.Width,
+		Y: e.Game.Height/2 - e.Game.P2.Height/2,
+	}
+	e.P2Vel = Vec2{0, 0}
+
+	return e
 }
 
 // advanceBall advances the ball one tick or frame
 func (e *CanvasEngine) advanceBall() *CanvasEngine {
 	// Increase velocity multiplier gradually over time
-	// Adjust the rate of increase (0.0001) to control how quickly the ball speeds up
 	if e.VelocityIncrease > 0 {
 		e.VelocityMultiplier += e.VelocityIncrease
 	} else {
@@ -255,54 +259,41 @@ func (e *CanvasEngine) advanceBall() *CanvasEngine {
 	}
 
 	// Apply the velocity multiplier to the ball movement
-	e.BallX += (e.BallXVelocity * e.VelocityMultiplier) / e.FPS
-	e.BallY += (e.BallYVelocity * e.VelocityMultiplier) / e.FPS
-	return e
-}
-
-// advancePlayers advances the players one tick or frame
-func (e *CanvasEngine) advancePlayers() *CanvasEngine {
-	switch {
-	case e.ballDirP1():
-		e.P2YVelocity = 0
-
-	case e.ballDirP2():
-		switch y := (e.P2Y + (e.Game.P2.Height / 2)) - e.BallY; {
-		case y > 0:
-			e.P2YVelocity = max_y_vel_ratio * e.Game.Height
-			// e.P2Y -= e.P2YVelocity / e.FPS
-		case y < 0:
-			e.P2YVelocity = max_y_vel_ratio * e.Game.Height
-			// e.P2Y += e.P2YVelocity / e.FPS
-		case y > -0.9 && y < 0.9:
-			e.P2YVelocity = 0
-		}
-	}
-
+	dt := 1.0 / e.FPS
+	velocityThisTick := e.BallVel.Scale(e.VelocityMultiplier * dt)
+	e.BallPos = e.BallPos.Add(velocityThisTick)
 	return e
 }
 
 func (e *CanvasEngine) p1Up() *CanvasEngine {
-	e.P1YVelocity = player_input_dist
-	e.P1Y += player_input_dist
+	speed := y_vel_ratio * e.Game.Height
+	e.P1Vel = Vec2{0, -speed}
+	dt := 1.0 / e.FPS
+	e.P1Pos = e.P1Pos.Add(e.P1Vel.Scale(dt))
 	return e
 }
 
 func (e *CanvasEngine) p1Down() *CanvasEngine {
-	e.P1YVelocity = player_input_dist
-	e.P1Y -= player_input_dist
+	speed := y_vel_ratio * e.Game.Height
+	e.P1Vel = Vec2{0, speed}
+	dt := 1.0 / e.FPS
+	e.P1Pos = e.P1Pos.Add(e.P1Vel.Scale(dt))
 	return e
 }
 
 func (e *CanvasEngine) p2Up() *CanvasEngine {
-	e.P2YVelocity = player_input_dist
-	e.P2Y += player_input_dist
+	speed := y_vel_ratio * e.Game.Height
+	e.P2Vel = Vec2{0, -speed}
+	dt := 1.0 / e.FPS
+	e.P2Pos = e.P2Pos.Add(e.P2Vel.Scale(dt))
 	return e
 }
 
 func (e *CanvasEngine) p2Down() *CanvasEngine {
-	e.P2YVelocity = player_input_dist
-	e.P2Y -= player_input_dist
+	speed := y_vel_ratio * e.Game.Height
+	e.P2Vel = Vec2{0, speed}
+	dt := 1.0 / e.FPS
+	e.P2Pos = e.P2Pos.Add(e.P2Vel.Scale(dt))
 	return e
 }
 
@@ -311,63 +302,79 @@ func (e *CanvasEngine) inverseBallXYVelocity() *CanvasEngine {
 }
 
 func (e *CanvasEngine) inverseBallXVelocity() *CanvasEngine {
-	if e.BallXVelocity > 0 {
-		e.BallXVelocity = e.BallXVelocity * -1
-	} else {
-		e.BallXVelocity = math.Abs(e.BallXVelocity)
-	}
+	e.BallVel.X *= -1
 	return e
 }
 
 func (e *CanvasEngine) inverseBallYVelocity() *CanvasEngine {
-	if e.BallYVelocity > 0 {
-		e.BallYVelocity = e.BallYVelocity * -1
-	} else {
-		e.BallYVelocity = math.Abs(e.BallYVelocity)
-	}
+	e.BallVel.Y *= -1
 	return e
 }
 
 func (e *CanvasEngine) deOutOfBoundsPlayers() *CanvasEngine {
 	// P1, top
-	if e.P1Y-default_padding <= baseline {
-		e.P1Y = baseline + default_padding
-		e.P1YVelocity = 0
+	if e.P1Pos.Y <= 0 {
+		e.P1Pos.Y = 0
+		e.P1Vel.Y = 0
 	}
 	// P1, bottom
-	if e.P1Y+e.Game.P1.Height >= e.Game.Height-default_padding {
-		e.P1Y = e.Game.Height - e.Game.P1.Height - default_padding
-		e.P1YVelocity = 0
+	if e.P1Pos.Y+e.Game.P1.Height >= e.Game.Height {
+		e.P1Pos.Y = e.Game.Height - e.Game.P1.Height
+		e.P1Vel.Y = 0
 	}
 	// P2, top
-	if e.P2Y-default_padding <= baseline {
-		e.P2Y = baseline + default_padding
-		e.P2YVelocity = 0
+	if e.P2Pos.Y <= 0 {
+		e.P2Pos.Y = 0
+		e.P2Vel.Y = 0
 	}
 	// P2, bottom
-	if e.P2Y+e.Game.P2.Height >= e.Game.Height-default_padding {
-		e.P2Y = e.Game.Height - e.Game.P2.Height - default_padding
-		e.P2YVelocity = 0
+	if e.P2Pos.Y+e.Game.P2.Height >= e.Game.Height-0 {
+		e.P2Pos.Y = e.Game.Height - e.Game.P2.Height - 0
+		e.P2Vel.Y = 0
 	}
 	return e
 }
 
 func (e *CanvasEngine) deOutOfBoundsBall() *CanvasEngine {
 	// Top
-	if e.BallY <= baseline {
-		e.BallY = baseline - 1
+	if e.BallPos.Y <= 0 {
+		e.BallPos.Y = -1
 	}
 	// Bottom
-	if e.BallY+e.Game.Ball.Height >= e.Game.Height {
-		e.BallY = e.Game.Height - e.Game.Ball.Height - 1
+	if e.BallPos.Y+e.Game.Ball.Height >= e.Game.Height {
+		e.BallPos.Y = e.Game.Height - e.Game.Ball.Height - 1
 	}
 	// P1
-	if e.BallX-e.Game.Ball.Width <= e.P1X+e.Game.P1.Width {
-		e.BallX = e.P1X + e.Game.P1.Width + magic_p
+	if e.BallPos.X-e.Game.Ball.Width <= e.P1Pos.X {
+		e.BallPos.X = e.P1Pos.X + e.Game.P1.Width
 	}
 	// P2
-	if e.BallX+e.Game.Ball.Width >= e.P2X {
-		e.BallX = e.P2X - magic_p
+	if e.BallPos.X+e.Game.Ball.Width >= e.P2Pos.X {
+		e.BallPos.X = e.P2Pos.X - magic_p
 	}
+	return e
+}
+
+func (e *CanvasEngine) handlePaddleEdgeHit() *CanvasEngine {
+	// First, invert the X direction as we always want the ball to bounce back
+	e.BallVel.X *= -1
+
+	// Calculate current ball speed (magnitude of velocity)
+	currentSpeed := math.Sqrt(e.BallVel.X*e.BallVel.X + e.BallVel.Y*e.BallVel.Y)
+
+	// For edge hits, we want a steeper angle but maintain similar speed
+	// Use a 60-degree angle (approximately 0.866 for x and 0.5 for y components)
+	normalizedX := math.Abs(e.BallVel.X) / currentSpeed
+
+	// Determine the direction of Y velocity based on which edge was hit
+	yDirection := 1.0
+	if e.BallVel.Y < 0 {
+		yDirection = -1.0
+	}
+
+	// Set new velocities while maintaining approximate original speed
+	e.BallVel.X = normalizedX * currentSpeed * math.Copysign(1, e.BallVel.X)
+	e.BallVel.Y = 0.5 * currentSpeed * yDirection // Use 0.5 for a consistent but not too extreme angle
+
 	return e
 }

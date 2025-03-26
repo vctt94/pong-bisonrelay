@@ -109,11 +109,11 @@ func (s *Server) handleGameLifecycle(ctx context.Context, players []*ponggame.Pl
 				continue
 			}
 			playerSession.BetAmt = totalDcrAmount
-			s.log.Debugf("Reset player %s with updated bet amount: %.8f", player.ID, totalDcrAmount)
+			s.log.Debugf("Reset player %s with updated bet amount: %.8f", player.ID, float64(totalDcrAmount)/1e11)
 		}
 		// remove game from gameManager after it ended
 		delete(s.gameManager.Games, game.Id)
-		s.log.Infof("Game %s cleaned up", game.Id)
+		s.log.Debugf("Game %s cleaned up", game.Id)
 	}()
 
 	game.Run()
@@ -183,6 +183,8 @@ func (s *Server) handleGameEnd(ctx context.Context, game *ponggame.GameInstance,
 			Message:          message,
 			GameId:           game.Id,
 		})
+		// delete player from gameManager PlayerGameMap
+		delete(s.gameManager.PlayerGameMap, *player.ID)
 	}
 
 	// Transfer actual reserved tip amounts to winner

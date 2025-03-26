@@ -12,6 +12,26 @@ import (
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 )
 
+// Rect represents a bounding box with center position and half-dimensions
+type Rect struct {
+	Cx    float64 // Center X
+	Cy    float64 // Center Y
+	HalfW float64 // Half-width
+	HalfH float64 // Half-height
+}
+
+type Vec2 struct {
+	X, Y float64
+}
+
+func (v Vec2) Add(w Vec2) Vec2 {
+	return Vec2{v.X + w.X, v.Y + w.Y}
+}
+
+func (v Vec2) Scale(s float64) Vec2 {
+	return Vec2{v.X * s, v.Y * s}
+}
+
 type Player struct {
 	ID *zkidentity.ShortID
 
@@ -73,6 +93,7 @@ type GameManager struct {
 	Games          map[string]*GameInstance
 	WaitingRooms   []*WaitingRoom
 	PlayerSessions *PlayerSessions
+	PlayerGameMap  map[zkidentity.ShortID]*GameInstance
 
 	Log slog.Logger
 
@@ -90,11 +111,10 @@ type CanvasEngine struct {
 	// State
 	P1Score, P2Score int
 
-	BallX, BallY       float64
-	P1X, P1Y, P2X, P2Y float64
-
-	P1YVelocity, P2YVelocity     float64
-	BallXVelocity, BallYVelocity float64
+	BallPos, BallVel Vec2
+	// Replace individual position/velocity fields with vectors
+	P1Pos, P2Pos Vec2
+	P1Vel, P2Vel Vec2
 
 	// Velocity multiplier that increases over time
 	VelocityMultiplier float64
@@ -106,7 +126,7 @@ type CanvasEngine struct {
 	// Engine debug state
 	log slog.Logger
 
-	mu sync.Mutex
+	mu sync.RWMutex
 }
 
 // StartGameStreamRequest encapsulates the data needed to start a game stream.

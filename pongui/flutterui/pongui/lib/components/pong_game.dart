@@ -44,9 +44,7 @@ class PongGame {
   }
 
   Future<void> handleInput(String clientId, String data) async {
-      // Send the first input immediately
-      await _sendKeyInput(data);
-
+    await _sendKeyInput(data);
   }
 
   Future<void> _sendKeyInput(String data) async {
@@ -85,6 +83,17 @@ class PongPainter extends CustomPainter {
     double scaleX = size.width / gameWidth;
     double scaleY = size.height / gameHeight;
 
+    // Paint object for drawing
+    var paint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+
+    // Draw background
+    canvas.drawRect(
+      Rect.fromLTWH(0.0, 0.0, size.width, size.height),
+      Paint()..color = Colors.black,
+    );
+
     // Extract and scale paddle 1 properties
     double paddle1X = 0.0; // Paddle 1 is on the left edge
     double paddle1Y = (gameState['p1Y'] as num?)?.toDouble() ?? 0.0;
@@ -121,17 +130,6 @@ class PongPainter extends CustomPainter {
     ballWidth *= scaleX;
     ballHeight *= scaleY;
 
-    // Paint object for drawing
-    var paint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-
-    // Draw background
-    canvas.drawRect(
-      Rect.fromLTWH(0.0, 0.0, size.width, size.height),
-      Paint()..color = Colors.black,
-    );
-
     // Draw Paddle 1
     canvas.drawRect(
       Rect.fromLTWH(paddle1X, paddle1Y, paddle1Width, paddle1Height),
@@ -149,6 +147,39 @@ class PongPainter extends CustomPainter {
       Rect.fromLTWH(ballX, ballY, ballWidth, ballHeight),
       paint,
     );
+
+    // Draw scores
+    int p1Score = (gameState['p1Score'] as num?)?.toInt() ?? 0;
+    int p2Score = (gameState['p2Score'] as num?)?.toInt() ?? 0;
+
+    // Create text painters for scores
+    final p1ScoreTextPainter = TextPainter(
+      text: TextSpan(
+        text: '$p1Score',
+        style: TextStyle(
+            color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+
+    final p2ScoreTextPainter = TextPainter(
+      text: TextSpan(
+        text: '$p2Score',
+        style: TextStyle(
+            color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+
+    // Layout the text
+    p1ScoreTextPainter.layout();
+    p2ScoreTextPainter.layout();
+
+    // Position and draw the scores at the top of the screen
+    p1ScoreTextPainter.paint(
+        canvas, Offset(size.width * 0.25 - p1ScoreTextPainter.width / 2, 20));
+    p2ScoreTextPainter.paint(
+        canvas, Offset(size.width * 0.75 - p2ScoreTextPainter.width / 2, 20));
   }
 
   @override

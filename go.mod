@@ -15,17 +15,13 @@ require (
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58
 	github.com/prometheus/procfs v0.12.0
 	github.com/stretchr/testify v1.10.0
-	github.com/vctt94/bisonbotkit v0.0.0-00010101000000-000000000000
+	github.com/vctt94/bisonbotkit v0.0.0-20250325152223-333fcdc2605b
 	go.etcd.io/bbolt v1.3.8
 	golang.org/x/mobile v0.0.0-20240604190613-2782386b8afd
 	golang.org/x/sync v0.12.0
 	google.golang.org/grpc v1.62.0
 	google.golang.org/protobuf v1.36.6
 )
-
-replace github.com/companyzero/bisonrelay => github.com/vctt94/bisonrelay v0.0.0-20241105192107-e02453230ee8
-
-replace github.com/vctt94/bisonbotkit => ../bisonbotkit
 
 require (
 	decred.org/cspp/v2 v2.2.0 // indirect
@@ -103,7 +99,7 @@ require (
 	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgproto3/v2 v2.3.2 // indirect
-	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/pgtype v1.14.0 // indirect
 	github.com/jackc/pgx/v4 v4.18.1 // indirect
 	github.com/jessevdk/go-flags v1.6.1 // indirect
