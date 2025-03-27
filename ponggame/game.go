@@ -2,7 +2,6 @@ package ponggame
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/companyzero/bisonrelay/zkidentity"
@@ -10,6 +9,7 @@ import (
 	"github.com/ndabAP/ping-pong/engine"
 	"github.com/vctt94/bisonbotkit/utils"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
+	"google.golang.org/protobuf/proto"
 )
 
 const maxScore = 3
@@ -97,7 +97,7 @@ func (gm *GameManager) HandlePlayerInput(clientID zkidentity.ShortID, req *pong.
 	}
 
 	req.PlayerNumber = player.PlayerNumber
-	inputBytes, err := json.Marshal(req)
+	inputBytes, err := proto.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize input: %w", err)
 	}

@@ -10,16 +10,16 @@ import (
 
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
-	"github.com/decred/slog"
+	"github.com/decred/dcrd/dcrutil/v4"
 	"github.com/vctt94/pong-bisonrelay/ponggame"
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
 	"github.com/vctt94/pong-bisonrelay/server/serverdb"
 )
 
-func (s *Server) handleReturnUnprocessedTips(ctx context.Context, clientID zkidentity.ShortID, paymentClient types.PaymentsServiceClient, log slog.Logger) error {
+func (s *Server) handleReturnUnprocessedTips(ctx context.Context, clientID zkidentity.ShortID) error {
 	tips, err := s.db.FetchReceivedTipsByUID(ctx, clientID, serverdb.StatusUnpaid)
 	if err != nil {
-		log.Errorf("Failed to fetch unprocessed tips for client %s: %v", clientID.String(), err)
+		s.log.Errorf("Failed to fetch unprocessed tips for client %s: %v", clientID.String(), err)
 		return err
 	}
 
@@ -27,23 +27,19 @@ func (s *Server) handleReturnUnprocessedTips(ctx context.Context, clientID zkide
 		return nil
 	}
 
-	totalDcrAmount := 0.0
+	totalDcrAmount := int64(0)
 	for _, tip := range tips {
-		totalDcrAmount += float64(tip.AmountMatoms) / 1e11 // Convert matoms to DCR
+		totalDcrAmount += tip.AmountMatoms
 	}
 
-	paymentReq := &types.TipUserRequest{
-		User:        clientID.String(),
-		DcrAmount:   totalDcrAmount,
-		MaxAttempts: 3,
-	}
-	resp := &types.TipUserResponse{}
-	if err := paymentClient.TipUser(ctx, paymentReq, resp); err != nil {
-		log.Errorf("Failed to return unprocessed tips to client %s: %v", clientID.String(), err)
+	totalDcrAmount = int64(float64(totalDcrAmount) * 1e-3)
+
+	if err := s.bot.PayTip(ctx, clientID, dcrutil.Amount(totalDcrAmount), 3); err != nil {
+		s.log.Errorf("Failed to return unprocessed tips to client %s: %v", clientID.String(), err)
 		return err
 	}
 
-	log.Infof("Returned unprocessed tips to client %s: %.8f", clientID.String(), totalDcrAmount)
+	s.log.Infof("Returned unprocessed tips to client %s: %.8f", clientID.String(), totalDcrAmount)
 
 	// Convert total back to matoms for storage
 	totalMatoms := int64(totalDcrAmount * 1e11)
@@ -51,7 +47,7 @@ func (s *Server) handleReturnUnprocessedTips(ctx context.Context, clientID zkide
 	// Store send progress with all tips being returned
 	err = s.db.StoreSendTipProgress(ctx, clientID.Bytes(), totalMatoms, tips, serverdb.StatusSending)
 	if err != nil {
-		log.Errorf("Failed to store return tip progress: %v", err)
+		s.log.Errorf("Failed to store return tip progress: %v", err)
 		return err
 	}
 
@@ -59,7 +55,7 @@ func (s *Server) handleReturnUnprocessedTips(ctx context.Context, clientID zkide
 		tipID := make([]byte, 8)
 		binary.BigEndian.PutUint64(tipID, tip.SequenceId)
 		if err := s.db.UpdateTipStatus(ctx, clientID.Bytes(), tipID, serverdb.StatusSending); err != nil {
-			log.Errorf("Failed to update tip status for client %s: %v", clientID.String(), err)
+			s.log.Errorf("Failed to update tip status for client %s: %v", clientID.String(), err)
 		}
 	}
 
@@ -214,16 +210,13 @@ func (s *Server) handleGameEnd(ctx context.Context, game *ponggame.GameInstance,
 				s.log.Errorf("Failed to update tip status for player %s: %v", tip.Uid, err)
 			}
 		}
-		resp := &types.TipUserResponse{}
-		err = s.paymentClient.TipUser(ctx, &types.TipUserRequest{
-			User:        winner.String(),
-			DcrAmount:   totalDcrAmount,
-			MaxAttempts: 3,
-		}, resp)
+		totalAtoms := int64(float64(totalAmountMatoms) * 1e-3)
+		err = s.bot.PayTip(ctx, *winner, dcrutil.Amount(totalAtoms), 3)
 		if err != nil {
 			s.log.Errorf("Failed to transfer bet amount to winner %s: %v", winner.String(), err)
 			return
 		}
+		s.log.Infof("Transferred bet amount to winner %s: %.8f", winner.String(), totalDcrAmount)
 	}
 }
 
