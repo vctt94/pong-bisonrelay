@@ -23,7 +23,10 @@ class SharedLayout extends StatelessWidget {
     }
 
     return Scaffold(
+      backgroundColor: const Color(0xFF121212), // Dark background
       appBar: AppBar(
+        backgroundColor: const Color(0xFF1A1A1A), // Dark app bar
+        foregroundColor: Colors.white, // White text and icons
         title: Text(title),
         leading: Navigator.of(context).canPop()
             ? IconButton(
@@ -36,29 +39,54 @@ class SharedLayout extends StatelessWidget {
       ),
       drawer: pongModel != null
           ? Drawer(
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  const DrawerHeader(
-                    decoration: BoxDecoration(color: Colors.blueAccent),
-                    child: Text('Menu',
-                        style: TextStyle(color: Colors.white, fontSize: 24)),
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.home),
-                    title: const Text('Home'),
-                    onTap: () {
-                      Navigator.of(context).pushReplacementNamed('/');
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.settings),
-                    title: const Text('Settings'),
-                    onTap: () {
-                      Navigator.of(context).pushNamed('/settings');
-                    },
-                  ),
-                ],
+              child: Container(
+                color: const Color(0xFF1A1A1A), // Dark drawer background
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    DrawerHeader(
+                      decoration: const BoxDecoration(color: Colors.blueAccent),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          const Text(
+                            'Pong Menu',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Client ID: ${pongModel.clientId}',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.home, color: Colors.white),
+                      title: const Text('Home',
+                          style: TextStyle(color: Colors.white)),
+                      onTap: () {
+                        Navigator.of(context).pushReplacementNamed('/');
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.settings, color: Colors.white),
+                      title: const Text('Settings',
+                          style: TextStyle(color: Colors.white)),
+                      onTap: () {
+                        Navigator.of(context).pushNamed('/settings');
+                      },
+                    ),
+                  ],
+                ),
               ),
             )
           : null,
@@ -69,10 +97,9 @@ class SharedLayout extends StatelessWidget {
           if (pongModel != null)
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade900,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(12)),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1B1E2C),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -81,7 +108,7 @@ class SharedLayout extends StatelessWidget {
                     children: [
                       Icon(
                         pongModel.isConnected
-                            ? Icons.cloud_done
+                            ? Icons.check_circle
                             : Icons.cloud_off,
                         color:
                             pongModel.isConnected ? Colors.green : Colors.red,
@@ -89,20 +116,20 @@ class SharedLayout extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         pongModel.isConnected ? "Connected" : "Disconnected",
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: pongModel.isConnected
-                                  ? Colors.green
-                                  : Colors.red,
-                            ),
+                        style: TextStyle(
+                          color:
+                              pongModel.isConnected ? Colors.green : Colors.red,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),
                   Text(
                     "Client ID: ${pongModel.clientId}",
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: Colors.white70),
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ],
               ),
