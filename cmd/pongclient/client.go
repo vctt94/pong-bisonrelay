@@ -86,6 +86,10 @@ type appstate struct {
 
 	logBuffer   []string
 	logViewport viewport.Model
+
+	// Track which keys are pressed for paddle movement
+	upKeyPressed   bool
+	downKeyPressed bool
 }
 
 func (m *appstate) listenForUpdates() tea.Cmd {
@@ -167,25 +171,18 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.selectedRoomIndex = 0
 			m.listWaitingRooms()
 			return m, nil
-		case "w", "s":
+		case "w", "up":
 			if m.mode == gameMode {
 				return m, m.handleGameInput(msg)
-			}
-		case "up":
-			// Check mode to avoid duplicate handling of "up" key
-			if m.mode == joinRoom && m.selectedRoomIndex > 0 {
+			} else if m.mode == joinRoom && m.selectedRoomIndex > 0 {
 				m.selectedRoomIndex--
-			} else if m.mode == gameMode {
-				return m, m.handleGameInput(msg)
 			}
 			return m, nil
-
-		case "down":
-			// Check mode to avoid duplicate handling of "down" key
-			if m.mode == joinRoom && m.selectedRoomIndex < len(m.waitingRooms)-1 {
-				m.selectedRoomIndex++
-			} else if m.mode == gameMode {
+		case "s", "down":
+			if m.mode == gameMode {
 				return m, m.handleGameInput(msg)
+			} else if m.mode == joinRoom && m.selectedRoomIndex < len(m.waitingRooms)-1 {
+				m.selectedRoomIndex++
 			}
 			return m, nil
 		case "enter":
@@ -248,6 +245,17 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.Type == tea.KeyEsc {
+			if m.mode == gameMode {
+				// When exiting game mode, stop all paddle movement
+				if m.upKeyPressed {
+					m.pc.SendInput("ArrowUpStop")
+					m.upKeyPressed = false
+				}
+				if m.downKeyPressed {
+					m.pc.SendInput("ArrowDownStop")
+					m.downKeyPressed = false
+				}
+			}
 			m.mode = gameIdle
 			return m, nil
 		}
@@ -331,12 +339,48 @@ func (m *appstate) makeClientUnready() error {
 func (m *appstate) handleGameInput(msg tea.KeyMsg) tea.Cmd {
 	return func() tea.Msg {
 		var input string
+
 		switch msg.String() {
 		case "w", "up":
-			input = "ArrowUp"
+			m.Lock()
+			// Only send if not already pressed
+			if !m.upKeyPressed {
+				input = "ArrowUp"
+				m.upKeyPressed = true
+				// If down was pressed, release it
+				if m.downKeyPressed {
+					m.pc.SendInput("ArrowDownStop")
+					m.downKeyPressed = false
+				}
+			}
+			m.Unlock()
 		case "s", "down":
-			input = "ArrowDown"
+			m.Lock()
+			// Only send if not already pressed
+			if !m.downKeyPressed {
+				input = "ArrowDown"
+				m.downKeyPressed = true
+				// If up was pressed, release it
+				if m.upKeyPressed {
+					m.pc.SendInput("ArrowUpStop")
+					m.upKeyPressed = false
+				}
+			}
+			m.Unlock()
+		case "esc":
+			// When exiting game mode, stop all movement
+			m.Lock()
+			if m.upKeyPressed {
+				m.pc.SendInput("ArrowUpStop")
+				m.upKeyPressed = false
+			}
+			if m.downKeyPressed {
+				m.pc.SendInput("ArrowDownStop")
+				m.downKeyPressed = false
+			}
+			m.Unlock()
 		}
+
 		if input != "" {
 			err := m.pc.SendInput(input)
 			if err != nil {

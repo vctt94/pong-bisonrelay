@@ -163,6 +163,16 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 						e.p1Up()
 					case "ArrowDown":
 						e.p1Down()
+					case "ArrowUpStop":
+						// Stop upward movement
+						if e.P1Vel.Y < 0 {
+							e.P1Vel.Y = 0
+						}
+					case "ArrowDownStop":
+						// Stop downward movement
+						if e.P1Vel.Y > 0 {
+							e.P1Vel.Y = 0
+						}
 					}
 				} else {
 					switch k := in.Input; k {
@@ -170,6 +180,16 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 						e.p2Up()
 					case "ArrowDown":
 						e.p2Down()
+					case "ArrowUpStop":
+						// Stop upward movement
+						if e.P2Vel.Y < 0 {
+							e.P2Vel.Y = 0
+						}
+					case "ArrowDownStop":
+						// Stop downward movement
+						if e.P2Vel.Y > 0 {
+							e.P2Vel.Y = 0
+						}
 					}
 				}
 			case <-ctx.Done():
