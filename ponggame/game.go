@@ -106,12 +106,26 @@ func (gm *GameManager) HandlePlayerInput(clientID zkidentity.ShortID, req *pong.
 		return nil, fmt.Errorf("game has ended for client ID %s", clientID)
 	}
 
-	// Send inputBytes to game.inputch
+	// Try to send input without blocking, discard old inputs if channel is full
 	select {
 	case game.Inputch <- inputBytes:
+		// success
 	default:
-		// Channel is full, consider logging or handling this case
-		gm.Log.Debugf("Input channel full for game %s, dropping input", game.Id)
+		// channel is full; drop the oldest one
+		select {
+		case <-game.Inputch:
+		default:
+			// means the channel was emptied in the meantime
+		}
+
+		// now that we've popped one off, try once more
+		select {
+		case game.Inputch <- inputBytes:
+			// success
+		default:
+			// still no room, just drop the input
+			gm.Log.Debugf("Input channel full for game %s, dropping input", game.Id)
+		}
 	}
 
 	return &pong.GameUpdate{}, nil

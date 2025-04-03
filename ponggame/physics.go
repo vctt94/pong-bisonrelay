@@ -82,13 +82,11 @@ func (e *CanvasEngine) bottomRect() Rect {
 
 // tick calculates the next frame
 func (e *CanvasEngine) tick() {
-	// Only lock when actually updating shared state
-	e.mu.RLock()
-	collision := e.detectColl()
-	e.mu.RUnlock()
-
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
+	// Detect collision inside the lock
+	collision := e.detectColl()
 
 	// Process collision result
 	switch collision {
