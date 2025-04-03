@@ -97,7 +97,7 @@ class MainContent extends StatelessWidget {
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 24.0),
           child: Text(
-            "To place a bet send a tip to pongbot on Bisonn Relay.",
+            "To place a bet send a tip to pongbot on Bison Relay.",
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 16,
