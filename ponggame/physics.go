@@ -16,7 +16,7 @@ const (
 
 	default_ball_x_vel_ratio = 0.25
 	min_ball_y_vel_ratio     = 0.1
-	y_vel_ratio              = 2
+	y_vel_ratio              = 1
 	initial_ball_y_vel       = 0.20
 
 	magic_p = 1
