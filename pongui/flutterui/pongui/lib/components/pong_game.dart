@@ -14,6 +14,11 @@ class PongGame {
   Widget buildWidget(GameUpdate gameState, FocusNode focusNode) {
     return GestureDetector(
       onPanUpdate: handlePaddleMovement,
+      onPanEnd: (details) {
+        // Stop paddle movement when the user stops dragging
+        stopPaddleMovement(clientId, 'ArrowUpStop');
+        stopPaddleMovement(clientId, 'ArrowDownStop');
+      },
       onTap: () => focusNode.requestFocus(),
       child: Focus(
         child: KeyboardListener(
@@ -22,6 +27,14 @@ class PongGame {
             if (event is KeyDownEvent || event is KeyRepeatEvent) {
               String keyLabel = event.logicalKey.keyLabel;
               handleInput(clientId, keyLabel);
+            } else if (event is KeyUpEvent) {
+              // Handle key up events to stop paddle movement
+              String keyLabel = event.logicalKey.keyLabel;
+              if (keyLabel == 'W' || keyLabel == 'Arrow Up') {
+                stopPaddleMovement(clientId, 'ArrowUpStop');
+              } else if (keyLabel == 'S' || keyLabel == 'Arrow Down') {
+                stopPaddleMovement(clientId, 'ArrowDownStop');
+              }
             }
           },
           child: LayoutBuilder(
@@ -58,6 +71,15 @@ class PongGame {
       } else {
         return;
       }
+      await grpcClient.sendInput(clientId, action);
+    } catch (e) {
+      print(e);
+    }
+  }
+
+  // New method to stop paddle movement
+  Future<void> stopPaddleMovement(String clientId, String action) async {
+    try {
       await grpcClient.sendInput(clientId, action);
     } catch (e) {
       print(e);

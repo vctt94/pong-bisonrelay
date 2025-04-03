@@ -16,7 +16,7 @@ const (
 
 	default_ball_x_vel_ratio = 0.25
 	min_ball_y_vel_ratio     = 0.1
-	y_vel_ratio              = 2
+	y_vel_ratio              = 1
 	initial_ball_y_vel       = 0.20
 
 	magic_p = 1
@@ -82,13 +82,16 @@ func (e *CanvasEngine) bottomRect() Rect {
 
 // tick calculates the next frame
 func (e *CanvasEngine) tick() {
-	// Only lock when actually updating shared state
-	e.mu.RLock()
-	collision := e.detectColl()
-	e.mu.RUnlock()
-
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
+	// Apply paddle movement based on current velocity
+	dt := 1.0 / e.FPS
+	e.P1Pos = e.P1Pos.Add(e.P1Vel.Scale(dt))
+	e.P2Pos = e.P2Pos.Add(e.P2Vel.Scale(dt))
+
+	// Detect collision inside the lock
+	collision := e.detectColl()
 
 	// Process collision result
 	switch collision {
@@ -268,32 +271,24 @@ func (e *CanvasEngine) advanceBall() *CanvasEngine {
 func (e *CanvasEngine) p1Up() *CanvasEngine {
 	speed := y_vel_ratio * e.Game.Height
 	e.P1Vel = Vec2{0, -speed}
-	dt := 1.0 / e.FPS
-	e.P1Pos = e.P1Pos.Add(e.P1Vel.Scale(dt))
 	return e
 }
 
 func (e *CanvasEngine) p1Down() *CanvasEngine {
 	speed := y_vel_ratio * e.Game.Height
 	e.P1Vel = Vec2{0, speed}
-	dt := 1.0 / e.FPS
-	e.P1Pos = e.P1Pos.Add(e.P1Vel.Scale(dt))
 	return e
 }
 
 func (e *CanvasEngine) p2Up() *CanvasEngine {
 	speed := y_vel_ratio * e.Game.Height
 	e.P2Vel = Vec2{0, -speed}
-	dt := 1.0 / e.FPS
-	e.P2Pos = e.P2Pos.Add(e.P2Vel.Scale(dt))
 	return e
 }
 
 func (e *CanvasEngine) p2Down() *CanvasEngine {
 	speed := y_vel_ratio * e.Game.Height
 	e.P2Vel = Vec2{0, speed}
-	dt := 1.0 / e.FPS
-	e.P2Pos = e.P2Pos.Add(e.P2Vel.Scale(dt))
 	return e
 }
 

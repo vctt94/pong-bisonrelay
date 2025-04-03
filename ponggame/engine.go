@@ -57,13 +57,15 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 
 	// Calculates and writes frames
 	go func() {
+		frameTimer := time.NewTicker(time.Duration(1000.0/e.FPS) * time.Millisecond)
+		defer frameTimer.Stop()
+
 		for {
 			select {
 			case <-ctx.Done():
 				e.log.Debug("exiting")
 				return
-			default:
-				currentTime := time.Now()
+			case <-frameTimer.C:
 				e.tick()
 
 				if errors.Is(e.Err, engine.ErrP1Win) {
@@ -126,14 +128,6 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 				case <-ctx.Done():
 					return
 				}
-
-				// Sleep to maintain target frame rate - fixed type conversion
-				targetFrameTime := float64(time.Second) / e.FPS
-				elapsedTime := float64(time.Since(currentTime))
-				sleepTime := time.Duration(targetFrameTime - elapsedTime)
-				if sleepTime > 0 {
-					time.Sleep(sleepTime)
-				}
 			}
 		}
 	}()
@@ -169,6 +163,16 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 						e.p1Up()
 					case "ArrowDown":
 						e.p1Down()
+					case "ArrowUpStop":
+						// Stop upward movement
+						if e.P1Vel.Y < 0 {
+							e.P1Vel.Y = 0
+						}
+					case "ArrowDownStop":
+						// Stop downward movement
+						if e.P1Vel.Y > 0 {
+							e.P1Vel.Y = 0
+						}
 					}
 				} else {
 					switch k := in.Input; k {
@@ -176,6 +180,16 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 						e.p2Up()
 					case "ArrowDown":
 						e.p2Down()
+					case "ArrowUpStop":
+						// Stop upward movement
+						if e.P2Vel.Y < 0 {
+							e.P2Vel.Y = 0
+						}
+					case "ArrowDownStop":
+						// Stop downward movement
+						if e.P2Vel.Y > 0 {
+							e.P2Vel.Y = 0
+						}
 					}
 				}
 			case <-ctx.Done():
