@@ -198,3 +198,39 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 		}
 	}()
 }
+
+// State returns the current state of the canvas engine
+func (e *CanvasEngine) State() struct {
+	PaddleWidth, PaddleHeight float64
+	BallWidth, BallHeight     float64
+	P1PosX, P1PosY            float64
+	P2PosX, P2PosY            float64
+	BallPosX, BallPosY        float64
+	BallVelX, BallVelY        float64
+	FPS, TPS                  float64
+} {
+	return struct {
+		PaddleWidth, PaddleHeight float64
+		BallWidth, BallHeight     float64
+		P1PosX, P1PosY            float64
+		P2PosX, P2PosY            float64
+		BallPosX, BallPosY        float64
+		BallVelX, BallVelY        float64
+		FPS, TPS                  float64
+	}{
+		PaddleWidth:  e.Game.P1.Width,
+		PaddleHeight: e.Game.P1.Height,
+		BallWidth:    e.Game.Ball.Width,
+		BallHeight:   e.Game.Ball.Height,
+		P1PosX:       e.P1Pos.X,
+		P1PosY:       e.P1Pos.Y,
+		P2PosX:       e.P2Pos.X,
+		P2PosY:       e.P2Pos.Y,
+		BallPosX:     e.BallPos.X,
+		BallPosY:     e.BallPos.Y,
+		BallVelX:     e.BallVel.X,
+		BallVelY:     e.BallVel.Y,
+		FPS:          e.FPS,
+		TPS:          e.TPS,
+	}
+}

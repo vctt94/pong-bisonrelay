@@ -27,6 +27,12 @@ class PongModel extends ChangeNotifier {
   LocalWaitingRoom? currentWR;
   GameUpdate? gameState;
 
+  // Ready to play fields
+  String currentGameId = '';
+  bool isReadyToPlay = false;
+  bool countdownStarted = false;
+  String countdownMessage = '';
+
   PongModel(Config cfg, this.notificationModel) {
     _initPongClient(cfg);
   }
@@ -111,6 +117,27 @@ class PongModel extends ChangeNotifier {
           notifyListeners();
           break;
 
+        case NotificationType.GAME_READY_TO_PLAY:
+          // Store the game ID when we receive the ready to play notification
+          currentGameId = ntfn.gameId;
+          // Set game as started but waiting for player readiness
+          gameStarted = true;
+          isReadyToPlay = false;
+          countdownStarted = false;
+          notificationModel.showNotification(
+              "Game is ready! Signal when you're ready to play.");
+          notifyListeners();
+          break;
+
+        case NotificationType.COUNTDOWN_UPDATE:
+          countdownMessage = ntfn.message;
+          countdownStarted = true;
+          // When countdown starts, we need to make sure game is in progress
+          gameStarted = true;
+          notificationModel.showNotification(ntfn.message);
+          notifyListeners();
+          break;
+
         case NotificationType.PLAYER_JOINED_WR:
           if (ntfn.playerId == clientId) {
             currentWR = LocalWaitingRoom.fromProto(ntfn.wr);
@@ -142,8 +169,14 @@ class PongModel extends ChangeNotifier {
           break;
 
         case NotificationType.ON_PLAYER_READY:
-          // Update the waiting room with the player's ready status
-          if (currentWR != null) {
+          // Check if this is a ready to play notification for game
+          if (ntfn.gameId.isNotEmpty) {
+            String playerName =
+                ntfn.playerId == clientId ? "You are" : "Opponent is";
+            notificationModel.showNotification("$playerName ready to play!");
+          }
+          // Otherwise handle waiting room ready state
+          else if (currentWR != null) {
             // Find the player in the current waiting room and update their ready status
             for (var i = 0; i < currentWR!.players.length; i++) {
               if (currentWR!.players[i].uid == ntfn.playerId) {
@@ -158,8 +191,8 @@ class PongModel extends ChangeNotifier {
             notificationModel.showNotification(
               "Player $playerName is now $readyStatus",
             );
-            notifyListeners();
           }
+          notifyListeners();
           break;
 
         default:
@@ -180,6 +213,13 @@ class PongModel extends ChangeNotifier {
     currentWR = null;
     gameStarted = false;
     betAmt = 0;
+
+    // Reset ready to play fields
+    isReadyToPlay = false;
+    countdownStarted = false;
+    countdownMessage = '';
+    currentGameId = '';
+
     notifyListeners();
   }
 
@@ -286,6 +326,32 @@ class PongModel extends ChangeNotifier {
     } catch (e) {
       errorMessage = "Error leaving waiting room: $e";
       developer.log("Error leaving waiting room: $e");
+      notifyListeners();
+    }
+  }
+
+  // Signal that the player is ready to play
+  Future<void> signalReadyToPlay() async {
+    try {
+      if (currentGameId.isEmpty) {
+        errorMessage = "No active game found";
+        notifyListeners();
+        return;
+      }
+
+      final response =
+          await grpcClient.signalReadyToPlay(clientId, currentGameId);
+
+      if (response.success) {
+        isReadyToPlay = true;
+        notificationModel.showNotification("You are ready to play!");
+      } else {
+        errorMessage = response.message;
+      }
+
+      notifyListeners();
+    } catch (e) {
+      errorMessage = "Error signaling ready to play: $e";
       notifyListeners();
     }
   }

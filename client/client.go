@@ -130,6 +130,14 @@ func (pc *PongClient) StartNotifier(ctx context.Context) error {
 						pc.IsReady = ntfn.Ready
 						pc.UpdatesCh <- true
 					}
+					// Forward notification to UI for any player ready event
+					pc.UpdatesCh <- ntfn
+				case pong.NotificationType_COUNTDOWN_UPDATE:
+					// Forward countdown updates to UI
+					pc.UpdatesCh <- ntfn
+				case pong.NotificationType_GAME_READY_TO_PLAY:
+					// Forward game ready to play notifications to UI
+					pc.UpdatesCh <- ntfn
 				default:
 				}
 			}
@@ -427,6 +435,25 @@ func (pc *PongClient) SignalUnready() error {
 
 	// Notify UI of state change
 	pc.UpdatesCh <- UpdatedMsg{}
+
+	return nil
+}
+
+// SignalReadyToPlay signals that the player is ready to start playing
+func (pc *PongClient) SignalReadyToPlay(gameID string) error {
+	ctx := context.Background()
+
+	resp, err := pc.gc.SignalReadyToPlay(ctx, &pong.SignalReadyToPlayRequest{
+		ClientId: pc.ID,
+		GameId:   gameID,
+	})
+	if err != nil {
+		return fmt.Errorf("error signaling ready to play: %w", err)
+	}
+
+	if !resp.Success {
+		return fmt.Errorf("server rejected ready signal: %s", resp.Message)
+	}
 
 	return nil
 }

@@ -50,6 +50,95 @@ class PongGame {
     );
   }
 
+  // Build an overlay widget for the ready-to-play UI and countdown
+  Widget buildReadyToPlayOverlay(BuildContext context, bool isReadyToPlay,
+      bool countdownStarted, String countdownMessage, Function onReadyPressed) {
+    // If countdown has started, show the countdown message in the center
+    if (countdownStarted) {
+      return Center(
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.7),
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: Text(
+            countdownMessage,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 34,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // If not ready to play, show the ready button
+    if (!isReadyToPlay) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "Ready to play?",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                shadows: [
+                  Shadow(
+                    offset: const Offset(2, 2),
+                    blurRadius: 3.0,
+                    color: Colors.black.withOpacity(0.5),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => onReadyPressed(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(30),
+                ),
+              ),
+              child: const Text(
+                "I'm Ready!",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // If ready but waiting for opponent or countdown
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.7),
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: const Text(
+          "Waiting for opponent...",
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
   void handlePaddleMovement(DragUpdateDetails details) {
     double deltaY = details.delta.dy;
     String data = deltaY < 0 ? 'ArrowUp' : 'ArrowDown';

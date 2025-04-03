@@ -60,6 +60,7 @@ type appstate struct {
 	sync.Mutex
 	mode              appMode
 	gameState         *pong.GameUpdate
+	currentGameId     string
 	ctx               context.Context
 	err               error
 	cancel            context.CancelFunc
@@ -141,6 +142,20 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case client.UpdatedMsg:
 		// Simply return the model to refresh the view
 		return m, m.waitForMsg()
+	case *pong.NtfnStreamResponse:
+		// Handle specific notification types
+		switch msg.NotificationType {
+		case pong.NotificationType_GAME_READY_TO_PLAY:
+			m.notification = "=== GAME CREATED! === Press 'r' or SPACE to signal you're ready to play!"
+			m.currentGameId = msg.GameId
+		case pong.NotificationType_COUNTDOWN_UPDATE:
+			m.notification = msg.Message
+		case pong.NotificationType_ON_PLAYER_READY:
+			if msg.PlayerId != m.pc.ID {
+				m.notification = fmt.Sprintf("Opponent is ready to play")
+			}
+		}
+		return m, m.waitForMsg()
 	case tea.KeyMsg:
 		// Add Ctrl+C handling
 		if msg.Type == tea.KeyCtrlC {
@@ -219,6 +234,14 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.mode = gameIdle
 				return m, nil
 			}
+		case "r":
+			if m.isGameRunning {
+				err := m.signalReadyToPlay()
+				if err != nil {
+					m.notification = fmt.Sprintf("Error signaling ready: %v", err)
+				}
+			}
+			return m, nil
 		}
 
 		if msg.Type == tea.KeyF2 {
@@ -226,15 +249,22 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.Type == tea.KeySpace {
-			if m.pc.IsReady {
-				// If already ready, set to unready
+			if m.isGameRunning {
+				// When in game, space signals ready to play
+				err := m.signalReadyToPlay()
+				if err != nil {
+					m.notification = fmt.Sprintf("Error signaling ready: %v", err)
+				}
+				return m, nil
+			} else if m.pc.IsReady {
+				// If already ready in waiting room, set to unready
 				err := m.makeClientUnready()
 				if err != nil {
 					m.notification = fmt.Sprintf("Error signaling unreadiness: %v", err)
 					return m, nil
 				}
 			} else {
-				// If not ready, set to ready
+				// If not ready in waiting room, set to ready
 				m.mode = gameMode
 				err := m.makeClientReady()
 				if err != nil {
@@ -409,6 +439,24 @@ func (m *appstate) leaveRoom() error {
 	return nil
 }
 
+func (m *appstate) signalReadyToPlay() error {
+	if !m.isGameRunning {
+		return fmt.Errorf("no active game to signal readiness")
+	}
+
+	if m.currentGameId == "" {
+		return fmt.Errorf("game ID not available")
+	}
+
+	err := m.pc.SignalReadyToPlay(m.currentGameId)
+	if err != nil {
+		return fmt.Errorf("failed to signal ready to play: %v", err)
+	}
+
+	m.notification = "*** YOU ARE READY TO PLAY! *** Waiting for opponent..."
+	return nil
+}
+
 func (m *appstate) View() string {
 	var b strings.Builder
 
@@ -553,6 +601,14 @@ func (m *appstate) View() string {
 
 			// Append the score
 			gameView.WriteString(fmt.Sprintf("Score: %d - %d\n", m.gameState.P1Score, m.gameState.P2Score))
+
+			// Add ready status information with clear visibility
+			if m.pc.IsReady {
+				gameView.WriteString("\n*** You are READY to play! ***\n")
+			} else {
+				gameView.WriteString("\n*** Press 'r' or SPACE to signal you're ready to play ***\n")
+			}
+
 			b.WriteString(gameView.String())
 		} else {
 			b.WriteString("Waiting for game to start... Not all players are ready.\nHit [Space] to get ready\n")

@@ -22,11 +22,37 @@ class MainContent extends StatelessWidget {
         ));
       }
 
-      return Center(
-        child: pongModel.pongGame.buildWidget(
-          pongModel.gameState!,
-          FocusNode(),
-        ),
+      // Stack to overlay the game with the ready-to-play UI
+      return Stack(
+        children: [
+          // Base game widget
+          Center(
+            child: pongModel.pongGame.buildWidget(
+              pongModel.gameState!,
+              FocusNode(),
+            ),
+          ),
+
+          // Ready-to-play overlay if needed
+          if (!pongModel.countdownStarted && pongModel.currentGameId.isNotEmpty)
+            pongModel.pongGame.buildReadyToPlayOverlay(
+              context,
+              pongModel.isReadyToPlay,
+              pongModel.countdownStarted,
+              pongModel.countdownMessage,
+              () => pongModel.signalReadyToPlay(),
+            ),
+
+          // Countdown overlay
+          if (pongModel.countdownStarted)
+            pongModel.pongGame.buildReadyToPlayOverlay(
+              context,
+              true, // Always show as ready during countdown
+              pongModel.countdownStarted,
+              pongModel.countdownMessage,
+              () {}, // No action during countdown
+            ),
+        ],
       );
     }
 

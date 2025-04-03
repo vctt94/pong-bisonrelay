@@ -3,6 +3,7 @@ package ponggame
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/decred/slog"
@@ -201,72 +202,214 @@ func (s *GameManager) StartGame(ctx context.Context, players []*Player) (*GameIn
 }
 
 func (gm *GameManager) startNewGame(ctx context.Context, players []*Player, id string) *GameInstance {
-	game := engine.NewGame(
-		80, 40,
-		engine.NewPlayer(1, 5),
-		engine.NewPlayer(1, 5),
-		engine.NewBall(1, 1),
-	)
-
-	players[0].PlayerNumber = 1
-	players[1].PlayerNumber = 2
-
-	canvasEngine := New(game)
-	canvasEngine.SetLogger(gm.Log).SetFPS(DEFAULT_FPS)
-
 	framesch := make(chan []byte, INPUT_BUF_SIZE)
 	inputch := make(chan []byte, INPUT_BUF_SIZE)
 	roundResult := make(chan int32)
-	instanceCtx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(ctx)
+
 	// sum of all bets
-	betAmt := players[0].BetAmt + players[1].BetAmt
-	instance := &GameInstance{
+	betAmt := int64(0)
+	for _, player := range players {
+		player.Score = 0
+		betAmt += player.BetAmt
+	}
+
+	newGame := &GameInstance{
 		Id:          id,
-		engine:      canvasEngine,
 		Framesch:    framesch,
 		Inputch:     inputch,
 		roundResult: roundResult,
 		Running:     true,
-		ctx:         instanceCtx,
+		ctx:         ctx,
 		cancel:      cancel,
 		Players:     players,
 		betAmt:      betAmt,
 		log:         gm.Log,
+
+		// Initialize the ready to play fields
+		PlayersReady:     make(map[string]bool),
+		CountdownStarted: false,
+		CountdownValue:   3,
+		GameReady:        false,
 	}
 
-	gm.PlayerGameMap[*players[0].ID] = instance
-	gm.PlayerGameMap[*players[1].ID] = instance
-	return instance
+	// Setup engine
+	swidth := 800.0
+	sheight := 600.0
+
+	newGame.engine = NewEngine(swidth, sheight, players, gm.Log)
+
+	// Map players to this game for easy lookup
+	for _, player := range players {
+		gm.PlayerGameMap[*player.ID] = newGame
+		if player.GameStream != nil {
+			// Send initial dimensions
+			engineState := newGame.engine.State()
+			gameUpdate := &pong.GameUpdate{
+				GameWidth:  swidth,
+				GameHeight: sheight,
+				P1Width:    engineState.PaddleWidth,
+				P1Height:   engineState.PaddleHeight,
+				P2Width:    engineState.PaddleWidth,
+				P2Height:   engineState.PaddleHeight,
+				BallWidth:  engineState.BallWidth,
+				BallHeight: engineState.BallHeight,
+			}
+
+			// Set paddle positions
+			gameUpdate.P1X = engineState.P1PosX
+			gameUpdate.P1Y = engineState.P1PosY
+			gameUpdate.P2X = engineState.P2PosX
+			gameUpdate.P2Y = engineState.P2PosY
+
+			// Set ball position
+			gameUpdate.BallX = engineState.BallPosX
+			gameUpdate.BallY = engineState.BallPosY
+
+			// Set velocities
+			gameUpdate.P1YVelocity = 0
+			gameUpdate.P2YVelocity = 0
+			gameUpdate.BallXVelocity = engineState.BallVelX
+			gameUpdate.BallYVelocity = engineState.BallVelY
+
+			// Set FPS and TPS
+			gameUpdate.Fps = engineState.FPS
+			gameUpdate.Tps = engineState.TPS
+
+			sendInitialGameState(player, gameUpdate)
+		}
+
+		// Notify all players that the game has started
+		if player.NotifierStream != nil {
+			player.NotifierStream.Send(&pong.NtfnStreamResponse{
+				NotificationType: pong.NotificationType_GAME_READY_TO_PLAY,
+				Message:          "Game created! Signal when ready to play.",
+				Started:          true,
+				GameId:           id,
+				PlayerNumber:     player.PlayerNumber,
+			})
+		}
+	}
+
+	return newGame
 }
 
 func (g *GameInstance) Run() {
 	g.Running = true
+
+	// Wait for players to be ready before starting the actual game
 	go func() {
-		// Run a new round only if the game is still running
-		if g.Running {
-			g.engine.NewRound(g.ctx, g.Framesch, g.Inputch, g.roundResult)
+		// Check every 500ms if both players are ready
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-g.ctx.Done():
+				return
+			case <-ticker.C:
+				g.Lock()
+
+				// Check if all players are ready
+				allPlayersReady := len(g.PlayersReady) == len(g.Players)
+
+				// If all players are ready and countdown hasn't started yet, start countdown
+				if allPlayersReady && !g.CountdownStarted && !g.GameReady {
+					g.CountdownStarted = true
+					g.Unlock()
+
+					// Start the countdown
+					go g.startCountdown()
+				} else {
+					g.Unlock()
+				}
+
+				// If game is ready, start the actual gameplay
+				if g.GameReady {
+					// Start actual gameplay
+					go func() {
+						// Run a new round only if the game is still running
+						if g.Running {
+							g.engine.NewRound(g.ctx, g.Framesch, g.Inputch, g.roundResult)
+						}
+					}()
+
+					go func() {
+						for winnerNumber := range g.roundResult {
+							if !g.Running {
+								break
+							}
+
+							// Handle the result of each round
+							g.handleRoundResult(winnerNumber)
+
+							// Check if the game should continue or end
+							if g.shouldEndGame() {
+								// clean up the game after ending
+								g.Cleanup()
+								break
+							} else {
+								g.engine.NewRound(g.ctx, g.Framesch, g.Inputch, g.roundResult)
+							}
+						}
+					}()
+
+					return // Exit this goroutine once the game has started
+				}
+			}
 		}
 	}()
+}
 
-	go func() {
-		for winnerNumber := range g.roundResult {
-			if !g.Running {
-				break
+// startCountdown initiates and manages the countdown before the game starts
+func (g *GameInstance) startCountdown() {
+	countdownTicker := time.NewTicker(1 * time.Second)
+	defer countdownTicker.Stop()
+
+	for {
+		select {
+		case <-g.ctx.Done():
+			return
+		case <-countdownTicker.C:
+			g.Lock()
+
+			// Send countdown notification to all players
+			for _, player := range g.Players {
+				if player.NotifierStream != nil {
+					player.NotifierStream.Send(&pong.NtfnStreamResponse{
+						NotificationType: pong.NotificationType_COUNTDOWN_UPDATE,
+						Message:          fmt.Sprintf("Game starting in %d...", g.CountdownValue),
+						GameId:           g.Id,
+					})
+				}
 			}
 
-			// Handle the result of each round
-			g.handleRoundResult(winnerNumber)
+			g.CountdownValue--
 
-			// Check if the game should continue or end
-			if g.shouldEndGame() {
-				// clean up the game after ending
-				g.Cleanup()
-				break
-			} else {
-				g.engine.NewRound(g.ctx, g.Framesch, g.Inputch, g.roundResult)
+			// Check if countdown has finished
+			if g.CountdownValue < 0 {
+				g.GameReady = true
+				g.CountdownStarted = false
+
+				// Notify players that the game is starting
+				for _, player := range g.Players {
+					if player.NotifierStream != nil {
+						player.NotifierStream.Send(&pong.NtfnStreamResponse{
+							NotificationType: pong.NotificationType_GAME_START,
+							Message:          "Game is starting now!",
+							Started:          true,
+							GameId:           g.Id,
+						})
+					}
+				}
+
+				g.Unlock()
+				return // Exit the countdown goroutine
 			}
+
+			g.Unlock()
 		}
-	}()
+	}
 }
 
 func (g *GameInstance) handleRoundResult(winner int32) {
@@ -313,4 +456,52 @@ func (g *GameInstance) isTimeout() bool {
 	// const maxGameDuration = 10 * time.Minute
 	// return time.Since(g.startTime) >= maxGameDuration
 	return false
+}
+
+// Helper functions to get bet amounts
+func BetAmountP1(players []*Player) int64 {
+	if len(players) > 0 && players[0] != nil {
+		return players[0].BetAmt
+	}
+	return 0
+}
+
+func BetAmountP2(players []*Player) int64 {
+	if len(players) > 1 && players[1] != nil {
+		return players[1].BetAmt
+	}
+	return 0
+}
+
+// NewEngine creates a new CanvasEngine
+func NewEngine(width, height float64, players []*Player, log slog.Logger) *CanvasEngine {
+	game := engine.NewGame(
+		80, 40,
+		engine.NewPlayer(1, 5),
+		engine.NewPlayer(1, 5),
+		engine.NewBall(1, 1),
+	)
+
+	players[0].PlayerNumber = 1
+	players[1].PlayerNumber = 2
+
+	canvasEngine := New(game)
+	canvasEngine.SetLogger(log).SetFPS(DEFAULT_FPS)
+
+	return canvasEngine
+}
+
+// Fix the code that was causing "bytes declared and not used" and "select case must be send or receive" errors
+func sendInitialGameState(player *Player, gameUpdate *pong.GameUpdate) {
+	if player.GameStream == nil {
+		return
+	}
+
+	bytes, err := proto.Marshal(gameUpdate)
+	if err != nil {
+		return
+	}
+
+	// Use the bytes variable by sending it
+	player.GameStream.Send(&pong.GameUpdateBytes{Data: bytes})
 }

@@ -72,6 +72,12 @@ type GameInstance struct {
 	// betAmt sum of total bets
 	betAmt int64
 
+	// Ready to play state
+	PlayersReady     map[string]bool
+	CountdownStarted bool
+	CountdownValue   int
+	GameReady        bool
+
 	log slog.Logger
 }
 

@@ -27,6 +27,7 @@ type PongGameClient interface {
 	StartGameStream(ctx context.Context, in *StartGameStreamRequest, opts ...grpc.CallOption) (PongGame_StartGameStreamClient, error)
 	StartNtfnStream(ctx context.Context, in *StartNtfnStreamRequest, opts ...grpc.CallOption) (PongGame_StartNtfnStreamClient, error)
 	UnreadyGameStream(ctx context.Context, in *UnreadyGameStreamRequest, opts ...grpc.CallOption) (*UnreadyGameStreamResponse, error)
+	SignalReadyToPlay(ctx context.Context, in *SignalReadyToPlayRequest, opts ...grpc.CallOption) (*SignalReadyToPlayResponse, error)
 	// waiting room
 	GetWaitingRoom(ctx context.Context, in *WaitingRoomRequest, opts ...grpc.CallOption) (*WaitingRoomResponse, error)
 	GetWaitingRooms(ctx context.Context, in *WaitingRoomsRequest, opts ...grpc.CallOption) (*WaitingRoomsResponse, error)
@@ -125,6 +126,15 @@ func (c *pongGameClient) UnreadyGameStream(ctx context.Context, in *UnreadyGameS
 	return out, nil
 }
 
+func (c *pongGameClient) SignalReadyToPlay(ctx context.Context, in *SignalReadyToPlayRequest, opts ...grpc.CallOption) (*SignalReadyToPlayResponse, error) {
+	out := new(SignalReadyToPlayResponse)
+	err := c.cc.Invoke(ctx, "/pong.PongGame/SignalReadyToPlay", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *pongGameClient) GetWaitingRoom(ctx context.Context, in *WaitingRoomRequest, opts ...grpc.CallOption) (*WaitingRoomResponse, error) {
 	out := new(WaitingRoomResponse)
 	err := c.cc.Invoke(ctx, "/pong.PongGame/GetWaitingRoom", in, out, opts...)
@@ -179,6 +189,7 @@ type PongGameServer interface {
 	StartGameStream(*StartGameStreamRequest, PongGame_StartGameStreamServer) error
 	StartNtfnStream(*StartNtfnStreamRequest, PongGame_StartNtfnStreamServer) error
 	UnreadyGameStream(context.Context, *UnreadyGameStreamRequest) (*UnreadyGameStreamResponse, error)
+	SignalReadyToPlay(context.Context, *SignalReadyToPlayRequest) (*SignalReadyToPlayResponse, error)
 	// waiting room
 	GetWaitingRoom(context.Context, *WaitingRoomRequest) (*WaitingRoomResponse, error)
 	GetWaitingRooms(context.Context, *WaitingRoomsRequest) (*WaitingRoomsResponse, error)
@@ -203,6 +214,9 @@ func (UnimplementedPongGameServer) StartNtfnStream(*StartNtfnStreamRequest, Pong
 }
 func (UnimplementedPongGameServer) UnreadyGameStream(context.Context, *UnreadyGameStreamRequest) (*UnreadyGameStreamResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UnreadyGameStream not implemented")
+}
+func (UnimplementedPongGameServer) SignalReadyToPlay(context.Context, *SignalReadyToPlayRequest) (*SignalReadyToPlayResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SignalReadyToPlay not implemented")
 }
 func (UnimplementedPongGameServer) GetWaitingRoom(context.Context, *WaitingRoomRequest) (*WaitingRoomResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWaitingRoom not implemented")
@@ -306,6 +320,24 @@ func _PongGame_UnreadyGameStream_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PongGameServer).UnreadyGameStream(ctx, req.(*UnreadyGameStreamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PongGame_SignalReadyToPlay_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SignalReadyToPlayRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PongGameServer).SignalReadyToPlay(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pong.PongGame/SignalReadyToPlay",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PongGameServer).SignalReadyToPlay(ctx, req.(*SignalReadyToPlayRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -414,6 +446,10 @@ var PongGame_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UnreadyGameStream",
 			Handler:    _PongGame_UnreadyGameStream_Handler,
+		},
+		{
+			MethodName: "SignalReadyToPlay",
+			Handler:    _PongGame_SignalReadyToPlay_Handler,
 		},
 		{
 			MethodName: "GetWaitingRoom",
