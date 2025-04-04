@@ -111,6 +111,9 @@ class PongModel extends ChangeNotifier {
           gameStarted = true;
           // can set current wr as null after game starting
           currentWR = null;
+          // Reset countdown state when game actually starts
+          countdownStarted = false;
+          countdownMessage = '';
           notificationModel.showNotification(
             "Game started with ID: ${ntfn.gameId}",
           );

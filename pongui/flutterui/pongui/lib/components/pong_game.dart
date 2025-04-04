@@ -51,91 +51,231 @@ class PongGame {
   }
 
   // Build an overlay widget for the ready-to-play UI and countdown
-  Widget buildReadyToPlayOverlay(BuildContext context, bool isReadyToPlay,
-      bool countdownStarted, String countdownMessage, Function onReadyPressed) {
+  Widget buildReadyToPlayOverlay(
+      BuildContext context,
+      bool isReadyToPlay,
+      bool countdownStarted,
+      String countdownMessage,
+      Function onReadyPressed,
+      GameUpdate gameState) {
     // If countdown has started, show the countdown message in the center
     if (countdownStarted) {
       return Center(
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.7),
+            color: const Color(0xFF1B1E2C).withAlpha(230),
             borderRadius: BorderRadius.circular(15),
-          ),
-          child: Text(
-            countdownMessage,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 34,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-      );
-    }
-
-    // If not ready to play, show the ready button
-    if (!isReadyToPlay) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              "Ready to play?",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                shadows: [
-                  Shadow(
-                    offset: const Offset(2, 2),
-                    blurRadius: 3.0,
-                    color: Colors.black.withOpacity(0.5),
-                  ),
-                ],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.blueAccent.withAlpha(76),
+                spreadRadius: 3,
+                blurRadius: 10,
               ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () => onReadyPressed(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.sports_score,
+                size: 50,
+                color: Colors.blueAccent,
               ),
-              child: const Text(
-                "I'm Ready!",
-                style: TextStyle(
-                  fontSize: 18,
+              const SizedBox(height: 20),
+              Text(
+                countdownMessage,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 40,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
     }
 
-    // If ready but waiting for opponent or countdown
+    // If not ready to play, show the ready button with game controls info
+    if (!isReadyToPlay) {
+      return Container(
+        color: Color.fromRGBO(0, 0, 0, 0.65),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Static paddle and ball visualization
+              SizedBox(
+                height: 80,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                    ),
+                    SizedBox(width: 100),
+                    Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    SizedBox(width: 100),
+                    Container(
+                      width: 10,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 40),
+              Text(
+                "Ready to play?",
+                style: const TextStyle(
+                  color: Colors.blueAccent,
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 40),
+              ElevatedButton(
+                onPressed: () => onReadyPressed(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                ),
+                child: const Text(
+                  "I'm Ready!",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 50),
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1B1E2C),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blueAccent.withAlpha(76)),
+                ),
+                child: Column(
+                  children: [
+                    const Text(
+                      "GAME CONTROLS",
+                      style: TextStyle(
+                        color: Colors.blueAccent,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _controlKey("W", "Up"),
+                        const SizedBox(width: 10),
+                        _controlKey("S", "Down"),
+                        const SizedBox(width: 25),
+                        _controlKey("↑", "Up"),
+                        const SizedBox(width: 10),
+                        _controlKey("↓", "Down"),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // If ready but waiting for opponent
     return Center(
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.7),
-          borderRadius: BorderRadius.circular(15),
+          color: const Color(0xFF1B1E2C),
+          borderRadius: BorderRadius.circular(12),
         ),
-        child: const Text(
-          "Waiting for opponent...",
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 40,
+              height: 40,
+              child: CircularProgressIndicator(
+                color: Colors.blueAccent,
+                backgroundColor: Colors.grey.withAlpha(51),
+                strokeWidth: 4,
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              "Waiting for opponent...",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  // Helper widget for control key display
+  Widget _controlKey(String key, String action) {
+    return Column(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade800,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.grey.shade600),
+          ),
+          child: Center(
+            child: Text(
+              key,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          action,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 12,
+          ),
+        ),
+      ],
     );
   }
 
