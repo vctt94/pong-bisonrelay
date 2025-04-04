@@ -91,6 +91,11 @@ type appstate struct {
 	// Track which keys are pressed for paddle movement
 	upKeyPressed   bool
 	downKeyPressed bool
+
+	// Auto key release timer
+	keyReleaseDelay time.Duration
+	upKeyTimer      *time.Timer
+	downKeyTimer    *time.Timer
 }
 
 func (m *appstate) listenForUpdates() tea.Cmd {
@@ -121,6 +126,9 @@ func (m *appstate) Init() tea.Cmd {
 	m.viewport = viewport.New(0, 0)
 	m.logViewport = viewport.New(0, 0)
 	m.logBuffer = make([]string, 0)
+
+	// Set default key release delay to 150ms
+	m.keyReleaseDelay = 50 * time.Millisecond
 
 	return tea.Batch(
 		m.listenForUpdates(),
@@ -240,6 +248,18 @@ func (m *appstate) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if err != nil {
 					m.notification = fmt.Sprintf("Error signaling ready: %v", err)
 				}
+			}
+			return m, nil
+		case "+", "=":
+			if m.keyReleaseDelay < 500*time.Millisecond {
+				m.keyReleaseDelay += 25 * time.Millisecond
+				m.notification = fmt.Sprintf("Key release delay: %d ms", m.keyReleaseDelay/time.Millisecond)
+			}
+			return m, nil
+		case "-", "_":
+			if m.keyReleaseDelay > 50*time.Millisecond {
+				m.keyReleaseDelay -= 25 * time.Millisecond
+				m.notification = fmt.Sprintf("Key release delay: %d ms", m.keyReleaseDelay/time.Millisecond)
 			}
 			return m, nil
 		}
@@ -377,10 +397,32 @@ func (m *appstate) handleGameInput(msg tea.KeyMsg) tea.Cmd {
 			if !m.upKeyPressed {
 				input = "ArrowUp"
 				m.upKeyPressed = true
+
+				// Cancel existing timer if any
+				if m.upKeyTimer != nil {
+					m.upKeyTimer.Stop()
+				}
+
+				// Set timer to automatically release the key
+				m.upKeyTimer = time.AfterFunc(m.keyReleaseDelay, func() {
+					m.Lock()
+					if m.upKeyPressed {
+						m.upKeyPressed = false
+						err := m.pc.SendInput("ArrowUpStop")
+						if err != nil {
+							m.log.Errorf("Error auto-releasing up key: %v", err)
+						}
+					}
+					m.Unlock()
+				})
+
 				// If down was pressed, release it
 				if m.downKeyPressed {
 					m.pc.SendInput("ArrowDownStop")
 					m.downKeyPressed = false
+					if m.downKeyTimer != nil {
+						m.downKeyTimer.Stop()
+					}
 				}
 			}
 			m.Unlock()
@@ -390,10 +432,32 @@ func (m *appstate) handleGameInput(msg tea.KeyMsg) tea.Cmd {
 			if !m.downKeyPressed {
 				input = "ArrowDown"
 				m.downKeyPressed = true
+
+				// Cancel existing timer if any
+				if m.downKeyTimer != nil {
+					m.downKeyTimer.Stop()
+				}
+
+				// Set timer to automatically release the key
+				m.downKeyTimer = time.AfterFunc(m.keyReleaseDelay, func() {
+					m.Lock()
+					if m.downKeyPressed {
+						m.downKeyPressed = false
+						err := m.pc.SendInput("ArrowDownStop")
+						if err != nil {
+							m.log.Errorf("Error auto-releasing down key: %v", err)
+						}
+					}
+					m.Unlock()
+				})
+
 				// If up was pressed, release it
 				if m.upKeyPressed {
 					m.pc.SendInput("ArrowUpStop")
 					m.upKeyPressed = false
+					if m.upKeyTimer != nil {
+						m.upKeyTimer.Stop()
+					}
 				}
 			}
 			m.Unlock()
@@ -500,6 +564,9 @@ func (m *appstate) View() string {
 				b.WriteString("[Space] - Toggle ready status (currently NOT READY)\n")
 			}
 		}
+
+		// Add key release delay info
+		b.WriteString(fmt.Sprintf("⏱️ Key Release Delay: %d ms\n", m.keyReleaseDelay/time.Millisecond))
 	}
 
 	// Switch based on the current mode
@@ -510,7 +577,8 @@ func (m *appstate) View() string {
 	case gameMode:
 		b.WriteString("\n[Game Mode]\n")
 		b.WriteString("Press 'Esc' to return to the main menu.\n")
-		b.WriteString("Use W/S or Arrow Keys to move.\n\n")
+		b.WriteString("Use W/S or Arrow Keys to move.\n")
+		b.WriteString(fmt.Sprintf("Use +/- to adjust key release delay (current: %d ms).\n\n", m.keyReleaseDelay/time.Millisecond))
 
 		if m.gameState != nil {
 			var gameView strings.Builder
