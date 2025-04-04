@@ -28,6 +28,8 @@ const NotificationType$json = {
     {'1': 'ON_PLAYER_READY', '2': 8},
     {'1': 'ON_WR_REMOVED', '2': 9},
     {'1': 'PLAYER_LEFT_WR', '2': 10},
+    {'1': 'COUNTDOWN_UPDATE', '2': 11},
+    {'1': 'GAME_READY_TO_PLAY', '2': 12},
   ],
 };
 
@@ -37,7 +39,7 @@ final $typed_data.Uint8List notificationTypeDescriptor = $convert.base64Decode(
     'FSVBACEgwKCEdBTUVfRU5EEAMSGQoVT1BQT05FTlRfRElTQ09OTkVDVEVEEAQSFQoRQkVUX0FN'
     'T1VOVF9VUERBVEUQBRIUChBQTEFZRVJfSk9JTkVEX1dSEAYSEQoNT05fV1JfQ1JFQVRFRBAHEh'
     'MKD09OX1BMQVlFUl9SRUFEWRAIEhEKDU9OX1dSX1JFTU9WRUQQCRISCg5QTEFZRVJfTEVGVF9X'
-    'UhAK');
+    'UhAKEhQKEENPVU5URE9XTl9VUERBVEUQCxIWChJHQU1FX1JFQURZX1RPX1BMQVkQDA==');
 
 @$core.Deprecated('Use unreadyGameStreamRequestDescriptor instead')
 const UnreadyGameStreamRequest$json = {
@@ -349,4 +351,32 @@ const LeaveWaitingRoomResponse$json = {
 final $typed_data.Uint8List leaveWaitingRoomResponseDescriptor = $convert.base64Decode(
     'ChhMZWF2ZVdhaXRpbmdSb29tUmVzcG9uc2USGAoHc3VjY2VzcxgBIAEoCFIHc3VjY2VzcxIYCg'
     'dtZXNzYWdlGAIgASgJUgdtZXNzYWdl');
+
+@$core.Deprecated('Use signalReadyToPlayRequestDescriptor instead')
+const SignalReadyToPlayRequest$json = {
+  '1': 'SignalReadyToPlayRequest',
+  '2': [
+    {'1': 'client_id', '3': 1, '4': 1, '5': 9, '10': 'clientId'},
+    {'1': 'game_id', '3': 2, '4': 1, '5': 9, '10': 'gameId'},
+  ],
+};
+
+/// Descriptor for `SignalReadyToPlayRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List signalReadyToPlayRequestDescriptor = $convert.base64Decode(
+    'ChhTaWduYWxSZWFkeVRvUGxheVJlcXVlc3QSGwoJY2xpZW50X2lkGAEgASgJUghjbGllbnRJZB'
+    'IXCgdnYW1lX2lkGAIgASgJUgZnYW1lSWQ=');
+
+@$core.Deprecated('Use signalReadyToPlayResponseDescriptor instead')
+const SignalReadyToPlayResponse$json = {
+  '1': 'SignalReadyToPlayResponse',
+  '2': [
+    {'1': 'success', '3': 1, '4': 1, '5': 8, '10': 'success'},
+    {'1': 'message', '3': 2, '4': 1, '5': 9, '10': 'message'},
+  ],
+};
+
+/// Descriptor for `SignalReadyToPlayResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List signalReadyToPlayResponseDescriptor = $convert.base64Decode(
+    'ChlTaWduYWxSZWFkeVRvUGxheVJlc3BvbnNlEhgKB3N1Y2Nlc3MYASABKAhSB3N1Y2Nlc3MSGA'
+    'oHbWVzc2FnZRgCIAEoCVIHbWVzc2FnZQ==');
 

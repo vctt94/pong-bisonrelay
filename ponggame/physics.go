@@ -18,8 +18,6 @@ const (
 	min_ball_y_vel_ratio     = 0.1
 	y_vel_ratio              = 1
 	initial_ball_y_vel       = 0.20
-
-	magic_p = 1
 )
 
 // Helper function to check AABB intersection
@@ -212,10 +210,14 @@ func (e *CanvasEngine) reset() *CanvasEngine {
 }
 
 func (e *CanvasEngine) resetBall() *CanvasEngine {
-	// Center ball
+	// Calculate the center position of the ball
+	ballCenterX := e.Game.Width * 0.5
+	ballCenterY := e.Game.Height * 0.5
+
+	// Set BallPos to the top-left corner based on the center
 	e.BallPos = Vec2{
-		X: e.Game.Width / 2.0,
-		Y: e.Game.Height / 2.0,
+		X: ballCenterX - e.Game.Ball.Width*0.5,
+		Y: ballCenterY - e.Game.Ball.Height*0.5,
 	}
 
 	// Reset velocity multiplier to 1.0 at the start of each round
@@ -235,17 +237,25 @@ func (e *CanvasEngine) resetBall() *CanvasEngine {
 }
 
 func (e *CanvasEngine) resetPlayers() *CanvasEngine {
-	// P1
+	// Calculate P1 center position (left side)
+	p1CenterX := e.Game.P1.Width * 1.5 // Position at 1.5x paddle width from left edge
+	p1CenterY := e.Game.Height * 0.5   // Vertical center
+
+	// Set P1Pos to the top-left corner based on center
 	e.P1Pos = Vec2{
-		X: 0,
-		Y: e.Game.Height/2 - e.Game.P1.Height/2,
+		X: p1CenterX - e.Game.P1.Width*0.5,
+		Y: p1CenterY - e.Game.P1.Height*0.5,
 	}
 	e.P1Vel = Vec2{0, 0}
 
-	// P2
+	// Calculate P2 center position (right side)
+	p2CenterX := e.Game.Width - e.Game.P2.Width*1.5 // Position at 1.5x paddle width from right edge
+	p2CenterY := e.Game.Height * 0.5                // Vertical center
+
+	// Set P2Pos to the top-left corner based on center
 	e.P2Pos = Vec2{
-		X: e.Game.Width - e.Game.P1.Width,
-		Y: e.Game.Height/2 - e.Game.P2.Height/2,
+		X: p2CenterX - e.Game.P2.Width*0.5,
+		Y: p2CenterY - e.Game.P2.Height*0.5,
 	}
 	e.P2Vel = Vec2{0, 0}
 
@@ -292,10 +302,6 @@ func (e *CanvasEngine) p2Down() *CanvasEngine {
 	return e
 }
 
-func (e *CanvasEngine) inverseBallXYVelocity() *CanvasEngine {
-	return e.inverseBallXVelocity().inverseBallYVelocity()
-}
-
 func (e *CanvasEngine) inverseBallXVelocity() *CanvasEngine {
 	e.BallVel.X *= -1
 	return e
@@ -307,46 +313,103 @@ func (e *CanvasEngine) inverseBallYVelocity() *CanvasEngine {
 }
 
 func (e *CanvasEngine) deOutOfBoundsPlayers() *CanvasEngine {
-	// P1, top
-	if e.P1Pos.Y <= 0 {
-		e.P1Pos.Y = 0
+	p1Rect := e.p1Rect()
+	p2Rect := e.p2Rect()
+
+	// P1, top boundary
+	if p1Rect.Cy-p1Rect.HalfH <= 0 {
+		// Reposition paddle center to be exactly paddle halfHeight from the top
+		p1Rect.Cy = p1Rect.HalfH
+		// Update the top-left position based on the new center
+		e.P1Pos.Y = p1Rect.Cy - p1Rect.HalfH
 		e.P1Vel.Y = 0
 	}
-	// P1, bottom
-	if e.P1Pos.Y+e.Game.P1.Height >= e.Game.Height {
-		e.P1Pos.Y = e.Game.Height - e.Game.P1.Height
+
+	// P1, bottom boundary
+	if p1Rect.Cy+p1Rect.HalfH >= e.Game.Height {
+		// Reposition paddle center to be exactly paddle halfHeight from the bottom
+		p1Rect.Cy = e.Game.Height - p1Rect.HalfH
+		// Update the top-left position based on the new center
+		e.P1Pos.Y = p1Rect.Cy - p1Rect.HalfH
 		e.P1Vel.Y = 0
 	}
-	// P2, top
-	if e.P2Pos.Y <= 0 {
-		e.P2Pos.Y = 0
+
+	// P2, top boundary
+	if p2Rect.Cy-p2Rect.HalfH <= 0 {
+		// Reposition paddle center to be exactly paddle halfHeight from the top
+		p2Rect.Cy = p2Rect.HalfH
+		// Update the top-left position based on the new center
+		e.P2Pos.Y = p2Rect.Cy - p2Rect.HalfH
 		e.P2Vel.Y = 0
 	}
-	// P2, bottom
-	if e.P2Pos.Y+e.Game.P2.Height >= e.Game.Height-0 {
-		e.P2Pos.Y = e.Game.Height - e.Game.P2.Height - 0
+
+	// P2, bottom boundary
+	if p2Rect.Cy+p2Rect.HalfH >= e.Game.Height {
+		// Reposition paddle center to be exactly paddle halfHeight from the bottom
+		p2Rect.Cy = e.Game.Height - p2Rect.HalfH
+		// Update the top-left position based on the new center
+		e.P2Pos.Y = p2Rect.Cy - p2Rect.HalfH
 		e.P2Vel.Y = 0
 	}
+
 	return e
 }
 
 func (e *CanvasEngine) deOutOfBoundsBall() *CanvasEngine {
-	// Top
-	if e.BallPos.Y <= 0 {
-		e.BallPos.Y = -1
+	ballRect := e.ballRect()
+	p1Rect := e.p1Rect()
+	p2Rect := e.p2Rect()
+
+	// Top wall - use center-based calculation
+	if ballRect.Cy-ballRect.HalfH <= 0 {
+		// Reposition ball center to be exactly ballRect.HalfH from the top
+		ballRect.Cy = ballRect.HalfH
+		// Update the top-left position based on the new center
+		e.BallPos.Y = ballRect.Cy - ballRect.HalfH
 	}
-	// Bottom
-	if e.BallPos.Y+e.Game.Ball.Height >= e.Game.Height {
-		e.BallPos.Y = e.Game.Height - e.Game.Ball.Height - 1
+
+	// Bottom wall - use center-based calculation
+	if ballRect.Cy+ballRect.HalfH >= e.Game.Height {
+		// Reposition ball center to be exactly ballRect.HalfH from the bottom
+		ballRect.Cy = e.Game.Height - ballRect.HalfH
+		// Update the top-left position based on the new center
+		e.BallPos.Y = ballRect.Cy - ballRect.HalfH
 	}
-	// P1
-	if e.BallPos.X-e.Game.Ball.Width <= e.P1Pos.X {
-		e.BallPos.X = e.P1Pos.X + e.Game.P1.Width
+
+	// Left paddle (P1) - use center-based calculation
+	if ballRect.Cx-ballRect.HalfW <= p1Rect.Cx+p1Rect.HalfW {
+		// Calculate overlap between ball and paddle centers
+		overlapX := (ballRect.HalfW + p1Rect.HalfW) - math.Abs(ballRect.Cx-p1Rect.Cx)
+		if overlapX > 0 {
+			// If ball is to the right of the paddle's center, move it right by overlapX
+			if ballRect.Cx > p1Rect.Cx {
+				ballRect.Cx += overlapX
+			} else {
+				// This shouldn't happen in normal gameplay, but handle it anyway
+				ballRect.Cx = p1Rect.Cx + p1Rect.HalfW + ballRect.HalfW
+			}
+			// Update the top-left position based on the new center
+			e.BallPos.X = ballRect.Cx - ballRect.HalfW
+		}
 	}
-	// P2
-	if e.BallPos.X+e.Game.Ball.Width >= e.P2Pos.X {
-		e.BallPos.X = e.P2Pos.X - magic_p
+
+	// Right paddle (P2) - use center-based calculation
+	if ballRect.Cx+ballRect.HalfW >= p2Rect.Cx-p2Rect.HalfW {
+		// Calculate overlap between ball and paddle centers
+		overlapX := (ballRect.HalfW + p2Rect.HalfW) - math.Abs(ballRect.Cx-p2Rect.Cx)
+		if overlapX > 0 {
+			// If ball is to the left of the paddle's center, move it left by overlapX
+			if ballRect.Cx < p2Rect.Cx {
+				ballRect.Cx -= overlapX
+			} else {
+				// This shouldn't happen in normal gameplay, but handle it anyway
+				ballRect.Cx = p2Rect.Cx - p2Rect.HalfW - ballRect.HalfW
+			}
+			// Update the top-left position based on the new center
+			e.BallPos.X = ballRect.Cx - ballRect.HalfW
+		}
 	}
+
 	return e
 }
 

@@ -10,6 +10,7 @@ service PongGame {
   rpc StartGameStream(StartGameStreamRequest) returns (stream GameUpdateBytes);
   rpc StartNtfnStream(StartNtfnStreamRequest) returns (stream NtfnStreamResponse);
   rpc UnreadyGameStream(UnreadyGameStreamRequest) returns (UnreadyGameStreamResponse);
+  rpc SignalReadyToPlay(SignalReadyToPlayRequest) returns (SignalReadyToPlayResponse);
   
   // waiting room
   rpc GetWaitingRoom(WaitingRoomRequest) returns (WaitingRoomResponse);
@@ -32,6 +33,8 @@ enum NotificationType {
   ON_PLAYER_READY = 8;
   ON_WR_REMOVED = 9;
   PLAYER_LEFT_WR = 10;
+  COUNTDOWN_UPDATE = 11;
+  GAME_READY_TO_PLAY = 12;
 }
 
 message UnreadyGameStreamRequest {
@@ -161,6 +164,18 @@ message LeaveWaitingRoomRequest {
 }
 
 message LeaveWaitingRoomResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// SignalReadyToPlayRequest contains information about the client signaling readiness
+message SignalReadyToPlayRequest {
+  string client_id = 1;
+  string game_id = 2;
+}
+
+// SignalReadyToPlayResponse contains the result of the ready signal
+message SignalReadyToPlayResponse {
   bool success = 1;
   string message = 2;
 }

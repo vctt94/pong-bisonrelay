@@ -1618,6 +1618,136 @@ class LeaveWaitingRoomResponse extends $pb.GeneratedMessage {
   void clearMessage() => clearField(2);
 }
 
+/// SignalReadyToPlayRequest contains information about the client signaling readiness
+class SignalReadyToPlayRequest extends $pb.GeneratedMessage {
+  factory SignalReadyToPlayRequest({
+    $core.String? clientId,
+    $core.String? gameId,
+  }) {
+    final $result = create();
+    if (clientId != null) {
+      $result.clientId = clientId;
+    }
+    if (gameId != null) {
+      $result.gameId = gameId;
+    }
+    return $result;
+  }
+  SignalReadyToPlayRequest._() : super();
+  factory SignalReadyToPlayRequest.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
+  factory SignalReadyToPlayRequest.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'SignalReadyToPlayRequest', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'clientId')
+    ..aOS(2, _omitFieldNames ? '' : 'gameId')
+    ..hasRequiredFields = false
+  ;
+
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
+  'Will be removed in next major version')
+  SignalReadyToPlayRequest clone() => SignalReadyToPlayRequest()..mergeFromMessage(this);
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
+  'Will be removed in next major version')
+  SignalReadyToPlayRequest copyWith(void Function(SignalReadyToPlayRequest) updates) => super.copyWith((message) => updates(message as SignalReadyToPlayRequest)) as SignalReadyToPlayRequest;
+
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SignalReadyToPlayRequest create() => SignalReadyToPlayRequest._();
+  SignalReadyToPlayRequest createEmptyInstance() => create();
+  static $pb.PbList<SignalReadyToPlayRequest> createRepeated() => $pb.PbList<SignalReadyToPlayRequest>();
+  @$core.pragma('dart2js:noInline')
+  static SignalReadyToPlayRequest getDefault() => _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<SignalReadyToPlayRequest>(create);
+  static SignalReadyToPlayRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get clientId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set clientId($core.String v) { $_setString(0, v); }
+  @$pb.TagNumber(1)
+  $core.bool hasClientId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearClientId() => clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get gameId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set gameId($core.String v) { $_setString(1, v); }
+  @$pb.TagNumber(2)
+  $core.bool hasGameId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearGameId() => clearField(2);
+}
+
+/// SignalReadyToPlayResponse contains the result of the ready signal
+class SignalReadyToPlayResponse extends $pb.GeneratedMessage {
+  factory SignalReadyToPlayResponse({
+    $core.bool? success,
+    $core.String? message,
+  }) {
+    final $result = create();
+    if (success != null) {
+      $result.success = success;
+    }
+    if (message != null) {
+      $result.message = message;
+    }
+    return $result;
+  }
+  SignalReadyToPlayResponse._() : super();
+  factory SignalReadyToPlayResponse.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
+  factory SignalReadyToPlayResponse.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'SignalReadyToPlayResponse', package: const $pb.PackageName(_omitMessageNames ? '' : 'pong'), createEmptyInstance: create)
+    ..aOB(1, _omitFieldNames ? '' : 'success')
+    ..aOS(2, _omitFieldNames ? '' : 'message')
+    ..hasRequiredFields = false
+  ;
+
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
+  'Will be removed in next major version')
+  SignalReadyToPlayResponse clone() => SignalReadyToPlayResponse()..mergeFromMessage(this);
+  @$core.Deprecated(
+  'Using this can add significant overhead to your binary. '
+  'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
+  'Will be removed in next major version')
+  SignalReadyToPlayResponse copyWith(void Function(SignalReadyToPlayResponse) updates) => super.copyWith((message) => updates(message as SignalReadyToPlayResponse)) as SignalReadyToPlayResponse;
+
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SignalReadyToPlayResponse create() => SignalReadyToPlayResponse._();
+  SignalReadyToPlayResponse createEmptyInstance() => create();
+  static $pb.PbList<SignalReadyToPlayResponse> createRepeated() => $pb.PbList<SignalReadyToPlayResponse>();
+  @$core.pragma('dart2js:noInline')
+  static SignalReadyToPlayResponse getDefault() => _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<SignalReadyToPlayResponse>(create);
+  static SignalReadyToPlayResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.bool get success => $_getBF(0);
+  @$pb.TagNumber(1)
+  set success($core.bool v) { $_setBool(0, v); }
+  @$pb.TagNumber(1)
+  $core.bool hasSuccess() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSuccess() => clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get message => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set message($core.String v) { $_setString(1, v); }
+  @$pb.TagNumber(2)
+  $core.bool hasMessage() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearMessage() => clearField(2);
+}
+
 
 const _omitFieldNames = $core.bool.fromEnvironment('protobuf.omit_field_names');
 const _omitMessageNames = $core.bool.fromEnvironment('protobuf.omit_message_names');

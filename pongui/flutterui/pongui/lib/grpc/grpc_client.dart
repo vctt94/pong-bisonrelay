@@ -103,6 +103,22 @@ class GrpcPongClient {
     }
   }
 
+  // Signal that the player is ready to play
+  Future<SignalReadyToPlayResponse> signalReadyToPlay(
+      String clientId, String gameId) async {
+    final request = SignalReadyToPlayRequest()
+      ..clientId = clientId
+      ..gameId = gameId;
+
+    try {
+      final response = await _client.signalReadyToPlay(request);
+      return response;
+    } catch (e) {
+      print('Error during signalReadyToPlay: $e');
+      rethrow;
+    }
+  }
+
   // Optionally, clean up the gRPC connection
   Future<void> shutdown() async {
     await _channel.shutdown();

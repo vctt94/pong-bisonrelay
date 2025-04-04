@@ -22,11 +22,60 @@ class MainContent extends StatelessWidget {
         ));
       }
 
-      return Center(
-        child: pongModel.pongGame.buildWidget(
-          pongModel.gameState!,
-          FocusNode(),
-        ),
+      // Stack to overlay the game with the ready-to-play UI
+      return Stack(
+        children: [
+          // Black background layer
+          Container(color: Colors.black),
+
+          // Base game widget - always show the game state when available
+          Positioned.fill(
+            child: pongModel.pongGame.buildWidget(
+              pongModel.gameState!,
+              FocusNode(),
+            ),
+          ),
+
+          // Ready-to-play overlay if needed
+          if (!pongModel.countdownStarted &&
+              !pongModel.isReadyToPlay &&
+              pongModel.currentGameId.isNotEmpty)
+            Positioned.fill(
+              child: Container(
+                color: Color.fromRGBO(0, 0, 0, 0.5),
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: pongModel.pongGame.buildReadyToPlayOverlay(
+                    context,
+                    pongModel.isReadyToPlay,
+                    pongModel.countdownStarted,
+                    pongModel.countdownMessage,
+                    () => pongModel.signalReadyToPlay(),
+                    pongModel.gameState!,
+                  ),
+                ),
+              ),
+            ),
+
+          // Countdown overlay
+          if (pongModel.countdownStarted)
+            Positioned.fill(
+              child: Container(
+                color: Color.fromRGBO(0, 0, 0, 0.5),
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: pongModel.pongGame.buildReadyToPlayOverlay(
+                    context,
+                    true, // Always show as ready during countdown
+                    pongModel.countdownStarted,
+                    pongModel.countdownMessage,
+                    () {}, // No action during countdown
+                    pongModel.gameState!,
+                  ),
+                ),
+              ),
+            ),
+        ],
       );
     }
 
@@ -71,7 +120,7 @@ class MainContent extends StatelessWidget {
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 24.0),
           child: Text(
-            "To place a bet send a tip to pongbot on Bisonn Relay.",
+            "To place a bet send a tip to pongbot on Bison Relay.",
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 16,
@@ -92,7 +141,7 @@ class MainContent extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1B1E2C).withOpacity(0.6),
+                          color: Color.fromRGBO(27, 30, 44, 0.6),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
