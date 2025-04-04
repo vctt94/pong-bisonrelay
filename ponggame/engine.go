@@ -49,10 +49,7 @@ func (e *CanvasEngine) Error() error {
 // NewRound resets the ball, players and starts a new round. It accepts
 // a frames channel to write into and input channel to read from
 func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inputch <-chan []byte, roundResult chan<- int32) {
-	e.log.Info("new round")
-
-	time.Sleep(time.Millisecond * 1500) // 1.5 seconds
-
+	time.Sleep(time.Second)
 	e.reset()
 
 	// Calculates and writes frames

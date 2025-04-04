@@ -373,6 +373,30 @@ func (g *GameInstance) startCountdown() {
 		case <-countdownTicker.C:
 			g.Lock()
 
+			engineState := g.engine.State()
+			gameUpdate := &pong.GameUpdate{
+				GameWidth:     g.engine.Game.Width,
+				GameHeight:    g.engine.Game.Height,
+				P1Width:       engineState.PaddleWidth,
+				P1Height:      engineState.PaddleHeight,
+				P2Width:       engineState.PaddleWidth,
+				P2Height:      engineState.PaddleHeight,
+				BallWidth:     engineState.BallWidth,
+				BallHeight:    engineState.BallHeight,
+				P1X:           engineState.P1PosX,
+				P1Y:           engineState.P1PosY,
+				P2X:           engineState.P2PosX,
+				P2Y:           engineState.P2PosY,
+				BallX:         engineState.BallPosX,
+				BallY:         engineState.BallPosY,
+				P1YVelocity:   0,
+				P2YVelocity:   0,
+				BallXVelocity: 0,
+				BallYVelocity: 0,
+				Fps:           engineState.FPS,
+				Tps:           engineState.TPS,
+			}
+
 			// Send countdown notification to all players
 			for _, player := range g.Players {
 				if player.NotifierStream != nil {
@@ -381,6 +405,11 @@ func (g *GameInstance) startCountdown() {
 						Message:          fmt.Sprintf("Game starting in %d...", g.CountdownValue),
 						GameId:           g.Id,
 					})
+				}
+
+				// Send current game state to all players during countdown
+				if player.GameStream != nil {
+					sendInitialGameState(player, gameUpdate)
 				}
 			}
 
@@ -475,11 +504,12 @@ func BetAmountP2(players []*Player) int64 {
 
 // NewEngine creates a new CanvasEngine
 func NewEngine(width, height float64, players []*Player, log slog.Logger) *CanvasEngine {
+	// Create game with dimensions that match the display
 	game := engine.NewGame(
-		80, 40,
-		engine.NewPlayer(1, 5),
-		engine.NewPlayer(1, 5),
-		engine.NewBall(1, 1),
+		width, height,
+		engine.NewPlayer(10, 75),
+		engine.NewPlayer(10, 75),
+		engine.NewBall(15, 15),
 	)
 
 	players[0].PlayerNumber = 1
@@ -487,6 +517,8 @@ func NewEngine(width, height float64, players []*Player, log slog.Logger) *Canva
 
 	canvasEngine := New(game)
 	canvasEngine.SetLogger(log).SetFPS(DEFAULT_FPS)
+
+	canvasEngine.reset()
 
 	return canvasEngine
 }

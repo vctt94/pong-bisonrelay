@@ -56,7 +56,7 @@ func (p *Player) ResetPlayer() {
 }
 
 type GameInstance struct {
-	sync.Mutex
+	sync.RWMutex
 	Id          string
 	engine      *CanvasEngine
 	Framesch    chan []byte
