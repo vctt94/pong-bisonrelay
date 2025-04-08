@@ -40,14 +40,16 @@ class TopStatusCard extends StatelessWidget {
                           ),
                           Text(
                             pongModel.isReady
-                                ? (pongModel.gameStarted ? "In Game" : "Ready")
+                                ? (pongModel.isGameStarted
+                                    ? "In Game"
+                                    : "Ready")
                                 : "Not Ready",
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ],
                       ),
                       // If game hasn't started, show waiting room info
-                      if (!pongModel.gameStarted) ...[
+                      if (!pongModel.isGameStarted) ...[
                         const SizedBox(height: 12),
                         Divider(color: Colors.grey.shade400),
                         const SizedBox(height: 12),

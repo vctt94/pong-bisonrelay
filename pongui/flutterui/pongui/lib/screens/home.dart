@@ -16,7 +16,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final pongModel = Provider.of<PongModel>(context);
-    final bool gameInProgress = pongModel.gameStarted;
+    final bool gameInProgress = pongModel.isGameStarted;
 
     return SharedLayout(
       title: "Pong Game - Home",

@@ -11,6 +11,17 @@ import 'package:golib_plugin/grpc/generated/pong.pbgrpc.dart';
 import 'package:pongui/grpc/grpc_client.dart';
 import 'package:pongui/models/notifications.dart';
 
+// Define a clear enum for game states
+enum GameState {
+  idle, // Initial state, not in a game or waiting room
+  inWaitingRoom, // In a waiting room, not ready
+  waitingRoomReady, // In a waiting room and marked as ready
+  gameInitialized, // Game has started but not ready to play
+  readyToPlay, // Signaled ready to play but waiting for opponent
+  countdown, // Countdown in progress
+  playing // Active gameplay
+}
+
 class PongModel extends ChangeNotifier {
   late GrpcPongClient grpcClient;
   late PongGame pongGame;
@@ -18,20 +29,36 @@ class PongModel extends ChangeNotifier {
 
   String clientId = '';
   String nick = '';
-  bool isReady = false;
-  bool gameStarted = false;
-  bool isConnected = false;
   int betAmt = 0;
   String errorMessage = '';
   List<LocalWaitingRoom> waitingRooms = [];
   LocalWaitingRoom? currentWR;
   GameUpdate? gameState;
 
-  // Ready to play fields
+  // Connection state
+  bool isConnected = false;
+
+  // Game related state
+  GameState _currentGameState = GameState.idle;
   String currentGameId = '';
-  bool isReadyToPlay = false;
-  bool countdownStarted = false;
   String countdownMessage = '';
+
+  // Getters for the game state
+  GameState get currentGameState => _currentGameState;
+  bool get isInGame =>
+      _currentGameState != GameState.idle &&
+      _currentGameState != GameState.inWaitingRoom &&
+      _currentGameState != GameState.waitingRoomReady;
+  bool get isReady => _currentGameState == GameState.waitingRoomReady;
+  bool get isGameStarted =>
+      _currentGameState != GameState.idle &&
+      _currentGameState != GameState.inWaitingRoom &&
+      _currentGameState != GameState.waitingRoomReady;
+  bool get isReadyToPlay =>
+      _currentGameState == GameState.readyToPlay ||
+      _currentGameState == GameState.countdown ||
+      _currentGameState == GameState.playing;
+  bool get countdownStarted => _currentGameState == GameState.countdown;
 
   PongModel(Config cfg, this.notificationModel) {
     _initPongClient(cfg);
@@ -94,7 +121,6 @@ class PongModel extends ChangeNotifier {
       switch (ntfn.notificationType) {
         case NotificationType.BET_AMOUNT_UPDATE:
           if (ntfn.playerId == clientId) {
-            print("Bet amount updated: ${ntfn.betAmt}");
             betAmt = ntfn.betAmt.toInt();
           }
           break;
@@ -108,12 +134,13 @@ class PongModel extends ChangeNotifier {
           break;
 
         case NotificationType.GAME_START:
-          gameStarted = true;
+          if (_currentGameState == GameState.idle ||
+              _currentGameState == GameState.inWaitingRoom ||
+              _currentGameState == GameState.waitingRoomReady) {
+            _currentGameState = GameState.gameInitialized;
+          }
           // can set current wr as null after game starting
           currentWR = null;
-          // Reset countdown state when game actually starts
-          countdownStarted = false;
-          countdownMessage = '';
           notificationModel.showNotification(
             "Game started with ID: ${ntfn.gameId}",
           );
@@ -123,10 +150,11 @@ class PongModel extends ChangeNotifier {
         case NotificationType.GAME_READY_TO_PLAY:
           // Store the game ID when we receive the ready to play notification
           currentGameId = ntfn.gameId;
-          // Set game as started but waiting for player readiness
-          gameStarted = true;
-          isReadyToPlay = false;
-          countdownStarted = false;
+          if (_currentGameState == GameState.idle ||
+              _currentGameState == GameState.inWaitingRoom ||
+              _currentGameState == GameState.waitingRoomReady) {
+            _currentGameState = GameState.gameInitialized;
+          }
           notificationModel.showNotification(
               "Game is ready! Signal when you're ready to play.");
           notifyListeners();
@@ -134,9 +162,13 @@ class PongModel extends ChangeNotifier {
 
         case NotificationType.COUNTDOWN_UPDATE:
           countdownMessage = ntfn.message;
-          countdownStarted = true;
-          // When countdown starts, we need to make sure game is in progress
-          gameStarted = true;
+          _currentGameState = GameState.countdown;
+
+          // When countdown reaches 0, transition to playing state
+          if (ntfn.message.contains("0")) {
+            _currentGameState = GameState.playing;
+          }
+
           notificationModel.showNotification(ntfn.message);
           notifyListeners();
           break;
@@ -144,9 +176,11 @@ class PongModel extends ChangeNotifier {
         case NotificationType.PLAYER_JOINED_WR:
           if (ntfn.playerId == clientId) {
             currentWR = LocalWaitingRoom.fromProto(ntfn.wr);
+            _currentGameState = GameState.inWaitingRoom;
           }
           notificationModel
               .showNotification("A new player joined the waiting room");
+          notifyListeners();
           break;
 
         case NotificationType.GAME_END:
@@ -157,7 +191,13 @@ class PongModel extends ChangeNotifier {
         case NotificationType.ON_WR_REMOVED:
           // Handle the waiting room removal
           waitingRooms.removeWhere((room) => room.id == ntfn.roomId);
-          currentWR = null;
+
+          // If we were in this waiting room, reset our state
+          if (currentWR != null && currentWR!.id == ntfn.roomId) {
+            currentWR = null;
+            _currentGameState = GameState.idle;
+          }
+
           notificationModel.showNotification(
             "Waiting room removed: ${ntfn.roomId}",
           );
@@ -165,7 +205,9 @@ class PongModel extends ChangeNotifier {
           break;
 
         case NotificationType.OPPONENT_DISCONNECTED:
-          gameStarted = false;
+          if (_currentGameState == GameState.playing) {
+            _currentGameState = GameState.idle;
+          }
           currentWR = LocalWaitingRoom.fromProto(ntfn.wr);
           notificationModel.showNotification(ntfn.message);
           notifyListeners();
@@ -177,6 +219,11 @@ class PongModel extends ChangeNotifier {
             String playerName =
                 ntfn.playerId == clientId ? "You are" : "Opponent is";
             notificationModel.showNotification("$playerName ready to play!");
+
+            // If this is our own ready signal, update our state
+            if (ntfn.playerId == clientId) {
+              _currentGameState = GameState.readyToPlay;
+            }
           }
           // Otherwise handle waiting room ready state
           else if (currentWR != null) {
@@ -184,6 +231,13 @@ class PongModel extends ChangeNotifier {
             for (var i = 0; i < currentWR!.players.length; i++) {
               if (currentWR!.players[i].uid == ntfn.playerId) {
                 currentWR!.players[i].ready = ntfn.ready;
+
+                // If this is our own ready signal, update our state
+                if (ntfn.playerId == clientId) {
+                  _currentGameState = ntfn.ready
+                      ? GameState.waitingRoomReady
+                      : GameState.inWaitingRoom;
+                }
                 break;
               }
             }
@@ -204,7 +258,6 @@ class PongModel extends ChangeNotifier {
     }, onError: (error) {
       errorMessage = "Error in notification stream: ${error.message}";
       developer.log("Error: $error");
-      print("Error: $error");
       // XXX this is not correct, need to check if error is eof
       isConnected = false;
       notifyListeners();
@@ -212,17 +265,11 @@ class PongModel extends ChangeNotifier {
   }
 
   void resetGameState() {
-    isReady = false;
+    _currentGameState = GameState.idle;
     currentWR = null;
-    gameStarted = false;
     betAmt = 0;
-
-    // Reset ready to play fields
-    isReadyToPlay = false;
-    countdownStarted = false;
-    countdownMessage = '';
     currentGameId = '';
-
+    countdownMessage = '';
     notifyListeners();
   }
 
@@ -247,6 +294,7 @@ class PongModel extends ChangeNotifier {
 
       // Update the model state
       currentWR = roomInfo;
+      _currentGameState = GameState.inWaitingRoom;
       errorMessage = '';
       notifyListeners();
 
@@ -263,11 +311,11 @@ class PongModel extends ChangeNotifier {
   Future<void> joinWaitingRoom(String id) async {
     try {
       await Golib.JoinWaitingRoom(id);
+      _currentGameState = GameState.inWaitingRoom;
       errorMessage = '';
       notifyListeners();
     } catch (e) {
       errorMessage = "Error joining waiting room: $e";
-      print("Error: $e");
       notifyListeners();
     }
   }
@@ -280,34 +328,33 @@ class PongModel extends ChangeNotifier {
       throw Exception(error);
     }
 
-    if (!isReady) {
+    if (_currentGameState != GameState.waitingRoomReady) {
       // Player is getting ready
       grpcClient.startGameStreamRequest(clientId).listen((gameUpdateBytes) {
         final update = GameUpdate.fromBuffer(gameUpdateBytes.data);
-        gameStarted = true;
         gameState = update;
         errorMessage = '';
         notifyListeners();
       }, onError: (error) {
         developer.log("Error in game stream: $error");
         errorMessage = "Error in game stream: ${error.message}";
-        print("Error: $error");
         notifyListeners();
       });
+
+      _currentGameState = GameState.waitingRoomReady;
     } else {
       // Player is unreadying
       try {
         grpcClient.unreadyGameStream(clientId);
+        _currentGameState = GameState.inWaitingRoom;
       } catch (error) {
         developer.log("Error in unready game stream: $error");
         errorMessage = "Error in unready game stream: $error";
-        print("Error: $error");
         notifyListeners();
         return;
       }
     }
 
-    isReady = !isReady;
     notifyListeners();
   }
 
@@ -321,7 +368,7 @@ class PongModel extends ChangeNotifier {
 
       // Reset waiting room state
       currentWR = null;
-      isReady = false;
+      _currentGameState = GameState.idle;
       errorMessage = '';
       notifyListeners();
 
@@ -346,7 +393,7 @@ class PongModel extends ChangeNotifier {
           await grpcClient.signalReadyToPlay(clientId, currentGameId);
 
       if (response.success) {
-        isReadyToPlay = true;
+        _currentGameState = GameState.readyToPlay;
         notificationModel.showNotification("You are ready to play!");
       } else {
         errorMessage = response.message;

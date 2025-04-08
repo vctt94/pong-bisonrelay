@@ -214,12 +214,34 @@ class PongGame {
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: const Color(0xFF1B1E2C),
-          borderRadius: BorderRadius.circular(12),
+          color: const Color(0xFF1B1E2C).withAlpha(230),
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.blueAccent.withAlpha(76),
+              spreadRadius: 3,
+              blurRadius: 10,
+            ),
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            const Icon(
+              Icons.sports_esports,
+              size: 50,
+              color: Colors.blueAccent,
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              "Waiting for players to get ready...",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 20),
             SizedBox(
               width: 40,
               height: 40,
@@ -227,15 +249,6 @@ class PongGame {
                 color: Colors.blueAccent,
                 backgroundColor: Colors.grey.withAlpha(51),
                 strokeWidth: 4,
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              "Waiting for opponent...",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
               ),
             ),
           ],
