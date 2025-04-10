@@ -487,21 +487,6 @@ func (g *GameInstance) isTimeout() bool {
 	return false
 }
 
-// Helper functions to get bet amounts
-func BetAmountP1(players []*Player) int64 {
-	if len(players) > 0 && players[0] != nil {
-		return players[0].BetAmt
-	}
-	return 0
-}
-
-func BetAmountP2(players []*Player) int64 {
-	if len(players) > 1 && players[1] != nil {
-		return players[1].BetAmt
-	}
-	return 0
-}
-
 // NewEngine creates a new CanvasEngine
 func NewEngine(width, height float64, players []*Player, log slog.Logger) *CanvasEngine {
 	// Create game with dimensions that match the display
