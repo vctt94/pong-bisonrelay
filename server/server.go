@@ -696,3 +696,44 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	s.log.Info("Server shut down completed.")
 	return nil
 }
+
+// SignalReadyToPlay handles player readiness for a game
+func (s *Server) SignalReadyToPlay(ctx context.Context, req *pong.SignalReadyToPlayRequest) (*pong.SignalReadyToPlayResponse, error) {
+	var clientID zkidentity.ShortID
+	clientID.FromString(req.ClientId)
+
+	s.log.Debugf("Client %s signaling ready to play for game %s", req.ClientId, req.GameId)
+
+	player := s.gameManager.PlayerSessions.GetPlayer(clientID)
+	if player == nil {
+		return nil, fmt.Errorf("player not found for client ID %s", clientID)
+	}
+
+	game := s.gameManager.GetPlayerGame(clientID)
+	if game == nil {
+		return nil, fmt.Errorf("game instance not found for client ID %s", clientID)
+	}
+
+	// Mark this player as ready in the game
+	game.Lock()
+	game.PlayersReady[req.ClientId] = true
+	game.Unlock()
+
+	// Notify all players in the game that this player is ready
+	for _, p := range game.Players {
+		if p.NotifierStream != nil {
+			p.NotifierStream.Send(&pong.NtfnStreamResponse{
+				NotificationType: pong.NotificationType_ON_PLAYER_READY,
+				Message:          fmt.Sprintf("Player %s is ready to start the game", player.Nick),
+				PlayerId:         req.ClientId,
+				GameId:           req.GameId,
+				Ready:            true,
+			})
+		}
+	}
+
+	return &pong.SignalReadyToPlayResponse{
+		Success: true,
+		Message: "Ready signal received",
+	}, nil
+}

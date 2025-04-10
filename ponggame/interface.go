@@ -56,7 +56,7 @@ func (p *Player) ResetPlayer() {
 }
 
 type GameInstance struct {
-	sync.Mutex
+	sync.RWMutex
 	Id          string
 	engine      *CanvasEngine
 	Framesch    chan []byte
@@ -71,6 +71,12 @@ type GameInstance struct {
 
 	// betAmt sum of total bets
 	betAmt int64
+
+	// Ready to play state
+	PlayersReady     map[string]bool
+	CountdownStarted bool
+	CountdownValue   int
+	GameReady        bool
 
 	log slog.Logger
 }
