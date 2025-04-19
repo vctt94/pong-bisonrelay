@@ -217,7 +217,10 @@ Aq6RDElOTqAlDbNAuV8b/joQjIDLwqA=
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Log Notifications'),
+                    const Text(
+                      'Log Notifications',
+                      style: TextStyle(color: Colors.white),
+                    ),
                     Switch(
                       value: _wantsLogNtfns,
                       onChanged: (value) {
@@ -251,7 +254,17 @@ Aq6RDElOTqAlDbNAuV8b/joQjIDLwqA=
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: TextFormField(
         controller: controller,
-        decoration: InputDecoration(labelText: label),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(color: Colors.white70),
+          enabledBorder: const UnderlineInputBorder(
+            borderSide: BorderSide(color: Colors.white54),
+          ),
+          focusedBorder: const UnderlineInputBorder(
+            borderSide: BorderSide(color: Colors.blueAccent),
+          ),
+        ),
+        style: const TextStyle(color: Colors.white),
         obscureText: obscureText,
         validator: validator,
       ),
