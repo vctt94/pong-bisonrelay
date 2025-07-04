@@ -10,6 +10,7 @@ import (
 
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/zkidentity"
+	"github.com/decred/dcrd/dcrutil/v4"
 	"github.com/decred/slog"
 	"github.com/vctt94/bisonbotkit"
 	"github.com/vctt94/bisonbotkit/logging"
@@ -22,6 +23,14 @@ const (
 	name    = "pong"
 	version = "v0.0.0"
 )
+
+// BotInterface defines the methods needed by the server
+type BotInterface interface {
+	Run(ctx context.Context) error
+	AckTipProgress(ctx context.Context, sequenceId uint64) error
+	AckTipReceived(ctx context.Context, sequenceId uint64) error
+	PayTip(ctx context.Context, recipient zkidentity.ShortID, amount dcrutil.Amount, priority int32) error
+}
 
 type ServerConfig struct {
 	ServerDir string
@@ -42,7 +51,7 @@ type Server struct {
 	pong.UnimplementedPongGameServer
 	sync.RWMutex
 
-	bot                *bisonbotkit.Bot
+	bot                BotInterface
 	log                slog.Logger
 	isF2P              bool
 	minBetAmt          float64
@@ -122,10 +131,10 @@ func NewServer(id *zkidentity.ShortID, cfg ServerConfig) (*Server, error) {
 func (s *Server) StartGameStream(req *pong.StartGameStreamRequest, stream pong.PongGame_StartGameStreamServer) error {
 	ctx, cancel := context.WithCancel(stream.Context())
 	defer cancel()
-	defer s.activeGameStreams.Delete(req.ClientId)
 
 	var clientID zkidentity.ShortID
 	clientID.FromString(req.ClientId)
+	defer s.activeGameStreams.Delete(clientID)
 
 	// Store the cancel function
 	s.activeGameStreams.Store(clientID, cancel)
@@ -415,6 +424,10 @@ func (s *Server) JoinWaitingRoom(ctx context.Context, req *pong.JoinWaitingRoomR
 		return nil, err
 	}
 	for _, p := range wr.Players {
+		if p.NotifierStream == nil {
+			s.log.Errorf("player %s has nil NotifierStream", p.ID.String())
+			continue
+		}
 		p.NotifierStream.Send(&pong.NtfnStreamResponse{
 			NotificationType: pong.NotificationType_PLAYER_JOINED_WR,
 			Message:          fmt.Sprintf("New player joined Waiting Room: %s", player.Nick),
@@ -485,8 +498,14 @@ func (s *Server) CreateWaitingRoom(ctx context.Context, req *pong.CreateWaitingR
 	wr.Unlock()
 
 	hostPlayer.WR = wr
+
+	// append to WaitingRooms slice
+	s.gameManager.Lock()
 	s.gameManager.WaitingRooms = append(s.gameManager.WaitingRooms, wr)
-	s.log.Debugf("waiting room created. Total rooms: %d", len(s.gameManager.WaitingRooms))
+	totalRooms := len(s.gameManager.WaitingRooms)
+	s.gameManager.Unlock()
+
+	s.log.Debugf("waiting room created. Total rooms: %d", totalRooms)
 
 	// Signal that a new Waiting Room has been created
 	select {

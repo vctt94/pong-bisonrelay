@@ -15,6 +15,8 @@ class InitClient {
   final String serverAddr;
   @JsonKey(name: 'grpc_cert_path')
   final String grpcCertPath;
+  @JsonKey(name: 'datadir')
+  final String dataDir;
   @JsonKey(name: 'log_file')
   final String logFile;
   @JsonKey(name: "msgs_root")
@@ -41,6 +43,7 @@ class InitClient {
   InitClient(
     this.serverAddr,
     this.grpcCertPath,
+    this.dataDir,
     this.logFile,
     this.msgsRoot,
     this.debugLevel,

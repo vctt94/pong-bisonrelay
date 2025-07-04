@@ -239,6 +239,14 @@ func (gm *GameManager) startNewGame(ctx context.Context, players []*Player, id s
 
 	newGame.engine = NewEngine(swidth, sheight, players, gm.Log)
 
+	// Update PlayerSessions with the correct player numbers after NewEngine assigns them
+	for _, player := range players {
+		sessionPlayer := gm.PlayerSessions.GetPlayer(*player.ID)
+		if sessionPlayer != nil {
+			sessionPlayer.PlayerNumber = player.PlayerNumber
+		}
+	}
+
 	// Map players to this game for easy lookup
 	for _, player := range players {
 		gm.PlayerGameMap[*player.ID] = newGame

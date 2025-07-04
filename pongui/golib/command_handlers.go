@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -14,12 +13,14 @@ import (
 	"time"
 
 	"github.com/companyzero/bisonrelay/client/clientintf"
-	"github.com/companyzero/bisonrelay/clientrpc/jsonrpc"
 	"github.com/companyzero/bisonrelay/clientrpc/types"
 	"github.com/companyzero/bisonrelay/lockfile"
 	"github.com/companyzero/bisonrelay/rates"
 	"github.com/companyzero/bisonrelay/zkidentity"
 	"github.com/decred/slog"
+	"github.com/vctt94/bisonbotkit/botclient"
+	"github.com/vctt94/bisonbotkit/config"
+	"github.com/vctt94/bisonbotkit/logging"
 	"github.com/vctt94/pong-bisonrelay/client"
 	"golang.org/x/sync/errgroup"
 )
@@ -29,17 +30,15 @@ const (
 )
 
 type clientCtx struct {
-	ID      *localInfo
-	c       *client.PongClient
-	ctx     context.Context
-	chat    types.ChatServiceClient
-	payment types.PaymentsServiceClient
-	cancel  func()
-	runMtx  sync.Mutex
-	runErr  error
+	ID     *localInfo
+	c      *client.PongClient
+	ctx    context.Context
+	chat   types.ChatServiceClient
+	cancel func()
+	runMtx sync.Mutex
+	runErr error
 
 	log          slog.Logger
-	logBknd      *logBackend
 	certConfChan chan bool
 
 	httpClient *http.Client
@@ -89,30 +88,59 @@ func handleInitClient(handle uint32, args initClient) (*localInfo, error) {
 		return cs[handle].ID, nil
 	}
 
-	bknd := slog.NewBackend(os.Stderr)
-	log := bknd.Logger("EXMP")
-	log.SetLevel(slog.LevelDebug)
-	c, err := jsonrpc.NewWSClient(
-		jsonrpc.WithWebsocketURL(args.RPCWebsocketURL),
-		jsonrpc.WithServerTLSCertPath(args.RPCCertPath),
-		jsonrpc.WithClientTLSCert(args.RPCCLientCertPath, args.RPCCLientKeyPath),
-		jsonrpc.WithClientLog(log),
-		jsonrpc.WithClientBasicAuth(args.RPCUser, args.RPCPass),
-	)
+	// Load configuration using botclient config
+	cfg, err := config.LoadClientConfig(args.DataDir, "pongui.conf")
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %v", err)
+	}
+
+	// Apply overrides from args
+	if args.RPCWebsocketURL != "" {
+		cfg.RPCURL = args.RPCWebsocketURL
+	}
+	if args.RPCCertPath != "" {
+		cfg.ServerCertPath = args.RPCCertPath
+	}
+	if args.RPCCLientCertPath != "" {
+		cfg.ClientCertPath = args.RPCCLientCertPath
+	}
+	if args.RPCCLientKeyPath != "" {
+		cfg.ClientKeyPath = args.RPCCLientKeyPath
+	}
+	if args.RPCUser != "" {
+		cfg.RPCUser = args.RPCUser
+	}
+	if args.RPCPass != "" {
+		cfg.RPCPass = args.RPCPass
+	}
+
+	logBackend, err := logging.NewLogBackend(logging.LogConfig{
+		LogFile:        filepath.Join(args.DataDir, "logs", "pongui.log"),
+		DebugLevel:     cfg.Debug,
+		MaxLogFiles:    10,
+		MaxBufferLines: 1000,
+	})
 	if err != nil {
 		return nil, err
 	}
+	log := logBackend.Logger("pongui")
+
 	ctx, cancel := context.WithCancel(context.Background())
 	g, gctx := errgroup.WithContext(ctx)
-	// Run JSON-RPC client
-	g.Go(func() error { return c.Run(gctx) })
 
-	// Retrieve public identity via JSON-RPC
-	chat := types.NewChatServiceClient(c)
-	payment := types.NewPaymentsServiceClient(c)
-	// Initialize clientID
+	// Use botclient instead of manual JSON-RPC client
+	c, err := botclient.NewClient(cfg, logBackend)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("failed to create bot client: %v", err)
+	}
+
+	// Start the bot client
+	g.Go(func() error { return c.RPCClient.Run(gctx) })
+
+	// Initialize clientID using botclient
 	var publicIdentity types.PublicIdentity
-	err = chat.UserPublicIdentity(gctx, &types.PublicIdentityReq{}, &publicIdentity)
+	err = c.Chat.UserPublicIdentity(gctx, &types.PublicIdentityReq{}, &publicIdentity)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to get user public identity: %v", err)
@@ -123,36 +151,29 @@ func handleInitClient(handle uint32, args initClient) (*localInfo, error) {
 		ID:   id,
 		Nick: publicIdentity.Nick,
 	}
-	// Initialize logging.
-	logBknd, err := newLogBackend(args.LogFile, args.DebugLevel)
-	if err != nil {
-		cancel()
-		return nil, err
-	}
-	logBknd.notify = args.WantsLogNtfns
+
 	pc, err := client.NewPongClient(localInfo.ID.String(), &client.PongClientCfg{
 		ServerAddr:   args.ServerAddr,
-		ChatClient:   chat,
-		Log:          logBknd.logger("client"),
+		ChatClient:   c.Chat,
+		Log:          logBackend.Logger("client"),
 		GRPCCertPath: args.GRPCCertPath,
 	})
 	if err != nil {
 		cancel()
 		return nil, err
 	}
+
 	cctx := &clientCtx{
-		ID:      localInfo,
-		ctx:     gctx,
-		c:       pc,
-		cancel:  cancel,
-		log:     log,
-		logBknd: logBknd,
+		ID:     localInfo,
+		ctx:    gctx,
+		c:      pc,
+		chat:   c.Chat,
+		cancel: cancel,
+		log:    log,
 	}
 	cs[handle] = cctx
+
 	go func() {
-		// Run JSON-RPC client (it will block until the client is done)
-		g.Go(func() error { return receiveLoop(gctx, chat, log) })
-		g.Go(func() error { return receiveTipLoop(gctx, payment, log, cctx) })
 		// Handle client closure and errors
 		if err := g.Wait(); err != nil {
 			fmt.Printf("err: %+v\n\n", err)
@@ -221,9 +242,10 @@ func handleClientCmd(cc *clientCtx, cmd *cmd) (interface{}, error) {
 				}
 			}
 			res[i] = &waitingRoom{
-				ID:     r.Id,
-				HostID: r.HostId,
-				BetAmt: r.BetAmt,
+				ID:      r.Id,
+				HostID:  r.HostId,
+				BetAmt:  r.BetAmt,
+				Players: players,
 			}
 		}
 		return res, nil

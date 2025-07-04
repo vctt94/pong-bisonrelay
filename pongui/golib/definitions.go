@@ -11,6 +11,7 @@ type initClient struct {
 	ServerAddr     string `json:"server_addr"`
 	GRPCCertPath   string `json:"grpc_cert_path"`
 	DBRoot         string `json:"dbroot"`
+	DataDir        string `json:"datadir"`
 	DownloadsDir   string `json:"downloads_dir"`
 	LogFile        string `json:"log_file"`
 	DebugLevel     string `json:"debug_level"`

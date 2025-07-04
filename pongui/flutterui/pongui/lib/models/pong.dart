@@ -10,6 +10,7 @@ import 'package:golib_plugin/grpc/generated/pong.pb.dart';
 import 'package:golib_plugin/grpc/generated/pong.pbgrpc.dart';
 import 'package:pongui/grpc/grpc_client.dart';
 import 'package:pongui/models/notifications.dart';
+import 'package:path/path.dart' as path;
 
 // Define a clear enum for game states
 enum GameState {
@@ -69,13 +70,19 @@ class PongModel extends ChangeNotifier {
       if (clientId.isNotEmpty) {
         return;
       }
+      
+      // Create log file path in app data directory
+      final appDataDir = await defaultAppDataDir();
+      final logFilePath = path.join(appDataDir, "logs", "pongui.log");
+      
       InitClient initArgs = InitClient(
         cfg.serverAddr,
         cfg.grpcCertPath,
+        appDataDir,
+        logFilePath,
         "",
-        "",
-        "debug",
-        true,
+        cfg.debugLevel,
+        cfg.wantsLogNtfns,
         cfg.rpcWebsocketURL,
         cfg.rpcCertPath,
         cfg.rpcClientCertPath,
@@ -122,6 +129,7 @@ class PongModel extends ChangeNotifier {
         case NotificationType.BET_AMOUNT_UPDATE:
           if (ntfn.playerId == clientId) {
             betAmt = ntfn.betAmt.toInt();
+            notifyListeners();
           }
           break;
 

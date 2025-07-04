@@ -89,6 +89,12 @@ func (wr *WaitingRoom) ReadyPlayers() ([]*Player, bool) {
 func (wr *WaitingRoom) GetPlayer(clientID *zkidentity.ShortID) *Player {
 	wr.RLock()
 	defer wr.RUnlock()
+
+	// Check for nil clientID to prevent panic
+	if clientID == nil {
+		return nil
+	}
+
 	for _, player := range wr.Players {
 		if player.ID.String() == clientID.String() {
 			return player

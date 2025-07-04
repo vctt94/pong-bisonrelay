@@ -19,9 +19,14 @@ func (s *Server) HandleTipProgress(ctx context.Context, tip *types.TipProgressEv
 	var err error
 	if tip.Completed {
 		// ack tip progress if completed
+		if s.bot == nil {
+			s.log.Errorf("bot is nil, skipping tip progress acknowledgement")
+			return nil
+		}
+
 		err = s.bot.AckTipProgress(ctx, tip.SequenceId)
 		if err != nil {
-			s.log.Warnf("Error while acknowledging tip progress: %v", err)
+			s.log.Errorf("Error while acknowledging tip progress: %v", err)
 			return err
 		}
 		// Convert winner UID and amount to match stored progress
@@ -105,8 +110,11 @@ func (s *Server) HandleReceiveTip(ctx context.Context, tip *types.ReceivedTip) e
 	// Retrieve the player's session using the tip sender's ID.
 	player := s.gameManager.PlayerSessions.GetPlayer(zkidentity.ShortID(tip.Uid))
 	// If the player's session is not found, skip processing this tip.
+	// The tip is already stored as unprocessed and will be applied when the player connects.
 	if player == nil {
-		return fmt.Errorf("player not found")
+		playerID := hex.EncodeToString(tip.Uid)
+		s.log.Debugf("Tip from player %s stored as unprocessed (player not currently connected)", playerID)
+		return nil
 	}
 
 	// Update the player's bet amount with the tip value.

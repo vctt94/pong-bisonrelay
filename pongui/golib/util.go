@@ -3,11 +3,9 @@ package golib
 import (
 	"archive/zip"
 	"compress/gzip"
-	"context"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -18,8 +16,6 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/companyzero/bisonrelay/clientrpc/types"
-	"github.com/decred/slog"
 	"github.com/pbnjay/memory"
 	"github.com/prometheus/procfs"
 )
@@ -195,97 +191,6 @@ func reportCmdResultLoop(startTime, lastTime time.Time, id int32, lastCPUTimes [
 	cctx.log.Info(log02)
 	cctx.log.Info(log03)
 	cmtx.Unlock()
-}
-
-func receiveLoop(ctx context.Context, chat types.ChatServiceClient, log slog.Logger) error {
-	var ackRes types.AckResponse
-	var ackReq types.AckRequest
-	for {
-		// Keep requesting a new stream if the connection breaks. Also
-		// request any messages received since the last one we acked.
-		streamReq := types.PMStreamRequest{UnackedFrom: ackReq.SequenceId}
-		stream, err := chat.PMStream(ctx, &streamReq)
-		if errors.Is(err, context.Canceled) {
-			// Program is done.
-			return err
-		}
-		if err != nil {
-			log.Warn("Error while obtaining PM stream: %v", err)
-			time.Sleep(time.Second) // Wait to try again.
-			continue
-		}
-
-		for {
-			var pm types.ReceivedPM
-			err := stream.Recv(&pm)
-			if errors.Is(err, context.Canceled) {
-				// Program is done.
-				return err
-			}
-			if err != nil {
-				log.Warnf("Error while receiving stream: %v", err)
-				break
-			}
-
-			// Escape content before sending it to the terminal.
-			nick := escapeNick(pm.Nick)
-			var msg string
-			if pm.Msg != nil {
-				msg = escapeContent(pm.Msg.Message)
-			}
-
-			log.Debugf("Received PM from '%s' with len %d and sequence %s",
-				nick, len(msg), types.DebugSequenceID(pm.SequenceId))
-
-			fmt.Printf("<- %v %v\n", nick, msg)
-
-			// Ack to client that message is processed.
-			ackReq.SequenceId = pm.SequenceId
-			err = chat.AckReceivedPM(ctx, &ackReq, &ackRes)
-			if err != nil {
-				log.Warnf("Error while ack'ing received pm: %v", err)
-				break
-			}
-		}
-
-		time.Sleep(time.Second)
-	}
-}
-
-func receiveTipLoop(ctx context.Context, payment types.PaymentsServiceClient, log slog.Logger, cctx *clientCtx) error {
-	var ackReq types.AckRequest
-	for {
-		streamReq := types.TipStreamRequest{UnackedFrom: ackReq.SequenceId}
-		stream, err := payment.TipStream(ctx, &streamReq)
-		if errors.Is(err, context.Canceled) {
-			return err
-		}
-		if err != nil {
-			log.Warn("Error while obtaining tip stream: %v", err)
-			time.Sleep(time.Second)
-			continue
-		}
-
-		for {
-			var tip types.ReceivedTip
-			err := stream.Recv(&tip)
-			if errors.Is(err, context.Canceled) {
-				return err
-			}
-			if err != nil {
-				log.Warnf("Error while receiving stream: %v", err)
-				break
-			}
-
-			log.Debugf("Received tip from %s amount %d", hex.EncodeToString(tip.Uid), tip.AmountMatoms)
-			dcrAmount := float64(tip.AmountMatoms) / 1e11
-
-			fmt.Printf("<- %v %.8f\n", hex.EncodeToString(tip.Uid), dcrAmount)
-			ackReq.SequenceId = tip.SequenceId
-		}
-
-		time.Sleep(time.Second)
-	}
 }
 
 // escapeNick returns s escaped from chars that don't don't belong in a nick.
