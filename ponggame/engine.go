@@ -3,6 +3,7 @@ package ponggame
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/decred/slog"
@@ -12,6 +13,13 @@ import (
 
 	"github.com/ndabAP/ping-pong/engine"
 )
+
+// Pool for GameUpdate objects to reduce allocations
+var gameUpdatePool = sync.Pool{
+	New: func() interface{} {
+		return &pong.GameUpdate{}
+	},
+}
 
 // New returns a new Canvas engine for browsers with Canvas support
 func New(g engine.Game) *CanvasEngine {
@@ -91,35 +99,43 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 					return
 				}
 
-				gameUpdateFrame := &pong.GameUpdate{
-					GameWidth:     e.Game.Width,
-					GameHeight:    e.Game.Height,
-					P1Width:       e.Game.P1.Width,
-					P1Height:      e.Game.P1.Height,
-					P2Width:       e.Game.P2.Width,
-					P2Height:      e.Game.P2.Height,
-					BallWidth:     e.Game.Ball.Width,
-					BallHeight:    e.Game.Ball.Height,
-					P1Score:       int32(e.P1Score),
-					P2Score:       int32(e.P2Score),
-					BallX:         e.BallPos.X,
-					BallY:         e.BallPos.Y,
-					P1X:           e.P1Pos.X,
-					P1Y:           e.P1Pos.Y,
-					P2X:           e.P2Pos.X,
-					P2Y:           e.P2Pos.Y,
-					P1YVelocity:   e.P1Vel.Y,
-					P2YVelocity:   e.P2Vel.Y,
-					BallXVelocity: e.BallVel.X,
-					BallYVelocity: e.BallVel.Y,
-					Fps:           e.FPS,
-					Tps:           e.TPS,
-				}
+				// Use pooled object to reduce allocations
+				gameUpdateFrame := gameUpdatePool.Get().(*pong.GameUpdate)
+
+				// Reset the object
+				gameUpdateFrame.Reset()
+
+				// Populate the frame data
+				gameUpdateFrame.GameWidth = e.Game.Width
+				gameUpdateFrame.GameHeight = e.Game.Height
+				gameUpdateFrame.P1Width = e.Game.P1.Width
+				gameUpdateFrame.P1Height = e.Game.P1.Height
+				gameUpdateFrame.P2Width = e.Game.P2.Width
+				gameUpdateFrame.P2Height = e.Game.P2.Height
+				gameUpdateFrame.BallWidth = e.Game.Ball.Width
+				gameUpdateFrame.BallHeight = e.Game.Ball.Height
+				gameUpdateFrame.P1Score = int32(e.P1Score)
+				gameUpdateFrame.P2Score = int32(e.P2Score)
+				gameUpdateFrame.BallX = e.BallPos.X
+				gameUpdateFrame.BallY = e.BallPos.Y
+				gameUpdateFrame.P1X = e.P1Pos.X
+				gameUpdateFrame.P1Y = e.P1Pos.Y
+				gameUpdateFrame.P2X = e.P2Pos.X
+				gameUpdateFrame.P2Y = e.P2Pos.Y
+				gameUpdateFrame.P1YVelocity = e.P1Vel.Y
+				gameUpdateFrame.P2YVelocity = e.P2Vel.Y
+				gameUpdateFrame.BallXVelocity = e.BallVel.X
+				gameUpdateFrame.BallYVelocity = e.BallVel.Y
+				gameUpdateFrame.Fps = e.FPS
+				gameUpdateFrame.Tps = e.TPS
 
 				protoTick, err := proto.Marshal(gameUpdateFrame)
 				if err != nil {
 					e.log.Errorf("Error marshaling protobuf: %v", err)
 				}
+				// Return object to pool
+				gameUpdatePool.Put(gameUpdateFrame)
+
 				select {
 				case framesch <- protoTick:
 				case <-ctx.Done():

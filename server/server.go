@@ -341,9 +341,6 @@ func (s *Server) Run(ctx context.Context) error {
 				}
 			}
 			s.gameManager.Unlock()
-
-		default:
-			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }

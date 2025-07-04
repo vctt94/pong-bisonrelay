@@ -14,10 +14,10 @@ const (
 
 	canvas_border_correction = 1
 
-	default_ball_x_vel_ratio = 0.25
-	min_ball_y_vel_ratio     = 0.1
-	y_vel_ratio              = 1
-	initial_ball_y_vel       = 0.20
+	initial_ball_x_vel = 0.1
+	initial_ball_y_vel = 0.1
+
+	y_vel_ratio = 1
 )
 
 // Helper function to check AABB intersection
@@ -80,18 +80,37 @@ func (e *CanvasEngine) bottomRect() Rect {
 
 // tick calculates the next frame
 func (e *CanvasEngine) tick() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	// Apply paddle movement based on current velocity
 	dt := 1.0 / e.FPS
-	e.P1Pos = e.P1Pos.Add(e.P1Vel.Scale(dt))
-	e.P2Pos = e.P2Pos.Add(e.P2Vel.Scale(dt))
+
+	// Calculate new positions outside the lock
+	e.mu.RLock()
+	newP1Pos := e.P1Pos.Add(e.P1Vel.Scale(dt))
+	newP2Pos := e.P2Pos.Add(e.P2Vel.Scale(dt))
+	velocityIncrease := e.VelocityIncrease
+	collision := e.detectColl()
+	e.mu.RUnlock()
+
+	// Update positions with shorter lock
+	e.mu.Lock()
+	e.P1Pos = newP1Pos
+	e.P2Pos = newP2Pos
 
 	// Detect collision inside the lock
-	collision := e.detectColl()
 
-	// Process collision result
+	// Update velocity multiplier
+	if velocityIncrease > 0 {
+		e.VelocityMultiplier += velocityIncrease
+	} else {
+		e.VelocityMultiplier += DEFAULT_VEL_INCR
+	}
+
+	// Apply the velocity multiplier to the ball movement
+	velocityThisTick := e.BallVel.Scale(e.VelocityMultiplier * dt)
+	e.BallPos = e.BallPos.Add(velocityThisTick)
+	e.mu.Unlock()
+
+	// Process collision result (outside of lock)
 	switch collision {
 	case engine.CollP1Top,
 		engine.CollP1Bottom,
@@ -133,7 +152,7 @@ func (e *CanvasEngine) tick() {
 	default:
 	}
 
-	// Update ball position
+	// Final boundary check
 	e.advanceBall().deOutOfBoundsPlayers()
 }
 
@@ -224,9 +243,9 @@ func (e *CanvasEngine) resetBall() *CanvasEngine {
 	e.VelocityMultiplier = 1.0
 
 	// Random direction
-	xVel := default_ball_x_vel_ratio * e.Game.Width
-	yVel := min_ball_y_vel_ratio*e.Game.Height +
-		rand.Float64()*((initial_ball_y_vel*e.Game.Height)-(min_ball_y_vel_ratio*e.Game.Height))
+	xVel := initial_ball_x_vel * e.Game.Width
+	yVel := initial_ball_y_vel*e.Game.Height +
+		rand.Float64()*((initial_ball_y_vel*e.Game.Height)-(initial_ball_y_vel*e.Game.Height))
 
 	if rand.Intn(10) < 5 {
 		e.BallVel = Vec2{-xVel, -yVel}
@@ -365,7 +384,7 @@ func (e *CanvasEngine) deOutOfBoundsBall() *CanvasEngine {
 		// Reposition ball center to be exactly ballRect.HalfH from the top
 		ballRect.Cy = ballRect.HalfH
 		// Update the top-left position based on the new center
-		e.BallPos.Y = ballRect.Cy - ballRect.HalfH
+		e.BallPos.Y = ballRect.Cy + ballRect.HalfH
 	}
 
 	// Bottom wall - use center-based calculation

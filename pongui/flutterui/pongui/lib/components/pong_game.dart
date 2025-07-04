@@ -350,7 +350,8 @@ class PongPainter extends CustomPainter {
     // Paint object for drawing
     var paint = Paint()
       ..color = Colors.white
-      ..style = PaintingStyle.fill;
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
 
     // Draw background
     canvas.drawRect(
@@ -358,8 +359,8 @@ class PongPainter extends CustomPainter {
       Paint()..color = Colors.black,
     );
 
-    // Extract and scale paddle 1 properties
-    double paddle1X = 0.0; // Paddle 1 is on the left edge
+    // Extract and scale paddle 1 properties (use real position from server)
+    double paddle1X = gameState.p1X;
     double paddle1Y = gameState.p1Y;
     double paddle1Width = gameState.p1Width;
     double paddle1Height = gameState.p1Height;
@@ -406,9 +407,11 @@ class PongPainter extends CustomPainter {
       paint,
     );
 
-    // Draw the ball
-    canvas.drawRect(
-      Rect.fromLTWH(ballX, ballY, ballWidth, ballHeight),
+    // Draw the ball as a circle for smoother motion
+    double radius = (ballWidth + ballHeight) / 4;
+    canvas.drawCircle(
+      Offset(ballX + ballWidth / 2, ballY + ballHeight / 2),
+      radius,
       paint,
     );
 
