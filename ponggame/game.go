@@ -212,6 +212,8 @@ func (gm *GameManager) startNewGame(ctx context.Context, players []*Player, id s
 	for _, player := range players {
 		player.Score = 0
 		betAmt += player.BetAmt
+		// Create individual frame buffer for each player with frame dropping capability
+		player.FrameCh = make(chan []byte, INPUT_BUF_SIZE/4) // Smaller buffer per player
 	}
 
 	newGame := &GameInstance{
@@ -238,6 +240,9 @@ func (gm *GameManager) startNewGame(ctx context.Context, players []*Player, id s
 	sheight := 600.0
 
 	newGame.engine = NewEngine(swidth, sheight, players, gm.Log)
+
+	// Start frame distributor goroutine to distribute frames to individual player channels
+	go newGame.distributeFrames()
 
 	// Update PlayerSessions with the correct player numbers after NewEngine assigns them
 	for _, player := range players {
@@ -464,6 +469,14 @@ func (g *GameInstance) Cleanup() {
 	close(g.Framesch)
 	close(g.Inputch)
 	close(g.roundResult)
+
+	// Close individual player frame channels
+	for _, player := range g.Players {
+		if player.FrameCh != nil {
+			close(player.FrameCh)
+			player.FrameCh = nil
+		}
+	}
 }
 
 func (g *GameInstance) shouldEndGame() bool {
@@ -514,6 +527,54 @@ func NewEngine(width, height float64, players []*Player, log slog.Logger) *Canva
 	canvasEngine.reset()
 
 	return canvasEngine
+}
+
+// distributeFrames distributes frames from the main channel to individual player channels
+// This prevents one slow client from affecting others by implementing frame dropping
+func (g *GameInstance) distributeFrames() {
+	for {
+		select {
+		case <-g.ctx.Done():
+			return
+		case frame, ok := <-g.Framesch:
+			if !ok {
+				// Main frame channel closed, close all player channels
+				for _, player := range g.Players {
+					if player.FrameCh != nil {
+						close(player.FrameCh)
+					}
+				}
+				return
+			}
+
+			// Distribute frame to each player with non-blocking send and frame dropping
+			for _, player := range g.Players {
+				if player.FrameCh != nil {
+					select {
+					case player.FrameCh <- frame:
+						// Frame sent successfully
+					default:
+						// Player's buffer is full, drop oldest frame and try again
+						select {
+						case <-player.FrameCh:
+							// Dropped oldest frame
+						default:
+							// Channel was somehow emptied in the meantime
+						}
+
+						// Try to send the new frame
+						select {
+						case player.FrameCh <- frame:
+							// Frame sent successfully after dropping old one
+						default:
+							// Still full, just drop this frame
+							g.log.Debugf("Dropping frame for player %s (buffer full)", player.ID)
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 // Fix the code that was causing "bytes declared and not used" and "select case must be send or receive" errors

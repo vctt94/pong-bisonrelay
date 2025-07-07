@@ -43,6 +43,9 @@ type Player struct {
 	NotifierStream pong.PongGame_StartNtfnStreamServer
 	Ready          bool
 
+	// Per-player frame buffer to prevent one slow client from affecting others
+	FrameCh chan []byte
+
 	WR *WaitingRoom
 }
 
@@ -52,6 +55,10 @@ func (p *Player) ResetPlayer() {
 	p.PlayerNumber = 0
 	p.BetAmt = 0
 	p.Ready = false
+	if p.FrameCh != nil {
+		close(p.FrameCh)
+		p.FrameCh = nil
+	}
 	p.WR = nil
 }
 

@@ -296,9 +296,9 @@ func (s *Server) sendGameUpdates(ctx context.Context, player *ponggame.Player, g
 		case <-ctx.Done():
 			s.handleDisconnect(*player.ID)
 			return
-		case frame, ok := <-game.Framesch:
+		case frame, ok := <-player.FrameCh: // Use individual player channel instead of shared game channel
 			if !ok {
-				return // Game has ended, exit
+				return // Player's frame channel closed, exit
 			}
 			if player.GameStream == nil {
 				// XXX something going on with the stream, should try a reconnect.
