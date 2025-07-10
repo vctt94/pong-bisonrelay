@@ -14,6 +14,7 @@ import 'package:pongui/config.dart';
 import 'package:pongui/models/pong.dart';
 import 'package:pongui/screens/home.dart';
 import 'package:pongui/screens/newconfig.dart';
+import 'package:pongui/screens/logs.dart';
 
 Future<void> runNewConfigApp(List<String> args) async {
   final newConfig = NewConfigModel(args);
@@ -22,13 +23,17 @@ Future<void> runNewConfigApp(List<String> args) async {
     MaterialApp(
       title: 'New RPC Configuration',
       home: NewConfigScreen(
-        newConfig: newConfig,
+        model: newConfig,
         onConfigSaved: () async {
-          // Load the updated configuration
-          Config cfg = await configFromArgs(args);
-
-          // Navigate back to the main app
-          runMainApp(cfg);
+          try {
+            // Load the updated configuration
+            Config cfg = await configFromArgs(args);
+            // Navigate back to the main app
+            runMainApp(cfg);
+          } catch (e) {
+            print('onConfigSaved: Error reloading config: $e');
+            throw e;
+          }
         },
       ),
     ),
@@ -106,9 +111,10 @@ class MyApp extends StatelessWidget {
       routes: {
         '/': (context) => const HomeScreen(),
         '/settings': (context) => NewConfigScreen(
-              newConfig: NewConfigModel.fromConfig(cfg),
+              model: NewConfigModel.fromConfig(cfg),
               onConfigSaved: () => runMainApp(cfg),
             ),
+        '/logs': (context) => const LogsScreen(),
       },
       initialRoute: '/',
     );

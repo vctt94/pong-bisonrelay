@@ -1,118 +1,86 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:ini/ini.dart' as ini;
-import 'package:path/path.dart' as path;
+import 'package:path/path.dart' as p;
 import 'package:pongui/config.dart';
 
 class NewConfigModel extends ChangeNotifier {
-  String rpcUser = 'defaultuser';
-  String rpcPass = 'defaultpass';
-  String serverAddr = '104.131.180.29:50051';
-  String grpcCertPath = '';
-  String rpcCertPath = '';
+  // ─── Editable fields ────────────────────────────────────────────────────
+  String rpcUser         = 'defaultuser';
+  String rpcPass         = 'defaultpass';
+  String serverAddr      = '104.131.180.29:50051';
+  String grpcCertPath    = '';
+  String rpcCertPath     = '';
   String rpcClientCertPath = '';
-  String rpcClientKeyPath = '';
+  String rpcClientKeyPath  = '';
   String rpcWebsocketURL = 'wss://127.0.0.1:7676/ws';
-  String debugLevel = 'info';
-  bool wantsLogNtfns = false;
+  String debugLevel      = 'info';
+  bool   wantsLogNtfns   = false;
 
   final List<String> appArgs;
+  String _appDataDir = '';
+  String _brDataDir = '';
 
+  // ─── Construction ───────────────────────────────────────────────────────
   NewConfigModel(this.appArgs) {
-    // Assign default file paths based on app data directory
-    _initializeDefaults();
+    _initialiseDefaults();
   }
 
-  factory NewConfigModel.fromConfig(Config config) {
-    return NewConfigModel([])
-      ..rpcUser = config.rpcUser
-      ..rpcPass = config.rpcPass
-      ..serverAddr = config.serverAddr
-      ..grpcCertPath = config.grpcCertPath
-      ..rpcCertPath = config.rpcCertPath
-      ..rpcClientCertPath = config.rpcClientCertPath
-      ..rpcClientKeyPath = config.rpcClientKeyPath
-      ..rpcWebsocketURL = config.rpcWebsocketURL
-      ..debugLevel = config.debugLevel
-      ..wantsLogNtfns = config.wantsLogNtfns;
-  }
+  factory NewConfigModel.fromConfig(Config c) => NewConfigModel([])
+    ..rpcUser            = c.rpcUser
+    ..rpcPass            = c.rpcPass
+    ..serverAddr         = c.serverAddr
+    ..grpcCertPath       = c.grpcCertPath
+    ..rpcCertPath        = c.rpcCertPath
+    ..rpcClientCertPath  = c.rpcClientCertPath
+    ..rpcClientKeyPath   = c.rpcClientKeyPath
+    ..rpcWebsocketURL    = c.rpcWebsocketURL
+    ..debugLevel         = c.debugLevel
+    ..wantsLogNtfns      = c.wantsLogNtfns;
 
-  Future<void> _initializeDefaults() async {
-    var brDataDir = await defaultAppDataBRUIGDir();
-    var appDataDir = await defaultAppDataDir();
+  // ─── Helpers ────────────────────────────────────────────────────────────
+  Future<void> _initialiseDefaults() async {
+    _appDataDir = await defaultAppDataDir();
+    _brDataDir = await defaultAppDataBRUIGDir();
 
-    // Set default paths for certificates and keys
-    rpcCertPath =
-        rpcCertPath.isEmpty ? path.join(brDataDir, 'rpc.cert') : rpcCertPath;
-    rpcClientCertPath = rpcClientCertPath.isEmpty
-        ? path.join(brDataDir, 'rpc-client.cert')
-        : rpcClientCertPath;
-    rpcClientKeyPath = rpcClientKeyPath.isEmpty
-        ? path.join(brDataDir, 'rpc-client.key')
-        : rpcClientKeyPath;
-    grpcCertPath = grpcCertPath.isEmpty
-        ? path.join(appDataDir, 'server.cert')
-        : grpcCertPath;
+    grpcCertPath = p.join(_appDataDir, 'server.cert');
+    rpcCertPath  = p.join(_brDataDir, 'rpc.cert');
+    rpcClientCertPath = p.join(_brDataDir, 'rpc-client.cert');
+    rpcClientKeyPath  = p.join(_brDataDir, 'rpc-client.key');
 
-    // Notify listeners of any changes
     notifyListeners();
   }
 
-  // Get the application data directory path
-  Future<String> appDataDir() async =>
-      path.dirname(await configFileName(appArgs));
+  String appDatadir()  => _appDataDir;
 
-// Save current configuration values to a file
-  Future<void> saveConfig(String configFilePath) async {
-    ini.Config config;
+  Future<String> getConfigFilePath() async =>
+      p.join(_appDataDir, 'pongui.conf');
 
-    // Check if the config file exists; otherwise, create a new one
-    final configFile = File(configFilePath);
-    if (configFile.existsSync()) {
-      config = ini.Config.fromStrings(await configFile.readAsLines());
-    } else {
-      // Create a new config instance
-      config = ini.Config();
-      // Ensure required sections exist in the new config
-    }
-    print('Existing sections: ${config.sections().join(', ')}');
-    // Ensure the 'clientrpc' section exists
+  // ─── Save to disk ───────────────────────────────────────────────────────
+  Future<void> saveConfig() async {
+    final cfgPath = await getConfigFilePath();
+    final file    = File(cfgPath);
 
-    if (!config.hasSection('clientrpc')) {
-      config.addSection('clientrpc');
-    }
-    if (!config.hasSection('log')) {
-      config.addSection('log');
-    }
+    final content = (StringBuffer()
+      ..writeln('server=$serverAddr')
+      ..writeln('grpccertpath=$grpcCertPath')
+      ..writeln()
+      ..writeln('[clientrpc]')
+      ..writeln('rpcuser=$rpcUser')
+      ..writeln('rpcpass=$rpcPass')
+      ..writeln('rpcwebsocketurl=$rpcWebsocketURL')
+      ..writeln('rpccertpath=$rpcCertPath')
+      ..writeln('rpcclientcertpath=$rpcClientCertPath')
+      ..writeln('rpcclientkeypath=$rpcClientKeyPath')
+      ..writeln('wantsLogNtfns=${wantsLogNtfns ? "1" : "0"}')
+      ..writeln()
+      ..writeln('[log]')
+      ..writeln('debuglevel=$debugLevel')
+    ).toString();
 
-    // Set the configuration values
-    config.set('default', 'server', serverAddr);
-    config.set('default', 'grpccertpath', grpcCertPath);
-
-    config.set('clientrpc', 'rpcuser', rpcUser);
-    config.set('clientrpc', 'rpcpass', rpcPass);
-    config.set('clientrpc', 'rpcwebsocketurl', rpcWebsocketURL);
-    config.set('clientrpc', 'rpccertpath', rpcCertPath);
-    config.set('clientrpc', 'rpcclientcertpath', rpcClientCertPath);
-    config.set('clientrpc', 'rpcclientkeypath', rpcClientKeyPath);
-    config.set('clientrpc', 'wantsLogNtfns', wantsLogNtfns ? '1' : '0');
-
-    config.set('log', 'debuglevel', debugLevel);
-
-    // Ensure the config directory exists
-    final configFileDir = path.dirname(configFilePath);
-    final directory = Directory(configFileDir);
-    if (!directory.existsSync()) {
-      await directory.create(recursive: true);
-    }
-
-    // Write the updated config to the file
-    await configFile.writeAsString(config.toString());
+    await file.parent.create(recursive: true);
+    await file.writeAsString(content);
   }
 
-  // Get the path to the config file
-  Future<String> getConfigFilePath() async {
-    var dataDir = await appDataDir();
-    return path.join(dataDir, 'pongui.conf');
-  }
+  // expose the resolved data directory to the UI for display
+  String get dataDir => _appDataDir;
 }

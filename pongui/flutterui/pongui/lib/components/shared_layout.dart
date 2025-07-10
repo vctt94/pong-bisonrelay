@@ -85,6 +85,14 @@ class SharedLayout extends StatelessWidget {
                         Navigator.of(context).pushNamed('/settings');
                       },
                     ),
+                    ListTile(
+                      leading: const Icon(Icons.description, color: Colors.white),
+                      title: const Text('Logs',
+                          style: TextStyle(color: Colors.white)),
+                      onTap: () {
+                        Navigator.of(context).pushNamed('/logs');
+                      },
+                    ),
                   ],
                 ),
               ),

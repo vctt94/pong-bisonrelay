@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -86,6 +87,17 @@ func handleInitClient(handle uint32, args initClient) (*localInfo, error) {
 	}
 	if cs[handle] != nil {
 		return cs[handle].ID, nil
+	}
+
+	// Ensure the data directory exists first
+	if err := os.MkdirAll(args.DataDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create data directory %s: %v", args.DataDir, err)
+	}
+
+	// Ensure the logs subdirectory exists
+	logsDir := filepath.Dir(args.LogFile)
+	if err := os.MkdirAll(logsDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create logs directory %s: %v", logsDir, err)
 	}
 
 	// Load configuration using botclient config

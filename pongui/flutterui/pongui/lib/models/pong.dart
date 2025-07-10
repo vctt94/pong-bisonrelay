@@ -71,7 +71,6 @@ class PongModel extends ChangeNotifier {
         return;
       }
       
-      // Create log file path in app data directory
       final appDataDir = await defaultAppDataDir();
       final logFilePath = path.join(appDataDir, "logs", "pongui.log");
       

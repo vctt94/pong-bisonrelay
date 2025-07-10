@@ -19,6 +19,7 @@ class Config {
   late final String rpcUser;
   late final String rpcPass;
   late final bool wantsLogNtfns;
+  late final String dataDir;
 
   Config();
 
@@ -33,16 +34,17 @@ class Config {
     this.rpcUser = "",
     this.rpcPass = "",
     this.wantsLogNtfns = false,
+    this.dataDir = "",
   });
 
   // Save a new config from scratch
   Future<void> saveNewConfig(String filepath) async {
-    var f = ini.Config.fromString("\n[clientrpc]\n");
+    var f = ini.Config.fromString("[clientrpc]\n[log]\n");
     set(String section, String opt, String val) =>
         val != "" ? f.set(section, opt, val) : null;
 
     set("default", "server", serverAddr);
-    set("default", "grpcCertPath", grpcCertPath);
+    set("default", "grpccertpath", grpcCertPath);
     set("clientrpc", "rpccertpath", rpcCertPath);
     set("log", "debuglevel", debugLevel);
     set("clientrpc", "rpcwebsocketurl", rpcWebsocketURL);
@@ -119,14 +121,9 @@ final usageException = Exception("Usage Displayed");
 final newConfigNeededException = Exception("Config needed");
 
 Future<Config> loadConfig(String filepath) async {
-  var f = ini.Config.fromStrings(File(filepath).readAsLinesSync());
-  var appDataDir = await defaultAppDataDir();
-  var iniAppData = f.get("default", "root");
+  late ini.Config f;
 
-  // If the app data directory is defined in the config, use it
-  if (iniAppData != null && iniAppData != "") {
-    appDataDir = cleanAndExpandPath(iniAppData);
-  }
+  var configDir = cleanAndExpandPath(filepath);
 
   String getPath(String section, String option, String def) {
     var iniVal = f.get(section, option);
@@ -140,8 +137,15 @@ Future<Config> loadConfig(String filepath) async {
     var v = f.get(section, opt);
     return v == "yes" || v == "true" || v == "1";
   }
+  
+  try {
+    f = ini.Config.fromStrings(File(configDir).readAsLinesSync());
+  } catch (e) {
+    print('loadConfig: Error parsing config file: $e');
+    // Create empty config with default sections
+    f = ini.Config.fromString("[clientrpc]\n[log]\n");
+  }
 
-  // Creating and populating the Config instance with relevant fields
   var c = Config.filled(
       serverAddr: f.get("default", "server") ?? "localhost:50051",
       grpcCertPath: f.get("default", "grpccertpath") ?? "",
