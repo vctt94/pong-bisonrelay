@@ -90,12 +90,12 @@ Future<String> defaultAppDataDir() async {
       Platform.environment.containsKey("LOCALAPPDATA")) {
     return path.join(Platform.environment["LOCALAPPDATA"]!, APPNAME);
   } else if (Platform.isMacOS) {
-    final baseDir = (await getApplicationSupportDirectory()).parent.path;
-    return path.join(baseDir, APPNAME);
+    final baseDir = await getApplicationSupportDirectory();
+    return path.join(baseDir.path, APPNAME);
   }
 
   final dir = await getApplicationSupportDirectory();
-  return dir.path;
+  return path.join(dir.path, APPNAME);
 }
 
 // Function to get the default app data directory based on the platform
@@ -114,7 +114,7 @@ Future<String> defaultAppDataBRUIGDir() async {
   }
 
   final dir = await getApplicationSupportDirectory();
-  return dir.path;
+  return path.join(dir.path, BRUIGNAME);
 }
 
 final usageException = Exception("Usage Displayed");
