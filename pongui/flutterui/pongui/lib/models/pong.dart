@@ -72,6 +72,9 @@ class PongModel extends ChangeNotifier {
       }
       
       final appDataDir = await defaultAppDataDir();
+      if (appDataDir == ""){
+        throw Exception("Failed to get app data directory");
+      }
       final logFilePath = path.join(appDataDir, "logs", "pongui.log");
       
       InitClient initArgs = InitClient(

@@ -1,16 +1,30 @@
+//go:build !prototype
+// +build !prototype
+
 package ponggame
 
 import (
 	"math"
-	"math/rand"
 
 	"github.com/ndabAP/ping-pong/engine"
 )
 
+// -----------------------------------------------------------------------------
+// Paper‑driven AVBD parameters (SIGGRAPH 25, Table 2)
+// -----------------------------------------------------------------------------
 const (
 	DEFAULT_FPS      = 60
-	DEFAULT_VEL_INCR = 0.0005
-	INPUT_BUF_SIZE   = 2 << 8
+	DEFAULT_VEL_INCR = 0.05
+
+	kStart       = 1.0e-3      // initial stiffness for all hard constraints
+	beta         = 10.0        // stiffness growth factor
+	alpha        = 0.95        // dual‑variable damping
+	gamma        = 0.99        // stiffness damping
+	cor          = 0.9         // 0=inélastico, 1=elástico perfeito
+	maxAngle     = math.Pi / 3 // 60°
+	minSpeed     = 0.08        // fração da largura/seg   (saque)
+	maxSpeed     = 1.30        // fração da largura/seg   (teto absoluto)
+	minWallAngle = 0.15
 
 	canvas_border_correction = 1
 
@@ -18,440 +32,384 @@ const (
 	initial_ball_y_vel = 0.1
 
 	y_vel_ratio = 1
+
+	maxVertices    = 32 // 4 wall verts + 4 ball verts + 2 paddle verts
+	maxConstraints = 128
 )
 
-// Helper function to check AABB intersection
-func intersects(a, b Rect) bool {
-	if math.Abs(a.Cx-b.Cx) > (a.HalfW + b.HalfW) {
-		return false
-	}
-	if math.Abs(a.Cy-b.Cy) > (a.HalfH + b.HalfH) {
-		return false
-	}
-	return true
+// -----------------------------------------------------------------------------
+// Construction helpers
+// -----------------------------------------------------------------------------
+
+func (p *AVBDPhysics) addVertex(pos Vec2, invMass, radius float64) int {
+	v := Vertex{Pos: pos, Prev: pos, InvMass: invMass, Radius: radius}
+	p.verts = append(p.verts, v)
+	return len(p.verts) - 1
 }
 
-// Bounding box helpers for game objects
-func (e *CanvasEngine) ballRect() Rect {
-	return Rect{
-		Cx:    e.BallPos.X + e.Game.Ball.Width*0.5,
-		Cy:    e.BallPos.Y + e.Game.Ball.Height*0.5,
-		HalfW: e.Game.Ball.Width * 0.5,
-		HalfH: e.Game.Ball.Height * 0.5,
+// soft XPBD‑style distance spring
+func (p *AVBDPhysics) addDistConstraint(i, j int, rest float64) {
+	p.cons = append(p.cons, Constraint{I: i, J: j, Rest: rest, Hard: false, K: 1 / rest})
+	p.staticCount++
+}
+
+// one‑sided plane contact (half‑space)
+func (p *AVBDPhysics) addPlaneContact(v int, n Vec2, d float64) {
+	p.cons = append(p.cons, Constraint{
+		I: v, J: -1,
+		N: n, Radius: d,
+		Hard: true, K: kStart,
+		MinLam: 0, MaxLam: math.Inf(1),
+	})
+}
+
+// -----------------------------------------------------------------------------
+// Public constructor – builds permanent geometry
+// -----------------------------------------------------------------------------
+
+func NewAVBDPhysics(e *CanvasEngine) *AVBDPhysics {
+	p := &AVBDPhysics{gravity: Vec2{0, 0}, damping: 0.999}
+	p.verts = make([]Vertex, 0, maxVertices)
+	p.cons = make([]Constraint, 0, maxConstraints)
+
+	// ----- static wall marker vertices (pinned) -----------------------------
+	lw := p.addVertex(Vec2{0, e.Game.Height * 0.5}, 0, 0)
+	rw := p.addVertex(Vec2{e.Game.Width, e.Game.Height * 0.5}, 0, 0)
+	tw := p.addVertex(Vec2{e.Game.Width * 0.5, 0}, 0, 0)
+	bw := p.addVertex(Vec2{e.Game.Width * 0.5, e.Game.Height}, 0, 0)
+	_ = []int{lw, rw, tw, bw} // silence lints – positions are read later
+
+	// ----- ball as a 4‑corner square ---------------------------------------
+	ballR := e.Game.Ball.Height * 0.5
+	cx := e.BallPos.X + ballR
+	cy := e.BallPos.Y + ballR
+
+	b0 := p.addVertex(Vec2{cx - ballR, cy - ballR}, 1, ballR)
+	b1 := p.addVertex(Vec2{cx + ballR, cy - ballR}, 1, ballR)
+	b2 := p.addVertex(Vec2{cx + ballR, cy + ballR}, 1, ballR)
+	b3 := p.addVertex(Vec2{cx - ballR, cy + ballR}, 1, ballR)
+
+	stiff := 0.0001
+	p.addDistConstraint(b0, b1, 2*ballR)
+	p.addDistConstraint(b1, b2, 2*ballR)
+	p.addDistConstraint(b2, b3, 2*ballR)
+	p.addDistConstraint(b3, b0, 2*ballR)
+	diag := 2 * ballR * math.Sqrt2
+	p.addDistConstraint(b0, b2, diag*stiff)
+	p.addDistConstraint(b1, b3, diag*stiff)
+
+	// ----- paddle endpoints (pinned, kinematic) ----------------------------
+	p1h := e.Game.P1.Height * 0.5
+	p1cx := e.P1Pos.X + e.Game.P1.Width*0.5
+	p1cy := e.P1Pos.Y + p1h
+	_ = p.addVertex(Vec2{p1cx, p1cy - p1h}, 0, 0)
+	_ = p.addVertex(Vec2{p1cx, p1cy + p1h}, 0, 0)
+
+	p2cx := e.P2Pos.X + e.Game.P2.Width*0.5
+	p2cy := e.P2Pos.Y + e.Game.P2.Height*0.5
+	_ = p.addVertex(Vec2{p2cx, p2cy - p1h}, 0, 0)
+	_ = p.addVertex(Vec2{p2cx, p2cy + p1h}, 0, 0)
+
+	return p
+}
+
+// -----------------------------------------------------------------------------
+// Per‑frame contact generation
+// -----------------------------------------------------------------------------
+
+func (p *AVBDPhysics) makeContacts(e *CanvasEngine) {
+	// trim contacts back to the static set
+	p.cons = p.cons[:p.staticCount]
+
+	w := e.Game.Width
+	h := e.Game.Height
+
+	for _, bi := range []int{4, 5, 6, 7} { // ball vertices
+		v := &p.verts[bi].Pos
+
+		// walls
+		if v.X < 0 {
+			p.addPlaneContact(bi, Vec2{1, 0}, 0)
+		}
+		if v.X > w {
+			p.addPlaneContact(bi, Vec2{-1, 0}, -w)
+		}
+		if v.Y < 0 {
+			p.addPlaneContact(bi, Vec2{0, 1}, 0)
+		}
+		if v.Y > h {
+			p.addPlaneContact(bi, Vec2{0, -1}, -h)
+		}
+
+		// paddles treated as vertical planes
+		// P1
+		paddW := e.Game.P1.Width
+		if v.X < e.P1Pos.X+paddW && v.Y > e.P1Pos.Y && v.Y < e.P1Pos.Y+e.Game.P1.Height {
+			d := e.P1Pos.X + paddW
+			p.addPlaneContact(bi, Vec2{1, 0}, d)
+		}
+		// P2
+		if v.X > e.P2Pos.X && v.Y > e.P2Pos.Y && v.Y < e.P2Pos.Y+e.Game.P2.Height {
+			d := e.P2Pos.X
+			p.addPlaneContact(bi, Vec2{-1, 0}, -d)
+		}
 	}
 }
 
-func (e *CanvasEngine) p1Rect() Rect {
-	return Rect{
-		Cx:    e.P1Pos.X + e.Game.P1.Width*0.5,
-		Cy:    e.P1Pos.Y + e.Game.P1.Height*0.5,
-		HalfW: e.Game.P1.Width * 0.5,
-		HalfH: e.Game.P1.Height * 0.5,
+// -----------------------------------------------------------------------------
+// Solver – one AVBD step (Sec. 3.3)
+// -----------------------------------------------------------------------------
+
+func (p *AVBDPhysics) Step(dt float64) {
+	// 0. warm‑start / stiffness decay (Eq. 19)
+	for i := range p.cons {
+		c := &p.cons[i]
+		if !c.Hard {
+			continue
+		}
+		c.K = math.Max(kStart, gamma*c.K)
+		c.Lambda *= alpha * gamma
+	}
+
+	// 1. store previous position & integrate forces (standard Verlet)
+	for i := range p.verts {
+		v := &p.verts[i]
+		v.Prev = v.Pos
+		if v.InvMass == 0 {
+			continue
+		}
+		v.Vel = v.Vel.Add(p.gravity.Scale(dt))
+		v.Pos = v.Pos.Add(v.Vel.Scale(dt))
+	}
+
+	// 2. (re)generate contacts for this frame
+	p.makeContacts(currentEngine) // currentEngine set by StepPhysics wrapper
+
+	// 3. Gauss‑Seidel primal‑dual iterations
+	const iters = 2 // enough with warm‑start
+	for n := 0; n < iters; n++ {
+		for i := range p.cons {
+			c := &p.cons[i]
+			vi := &p.verts[c.I]
+
+			// plane vs point
+			if c.Hard {
+				phi := c.N.Dot(vi.Pos) - c.Radius // C(x)
+				grad := c.N
+				w := vi.InvMass
+				lamCand := c.K*phi + c.Lambda
+				lamNew := math.Min(c.MaxLam, math.Max(c.MinLam, lamCand))
+				deltaLam := lamNew - c.Lambda
+				if deltaLam != 0 && w != 0 {
+					corr := deltaLam / w
+					vi.Pos = vi.Pos.Sub(grad.Scale(corr * vi.InvMass))
+				}
+				c.Lambda = lamNew
+				if phi < 0 { // penetration ⇒ grow stiffness
+					c.K += beta * math.Abs(phi)
+				}
+				continue
+			}
+
+			// soft distance spring (XPBD Eq. 16)
+			vj := &p.verts[c.J]
+			delta := vj.Pos.Sub(vi.Pos)
+			dist := delta.Len()
+			if dist == 0 {
+				continue
+			}
+			grad := delta.Scale(1 / dist)
+			C := dist - c.Rest
+			w := vi.InvMass + vj.InvMass
+			corr := -(c.K * C) / (w + c.K)
+			vi.Pos = vi.Pos.Add(grad.Scale(corr * vi.InvMass))
+			vj.Pos = vj.Pos.Sub(grad.Scale(corr * vj.InvMass))
+		}
+	}
+
+	// 4. rebuild velocities (xₙ − xₙ₋₁)/dt and damping
+	for i := range p.verts {
+		v := &p.verts[i]
+		if v.InvMass == 0 {
+			v.Vel = Vec2{}
+			continue
+		}
+		v.Vel = v.Pos.Sub(v.Prev).Scale(1 / dt).Scale(p.damping)
+	}
+
+	for _, c := range p.cons {
+		if !c.Hard { // só interessa para contatos unilaterais
+			continue
+		}
+		v := &p.verts[c.I]
+		vn := c.N.Dot(v.Vel) // velocidade na direção da normal
+		if vn < 0 {          // aproximando-se do plano?
+			// v' = v - (1+e) (v·n) n  (reflexão com restituição)
+			v.Vel = v.Vel.Sub(c.N.Scale((1 + cor) * vn))
+		}
 	}
 }
 
-func (e *CanvasEngine) p2Rect() Rect {
-	return Rect{
-		Cx:    e.P2Pos.X + e.Game.P2.Width*0.5,
-		Cy:    e.P2Pos.Y + e.Game.P2.Height*0.5,
-		HalfW: e.Game.P2.Width * 0.5,
-		HalfH: e.Game.P2.Height * 0.5,
+// ---------- bridge to CanvasEngine -----------------------------------------
+
+var currentEngine *CanvasEngine // transient pointer used inside makeContacts
+
+func StepPhysics(e *CanvasEngine, dt float64) {
+	currentEngine = e // for contact generation
+
+	syncVerticesFromEngine(e)
+	e.phy.Step(dt)
+
+	// copy ball centroid back
+	var cx, cy float64
+	for i := 4; i <= 7; i++ {
+		cx += e.phy.verts[i].Pos.X
+		cy += e.phy.verts[i].Pos.Y
 	}
+	cx, cy = cx/4, cy/4
+	r := e.Game.Ball.Height * 0.5
+	e.BallPos = Vec2{cx - r, cy - r}
+
+	// velocity (average of corners)
+	var vx, vy float64
+	for i := 4; i <= 7; i++ {
+		vx += e.phy.verts[i].Vel.X
+		vy += e.phy.verts[i].Vel.Y
+	}
+	e.BallVel = Vec2{vx / 4, vy / 4}
 }
 
-// Wall rectangles
-func (e *CanvasEngine) topRect() Rect {
-	return Rect{
-		Cx:    e.Game.Width * 0.5,
-		Cy:    canvas_border_correction * 0.5,
-		HalfW: e.Game.Width * 0.5,
-		HalfH: canvas_border_correction * 0.5,
+// -----------------------------------------------------------------------------
+// Synchronise kinematic bodies (ball & paddles before Step)
+// -----------------------------------------------------------------------------
+
+func syncVerticesFromEngine(e *CanvasEngine) {
+	// ball
+	br := e.Game.Ball.Height * 0.5
+	cx := e.BallPos.X + br
+	cy := e.BallPos.Y + br
+	vx, vy := e.BallVel.X, e.BallVel.Y
+	rewind := func(i int, x, y float64) {
+		v := &e.phy.verts[i]
+		v.Pos = Vec2{x, y}
+		v.Prev = v.Pos.Sub(Vec2{vx, vy}.Scale(1 / e.FPS))
+		v.Vel = Vec2{vx, vy}
 	}
+	rewind(4, cx-br, cy-br)
+	rewind(5, cx+br, cy-br)
+	rewind(6, cx+br, cy+br)
+	rewind(7, cx-br, cy+br)
+
+	// paddles (indices 8‑11) – position only, zero mass so velocity zeroed
+	p1h := e.Game.P1.Height * 0.5
+	p1cx := e.P1Pos.X + e.Game.P1.Width*0.5
+	p1cy := e.P1Pos.Y + p1h
+	e.phy.verts[8].Pos = Vec2{p1cx, p1cy - p1h}
+	e.phy.verts[9].Pos = Vec2{p1cx, p1cy + p1h}
+
+	p2cx := e.P2Pos.X + e.Game.P2.Width*0.5
+	p2cy := e.P2Pos.Y + e.Game.P2.Height*0.5
+	e.phy.verts[10].Pos = Vec2{p2cx, p2cy - p1h}
+	e.phy.verts[11].Pos = Vec2{p2cx, p2cy + p1h}
 }
 
-func (e *CanvasEngine) bottomRect() Rect {
-	return Rect{
-		Cx:    e.Game.Width * 0.5,
-		Cy:    e.Game.Height - canvas_border_correction*0.5,
-		HalfW: e.Game.Width * 0.5,
-		HalfH: canvas_border_correction * 0.5,
-	}
-}
-
-// tick calculates the next frame
-func (e *CanvasEngine) tick() {
-	// Apply paddle movement based on current velocity
-	dt := 1.0 / e.FPS
-
-	// Calculate new positions outside the lock
-	e.mu.RLock()
-	newP1Pos := e.P1Pos.Add(e.P1Vel.Scale(dt))
-	newP2Pos := e.P2Pos.Add(e.P2Vel.Scale(dt))
-	velocityIncrease := e.VelocityIncrease
-	collision := e.detectColl()
-	e.mu.RUnlock()
-
-	// Update positions with shorter lock
-	e.mu.Lock()
-	e.P1Pos = newP1Pos
-	e.P2Pos = newP2Pos
-
-	// Detect collision inside the lock
-
-	// Update velocity multiplier
-	if velocityIncrease > 0 {
-		e.VelocityMultiplier += velocityIncrease
-	} else {
-		e.VelocityMultiplier += DEFAULT_VEL_INCR
-	}
-
-	// Apply the velocity multiplier to the ball movement
-	velocityThisTick := e.BallVel.Scale(e.VelocityMultiplier * dt)
-	e.BallPos = e.BallPos.Add(velocityThisTick)
-	e.mu.Unlock()
-
-	// Process collision result (outside of lock)
-	switch collision {
-	case engine.CollP1Top,
-		engine.CollP1Bottom,
-		engine.CollP2Top,
-		engine.CollP2Bottom:
-		e.handlePaddleEdgeHit().deOutOfBoundsBall()
-	case
-		engine.CollP1,
-		engine.CollP2:
-		e.inverseBallXVelocity().deOutOfBoundsBall()
-
-	case
-		engine.CollBottomLeft,
-		engine.CollTopLeft:
-		e.Err = engine.ErrP2Win
-		return
-
-	case
-		engine.CollBottomRight,
-		engine.CollTopRight:
-		e.Err = engine.ErrP2Win
-		return
-
-	case
-		engine.CollTop,
-		engine.CollBottom:
-		e.inverseBallYVelocity().deOutOfBoundsBall()
-
-	case engine.CollLeft:
-		e.Err = engine.ErrP2Win
-		return
-
-	case engine.CollRight:
-		e.Err = engine.ErrP1Win
-		return
-
-	case engine.CollNone:
-		fallthrough
+func (e *CanvasEngine) applyPaddleBounce(coll engine.Collision) {
+	var paddleY, paddleH float64
+	var dir int // +1 se bateu no P1 (bola deve ir p/ direita), -1 p/ P2
+	switch coll {
+	case engine.CollP1, engine.CollP1Top, engine.CollP1Bottom:
+		paddleY = e.P1Pos.Y
+		paddleH = e.Game.P1.Height
+		dir = +1
+	case engine.CollP2, engine.CollP2Top, engine.CollP2Bottom:
+		paddleY = e.P2Pos.Y
+		paddleH = e.Game.P2.Height
+		dir = -1
 	default:
+		return
 	}
 
-	// Final boundary check
-	e.advanceBall().deOutOfBoundsPlayers()
+	// 1. offset vertical relativo ao centro do paddle
+	ballCY := e.BallPos.Y + e.Game.Ball.Height*0.5
+	paddleCY := paddleY + paddleH*0.5
+	offset := (ballCY - paddleCY) / (paddleH * 0.5) // -1‥+1
+
+	// 2. converte em ângulo
+	angle := offset * maxAngle
+
+	// 3. módulo da velocidade (mantém “energia” atual)
+	speed := math.Hypot(e.BallVel.X, e.BallVel.Y)
+	if speed == 0 {
+		speed = e.Game.Width * initial_ball_x_vel // qualquer valor mínimo
+	}
+
+	if math.Abs(angle) < minWallAngle {
+		// obrigue um leve desvio vertical mesmo em batida central
+		angle = math.Copysign(minWallAngle, offset) // usa sinal do offset
+	}
+
+	// 4. novo vetor: cos = VX, sen = VY
+	e.BallVel.X = float64(dir) * math.Cos(angle) * speed
+	e.BallVel.Y = math.Sin(angle) * speed
 }
 
-// Collisions
+// devolve o vetor já limitado a [min, max]
+func clampBallSpeed(v Vec2, w float64) Vec2 {
+	s := math.Hypot(v.X, v.Y)
+	min := minSpeed * w
+	max := maxSpeed * w
 
-// detectColl detects and returns a possible collision
-func (e *CanvasEngine) detectColl() engine.Collision {
-	br := e.ballRect()
-	p1r := e.p1Rect()
-	p2r := e.p2Rect()
-	topr := e.topRect()
-	bottomr := e.bottomRect()
-
-	// Check paddle collisions first
-	if intersects(br, p1r) {
-		// Determine if it's a top/bottom collision by comparing centers
-		if math.Abs(br.Cy-p1r.Cy) > p1r.HalfH*0.8 { // Using 0.8 as threshold
-			if br.Cy < p1r.Cy {
-				return engine.CollP1Top
-			}
-			return engine.CollP1Bottom
-		}
-		return engine.CollP1
+	if s < 1e-9 { // bola (quase) parada → força mínimo
+		return Vec2{min, min * 0.6} // 0.6: ­inclinação inicial leve
 	}
-
-	if intersects(br, p2r) {
-		// Similar top/bottom check for P2
-		if math.Abs(br.Cy-p2r.Cy) > p2r.HalfH*0.8 {
-			if br.Cy < p2r.Cy {
-				return engine.CollP2Top
-			}
-			return engine.CollP2Bottom
-		}
-		return engine.CollP2
+	if s < min {
+		k := min / s
+		return Vec2{v.X * k, v.Y * k}
 	}
-
-	// Check wall collisions
-	if intersects(br, topr) {
-		if br.Cx <= p1r.Cx+p1r.HalfW {
-			return engine.CollTopLeft
-		}
-		if br.Cx >= p2r.Cx-p2r.HalfW {
-			return engine.CollTopRight
-		}
-		return engine.CollTop
+	if s > max {
+		k := max / s
+		return Vec2{v.X * k, v.Y * k}
 	}
-
-	if intersects(br, bottomr) {
-		if br.Cx <= p1r.Cx+p1r.HalfW {
-			return engine.CollBottomLeft
-		}
-		if br.Cx >= p2r.Cx-p2r.HalfW {
-			return engine.CollBottomRight
-		}
-		return engine.CollBottom
-	}
-
-	// Check side walls (scoring)
-	if br.Cx-br.HalfW <= 0 {
-		return engine.CollLeft
-	}
-	if br.Cx+br.HalfW >= e.Game.Width {
-		return engine.CollRight
-	}
-
-	return engine.CollNone
+	return v
 }
 
-// Mutations
+// func bounceWall(e *CanvasEngine, sign float64) { // sign = +1 teto, -1 piso
+// 	speed := math.Hypot(e.BallVel.X, e.BallVel.Y)
+// 	if speed < 1e-9 {
+// 		speed = minSpeed * e.Game.Width
+// 	}
 
-func (e *CanvasEngine) reset() *CanvasEngine {
-	e.Err = nil
-	return e.resetBall().resetPlayers()
-}
+// 	// ângulo atual (após inverter Vy)
+// 	ang := math.Atan2(e.BallVel.Y, e.BallVel.X)
 
-func (e *CanvasEngine) resetBall() *CanvasEngine {
-	// Calculate the center position of the ball
-	ballCenterX := e.Game.Width * 0.5
-	ballCenterY := e.Game.Height * 0.5
+// 	// força inclinação mínima
+// 	if math.Abs(ang) < minWallAngle {
+// 		ang = math.Copysign(minWallAngle, ang)
+// 	}
 
-	// Set BallPos to the top-left corner based on the center
-	e.BallPos = Vec2{
-		X: ballCenterX - e.Game.Ball.Width*0.5,
-		Y: ballCenterY - e.Game.Ball.Height*0.5,
+// 	// recria o vetor com o mesmo módulo, mas ângulo ≥ minWallAngle
+// 	e.BallVel.X = math.Cos(ang) * speed
+// 	e.BallVel.Y = math.Sin(ang) * speed
+
+// 	// clamp final para garantir módulo dentro dos limites
+// 	e.BallVel = clampBallSpeed(e.BallVel, e.Game.Width)
+// }
+
+func bounceWall(e *CanvasEngine, sign int) { // +1 = teto, -1 = piso
+	w := e.Game.Width
+	speed := math.Hypot(e.BallVel.X, e.BallVel.Y)
+	if speed < 1e-9 {
+		speed = minSpeed * w
 	}
 
-	// Reset velocity multiplier to 1.0 at the start of each round
-	e.VelocityMultiplier = 1.0
-
-	// Random direction
-	xVel := initial_ball_x_vel * e.Game.Width
-	yVel := initial_ball_y_vel*e.Game.Height +
-		rand.Float64()*((initial_ball_y_vel*e.Game.Height)-(initial_ball_y_vel*e.Game.Height))
-
-	if rand.Intn(10) < 5 {
-		e.BallVel = Vec2{-xVel, -yVel}
-	} else {
-		e.BallVel = Vec2{xVel, yVel}
-	}
-	return e
-}
-
-func (e *CanvasEngine) resetPlayers() *CanvasEngine {
-	// Calculate P1 center position (left side)
-	p1CenterX := e.Game.P1.Width * 1.5 // Position at 1.5x paddle width from left edge
-	p1CenterY := e.Game.Height * 0.5   // Vertical center
-
-	// Set P1Pos to the top-left corner based on center
-	e.P1Pos = Vec2{
-		X: p1CenterX - e.Game.P1.Width*0.5,
-		Y: p1CenterY - e.Game.P1.Height*0.5,
-	}
-	e.P1Vel = Vec2{0, 0}
-
-	// Calculate P2 center position (right side)
-	p2CenterX := e.Game.Width - e.Game.P2.Width*1.5 // Position at 1.5x paddle width from right edge
-	p2CenterY := e.Game.Height * 0.5                // Vertical center
-
-	// Set P2Pos to the top-left corner based on center
-	e.P2Pos = Vec2{
-		X: p2CenterX - e.Game.P2.Width*0.5,
-		Y: p2CenterY - e.Game.P2.Height*0.5,
-	}
-	e.P2Vel = Vec2{0, 0}
-
-	return e
-}
-
-// advanceBall advances the ball one tick or frame
-func (e *CanvasEngine) advanceBall() *CanvasEngine {
-	// Increase velocity multiplier gradually over time
-	if e.VelocityIncrease > 0 {
-		e.VelocityMultiplier += e.VelocityIncrease
-	} else {
-		e.VelocityMultiplier += DEFAULT_VEL_INCR
+	// ângulo mínimo acima/abaixo do eixo X
+	ang := minWallAngle * float64(sign)
+	// conserva direção horizontal (VX)
+	if e.BallVel.X < 0 {
+		ang = math.Pi - ang
 	}
 
-	// Apply the velocity multiplier to the ball movement
-	dt := 1.0 / e.FPS
-	velocityThisTick := e.BallVel.Scale(e.VelocityMultiplier * dt)
-	e.BallPos = e.BallPos.Add(velocityThisTick)
-	return e
-}
-
-func (e *CanvasEngine) p1Up() *CanvasEngine {
-	speed := y_vel_ratio * e.Game.Height
-	e.P1Vel = Vec2{0, -speed}
-	return e
-}
-
-func (e *CanvasEngine) p1Down() *CanvasEngine {
-	speed := y_vel_ratio * e.Game.Height
-	e.P1Vel = Vec2{0, speed}
-	return e
-}
-
-func (e *CanvasEngine) p2Up() *CanvasEngine {
-	speed := y_vel_ratio * e.Game.Height
-	e.P2Vel = Vec2{0, -speed}
-	return e
-}
-
-func (e *CanvasEngine) p2Down() *CanvasEngine {
-	speed := y_vel_ratio * e.Game.Height
-	e.P2Vel = Vec2{0, speed}
-	return e
-}
-
-func (e *CanvasEngine) inverseBallXVelocity() *CanvasEngine {
-	e.BallVel.X *= -1
-	return e
-}
-
-func (e *CanvasEngine) inverseBallYVelocity() *CanvasEngine {
-	e.BallVel.Y *= -1
-	return e
-}
-
-func (e *CanvasEngine) deOutOfBoundsPlayers() *CanvasEngine {
-	p1Rect := e.p1Rect()
-	p2Rect := e.p2Rect()
-
-	// P1, top boundary
-	if p1Rect.Cy-p1Rect.HalfH <= 0 {
-		// Reposition paddle center to be exactly paddle halfHeight from the top
-		p1Rect.Cy = p1Rect.HalfH
-		// Update the top-left position based on the new center
-		e.P1Pos.Y = p1Rect.Cy - p1Rect.HalfH
-		e.P1Vel.Y = 0
-	}
-
-	// P1, bottom boundary
-	if p1Rect.Cy+p1Rect.HalfH >= e.Game.Height {
-		// Reposition paddle center to be exactly paddle halfHeight from the bottom
-		p1Rect.Cy = e.Game.Height - p1Rect.HalfH
-		// Update the top-left position based on the new center
-		e.P1Pos.Y = p1Rect.Cy - p1Rect.HalfH
-		e.P1Vel.Y = 0
-	}
-
-	// P2, top boundary
-	if p2Rect.Cy-p2Rect.HalfH <= 0 {
-		// Reposition paddle center to be exactly paddle halfHeight from the top
-		p2Rect.Cy = p2Rect.HalfH
-		// Update the top-left position based on the new center
-		e.P2Pos.Y = p2Rect.Cy - p2Rect.HalfH
-		e.P2Vel.Y = 0
-	}
-
-	// P2, bottom boundary
-	if p2Rect.Cy+p2Rect.HalfH >= e.Game.Height {
-		// Reposition paddle center to be exactly paddle halfHeight from the bottom
-		p2Rect.Cy = e.Game.Height - p2Rect.HalfH
-		// Update the top-left position based on the new center
-		e.P2Pos.Y = p2Rect.Cy - p2Rect.HalfH
-		e.P2Vel.Y = 0
-	}
-
-	return e
-}
-
-func (e *CanvasEngine) deOutOfBoundsBall() *CanvasEngine {
-	ballRect := e.ballRect()
-	p1Rect := e.p1Rect()
-	p2Rect := e.p2Rect()
-
-	// Top wall - use center-based calculation
-	if ballRect.Cy-ballRect.HalfH <= 0 {
-		// Reposition ball center to be exactly ballRect.HalfH from the top
-		ballRect.Cy = ballRect.HalfH
-		// Update the top-left position based on the new center
-		e.BallPos.Y = ballRect.Cy + ballRect.HalfH
-	}
-
-	// Bottom wall - use center-based calculation
-	if ballRect.Cy+ballRect.HalfH >= e.Game.Height {
-		// Reposition ball center to be exactly ballRect.HalfH from the bottom
-		ballRect.Cy = e.Game.Height - ballRect.HalfH
-		// Update the top-left position based on the new center
-		e.BallPos.Y = ballRect.Cy - ballRect.HalfH
-	}
-
-	// Left paddle (P1) - use center-based calculation
-	if ballRect.Cx-ballRect.HalfW <= p1Rect.Cx+p1Rect.HalfW {
-		// Calculate overlap between ball and paddle centers
-		overlapX := (ballRect.HalfW + p1Rect.HalfW) - math.Abs(ballRect.Cx-p1Rect.Cx)
-		if overlapX > 0 {
-			// If ball is to the right of the paddle's center, move it right by overlapX
-			if ballRect.Cx > p1Rect.Cx {
-				ballRect.Cx += overlapX
-			} else {
-				// This shouldn't happen in normal gameplay, but handle it anyway
-				ballRect.Cx = p1Rect.Cx + p1Rect.HalfW + ballRect.HalfW
-			}
-			// Update the top-left position based on the new center
-			e.BallPos.X = ballRect.Cx - ballRect.HalfW
-		}
-	}
-
-	// Right paddle (P2) - use center-based calculation
-	if ballRect.Cx+ballRect.HalfW >= p2Rect.Cx-p2Rect.HalfW {
-		// Calculate overlap between ball and paddle centers
-		overlapX := (ballRect.HalfW + p2Rect.HalfW) - math.Abs(ballRect.Cx-p2Rect.Cx)
-		if overlapX > 0 {
-			// If ball is to the left of the paddle's center, move it left by overlapX
-			if ballRect.Cx < p2Rect.Cx {
-				ballRect.Cx -= overlapX
-			} else {
-				// This shouldn't happen in normal gameplay, but handle it anyway
-				ballRect.Cx = p2Rect.Cx - p2Rect.HalfW - ballRect.HalfW
-			}
-			// Update the top-left position based on the new center
-			e.BallPos.X = ballRect.Cx - ballRect.HalfW
-		}
-	}
-
-	return e
-}
-
-func (e *CanvasEngine) handlePaddleEdgeHit() *CanvasEngine {
-	// First, invert the X direction as we always want the ball to bounce back
-	e.BallVel.X *= -1
-
-	// Calculate current ball speed (magnitude of velocity)
-	currentSpeed := math.Sqrt(e.BallVel.X*e.BallVel.X + e.BallVel.Y*e.BallVel.Y)
-
-	// For edge hits, we want a steeper angle but maintain similar speed
-	// Use a 60-degree angle (approximately 0.866 for x and 0.5 for y components)
-	normalizedX := math.Abs(e.BallVel.X) / currentSpeed
-
-	// Determine the direction of Y velocity based on which edge was hit
-	yDirection := 1.0
-	if e.BallVel.Y < 0 {
-		yDirection = -1.0
-	}
-
-	// Set new velocities while maintaining approximate original speed
-	e.BallVel.X = normalizedX * currentSpeed * math.Copysign(1, e.BallVel.X)
-	e.BallVel.Y = 0.5 * currentSpeed * yDirection // Use 0.5 for a consistent but not too extreme angle
-
-	return e
+	e.BallVel.X = math.Cos(ang) * speed
+	e.BallVel.Y = math.Sin(ang) * speed
+	e.BallVel = clampBallSpeed(e.BallVel, w)
 }

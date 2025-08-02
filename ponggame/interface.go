@@ -2,6 +2,7 @@ package ponggame
 
 import (
 	"context"
+	"math"
 	"sync"
 
 	"github.com/companyzero/bisonrelay/client/clientintf"
@@ -13,23 +14,55 @@ import (
 )
 
 // Rect represents a bounding box with center position and half-dimensions
-type Rect struct {
-	Cx    float64 // Center X
-	Cy    float64 // Center Y
-	HalfW float64 // Half-width
-	HalfH float64 // Half-height
+type Rect struct{ Cx, Cy, HalfW, HalfH float64 }
+
+// -----------------------------------------------------------------------------
+// Small math helpers
+// -----------------------------------------------------------------------------
+
+type Vec2 struct{ X, Y float64 }
+
+func (a Vec2) Add(b Vec2) Vec2      { return Vec2{a.X + b.X, a.Y + b.Y} }
+func (a Vec2) Sub(b Vec2) Vec2      { return Vec2{a.X - b.X, a.Y - b.Y} }
+func (a Vec2) Scale(s float64) Vec2 { return Vec2{a.X * s, a.Y * s} }
+func (a Vec2) Len() float64         { return math.Hypot(a.X, a.Y) }
+func (a Vec2) Dot(b Vec2) float64   { return a.X*b.X + a.Y*b.Y }
+
+// -----------------------------------------------------------------------------
+// Data structures
+// -----------------------------------------------------------------------------
+
+type Vertex struct {
+	Pos, Prev Vec2
+	Vel       Vec2
+	InvMass   float64 // 0 ⇒ pinned
+	Radius    float64
 }
 
-type Vec2 struct {
-	X, Y float64
+type Constraint struct {
+	I, J int     // vertex indices (J < 0 ⇒ plane)
+	Rest float64 // soft‑spring rest length
+
+	// plane description (for hard contact)
+	N      Vec2    // outward normal
+	Radius float64 // signed distance (n·x ≥ d)
+
+	// augmented‑Lagrangian bookkeeping
+	Hard   bool
+	Lambda float64
+	K      float64
+	MinLam float64
+	MaxLam float64
 }
 
-func (v Vec2) Add(w Vec2) Vec2 {
-	return Vec2{v.X + w.X, v.Y + w.Y}
-}
+type AVBDPhysics struct {
+	verts []Vertex
+	cons  []Constraint
 
-func (v Vec2) Scale(s float64) Vec2 {
-	return Vec2{v.X * s, v.Y * s}
+	gravity Vec2
+	damping float64
+
+	staticCount int // number of permanent (distance) constraints
 }
 
 type Player struct {
@@ -129,10 +162,6 @@ type CanvasEngine struct {
 	P1Pos, P2Pos Vec2
 	P1Vel, P2Vel Vec2
 
-	// Velocity multiplier that increases over time
-	VelocityMultiplier float64
-	VelocityIncrease   float64
-
 	// Error of the current tick
 	Err error
 
@@ -140,6 +169,8 @@ type CanvasEngine struct {
 	log slog.Logger
 
 	mu sync.RWMutex
+
+	phy *AVBDPhysics
 }
 
 // StartGameStreamRequest encapsulates the data needed to start a game stream.

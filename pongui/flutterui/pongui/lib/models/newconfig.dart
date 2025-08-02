@@ -40,7 +40,13 @@ class NewConfigModel extends ChangeNotifier {
   // ─── Helpers ────────────────────────────────────────────────────────────
   Future<void> _initialiseDefaults() async {
     _appDataDir = await defaultAppDataDir();
+    if (_appDataDir == ""){
+      throw Exception("Failed to get app data directory");
+    }
     _brDataDir = await defaultAppDataBRUIGDir();
+    if (_brDataDir == ""){
+      throw Exception("Failed to get app data directory");
+    }
 
     grpcCertPath = p.join(_appDataDir, 'server.cert');
     rpcCertPath  = p.join(_brDataDir, 'rpc.cert');

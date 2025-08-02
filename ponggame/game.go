@@ -13,7 +13,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const maxScore = 3
+const (
+	INPUT_BUF_SIZE = 2 << 8
+	maxScore       = 3
+)
 
 // HandleWaitingRoomDisconnection handles player disconnection from a waiting room.
 func (gm *GameManager) HandleWaitingRoomDisconnection(clientID zkidentity.ShortID, log slog.Logger) {

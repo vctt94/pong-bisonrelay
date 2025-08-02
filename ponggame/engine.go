@@ -3,10 +3,12 @@ package ponggame
 import (
 	"context"
 	"errors"
+	"math"
 	"sync"
 	"time"
 
 	"github.com/decred/slog"
+	"golang.org/x/exp/rand"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/vctt94/pong-bisonrelay/pongrpc/grpc/pong"
@@ -21,27 +23,38 @@ var gameUpdatePool = sync.Pool{
 	},
 }
 
-// New returns a new Canvas engine for browsers with Canvas support
+// New returns a new Canvas engine pre‑wired with the AVBD physics solver.
 func New(g engine.Game) *CanvasEngine {
 	e := new(CanvasEngine)
 	e.Game = g
 	e.FPS = DEFAULT_FPS
 	e.TPS = 1000.0 / e.FPS
-	e.VelocityIncrease = DEFAULT_VEL_INCR
 
+	// zero everything explicitly
+	e.P1Vel = Vec2{}
+	e.P2Vel = Vec2{}
+	e.BallVel = Vec2{}
+
+	// place objects at their default positions
+	e.reset()
+
+	// build physics *after* reset so it sees the correct pose
+	e.phy = NewAVBDPhysics(e)
 	return e
 }
 
-// SetDebug sets the Canvas engines debug state
+// -----------------------------------------------------------------------------
+//  Public configuration helpers
+// -----------------------------------------------------------------------------
+
 func (e *CanvasEngine) SetLogger(log slog.Logger) *CanvasEngine {
 	e.log = log
 	return e
 }
 
-// SetFPS sets the Canvas engines frames per second
 func (e *CanvasEngine) SetFPS(fps uint) *CanvasEngine {
-	if fps <= 0 {
-		panic("fps must be greater zero")
+	if fps == 0 {
+		panic("fps must be greater than zero")
 	}
 	e.log.Debugf("fps %d", fps)
 	e.FPS = float64(fps)
@@ -49,95 +62,55 @@ func (e *CanvasEngine) SetFPS(fps uint) *CanvasEngine {
 	return e
 }
 
-// Error returns the Canvas engines error
-func (e *CanvasEngine) Error() error {
-	return e.Err
-}
+// Error returns the Canvas engine's last error (round finished).
+func (e *CanvasEngine) Error() error { return e.Err }
 
-// NewRound resets the ball, players and starts a new round. It accepts
-// a frames channel to write into and input channel to read from
+// -----------------------------------------------------------------------------
+//
+//	Round loop
+//
+// -----------------------------------------------------------------------------
 func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inputch <-chan []byte, roundResult chan<- int32) {
 	time.Sleep(time.Second)
 	e.reset()
 
-	// Calculates and writes frames
+	// frame pump
 	go func() {
-		frameTimer := time.NewTicker(time.Duration(1000.0/e.FPS) * time.Millisecond)
-		defer frameTimer.Stop()
-
+		tick := time.NewTicker(time.Duration(1000.0/e.FPS) * time.Millisecond)
+		defer tick.Stop()
 		for {
 			select {
 			case <-ctx.Done():
-				e.log.Debug("exiting")
 				return
-			case <-frameTimer.C:
+			case <-tick.C:
 				e.tick()
-
 				if errors.Is(e.Err, engine.ErrP1Win) {
-					e.log.Info("p1 wins")
-					e.P1Score += 1
-
-					// Send the winner's ID through the roundResult channel
-					select {
-					case roundResult <- 1:
-					case <-ctx.Done():
-						return
-					}
-
-					return
-				} else if errors.Is(e.Err, engine.ErrP2Win) {
-					e.log.Info("p2 wins")
-					e.P2Score += 1
-
-					// Send the winner's ID through the roundResult channel
-					select {
-					case roundResult <- 2:
-					case <-ctx.Done():
-						return
-					}
-
+					e.P1Score++
+					roundResult <- 1
 					return
 				}
-
-				// Use pooled object to reduce allocations
-				gameUpdateFrame := gameUpdatePool.Get().(*pong.GameUpdate)
-
-				// Reset the object
-				gameUpdateFrame.Reset()
-
-				// Populate the frame data
-				gameUpdateFrame.GameWidth = e.Game.Width
-				gameUpdateFrame.GameHeight = e.Game.Height
-				gameUpdateFrame.P1Width = e.Game.P1.Width
-				gameUpdateFrame.P1Height = e.Game.P1.Height
-				gameUpdateFrame.P2Width = e.Game.P2.Width
-				gameUpdateFrame.P2Height = e.Game.P2.Height
-				gameUpdateFrame.BallWidth = e.Game.Ball.Width
-				gameUpdateFrame.BallHeight = e.Game.Ball.Height
-				gameUpdateFrame.P1Score = int32(e.P1Score)
-				gameUpdateFrame.P2Score = int32(e.P2Score)
-				gameUpdateFrame.BallX = e.BallPos.X
-				gameUpdateFrame.BallY = e.BallPos.Y
-				gameUpdateFrame.P1X = e.P1Pos.X
-				gameUpdateFrame.P1Y = e.P1Pos.Y
-				gameUpdateFrame.P2X = e.P2Pos.X
-				gameUpdateFrame.P2Y = e.P2Pos.Y
-				gameUpdateFrame.P1YVelocity = e.P1Vel.Y
-				gameUpdateFrame.P2YVelocity = e.P2Vel.Y
-				gameUpdateFrame.BallXVelocity = e.BallVel.X
-				gameUpdateFrame.BallYVelocity = e.BallVel.Y
-				gameUpdateFrame.Fps = e.FPS
-				gameUpdateFrame.Tps = e.TPS
-
-				protoTick, err := proto.Marshal(gameUpdateFrame)
-				if err != nil {
-					e.log.Errorf("Error marshaling protobuf: %v", err)
+				if errors.Is(e.Err, engine.ErrP2Win) {
+					e.P2Score++
+					roundResult <- 2
+					return
 				}
-				// Return object to pool
-				gameUpdatePool.Put(gameUpdateFrame)
-
+				gu := gameUpdatePool.Get().(*pong.GameUpdate)
+				gu.Reset()
+				gu.GameWidth, gu.GameHeight = e.Game.Width, e.Game.Height
+				gu.P1Width, gu.P1Height = e.Game.P1.Width, e.Game.P1.Height
+				gu.P2Width, gu.P2Height = e.Game.P2.Width, e.Game.P2.Height
+				gu.BallWidth, gu.BallHeight = e.Game.Ball.Width, e.Game.Ball.Height
+				gu.P1Score, gu.P2Score = int32(e.P1Score), int32(e.P2Score)
+				gu.BallX, gu.BallY = e.BallPos.X, e.BallPos.Y
+				gu.P1X, gu.P1Y = e.P1Pos.X, e.P1Pos.Y
+				gu.P2X, gu.P2Y = e.P2Pos.X, e.P2Pos.Y
+				gu.P1YVelocity, gu.P2YVelocity = e.P1Vel.Y, e.P2Vel.Y
+				gu.BallXVelocity, gu.BallYVelocity = e.BallVel.X, e.BallVel.Y
+				gu.Fps, gu.Tps = e.FPS, e.TPS
+				data, _ := proto.Marshal(gu)
+				gameUpdatePool.Put(gu)
 				select {
-				case framesch <- protoTick:
+				case framesch <- data:
 				case <-ctx.Done():
 					return
 				}
@@ -145,65 +118,22 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 		}
 	}()
 
-	// Reads user input and moves player one according to it
+	// input pump
 	go func() {
 		for {
 			select {
-			case key, ok := <-inputch:
-				if !ok {
-					// Input channel is closed; exit goroutine
-					e.log.Debug("Input channel closed; exiting input reader goroutine")
+			case raw, ok := <-inputch:
+				if !ok || len(raw) == 0 {
 					return
 				}
-				if len(key) == 0 {
-					// Empty input received; possibly due to closed channel
-					e.log.Debug("Received empty input data; exiting")
-					return
-				}
-
 				in := &pong.PlayerInput{}
-				err := proto.Unmarshal(key, in)
-				if err != nil {
-					e.log.Errorf("Failed to unmarshal input: %v", err)
-					// Decide whether to continue or exit; here we'll continue
+				if err := proto.Unmarshal(raw, in); err != nil {
 					continue
 				}
-
-				// Process the valid input
-				if in.PlayerNumber == int32(1) {
-					switch k := in.Input; k {
-					case "ArrowUp":
-						e.p1Up()
-					case "ArrowDown":
-						e.p1Down()
-					case "ArrowUpStop":
-						// Stop upward movement
-						if e.P1Vel.Y < 0 {
-							e.P1Vel.Y = 0
-						}
-					case "ArrowDownStop":
-						// Stop downward movement
-						if e.P1Vel.Y > 0 {
-							e.P1Vel.Y = 0
-						}
-					}
+				if in.PlayerNumber == 1 {
+					e.handleP1Input(in.Input)
 				} else {
-					switch k := in.Input; k {
-					case "ArrowUp":
-						e.p2Up()
-					case "ArrowDown":
-						e.p2Down()
-					case "ArrowUpStop":
-						// Stop upward movement
-						if e.P2Vel.Y < 0 {
-							e.P2Vel.Y = 0
-						}
-					case "ArrowDownStop":
-						// Stop downward movement
-						if e.P2Vel.Y > 0 {
-							e.P2Vel.Y = 0
-						}
-					}
+					e.handleP2Input(in.Input)
 				}
 			case <-ctx.Done():
 				return
@@ -212,38 +142,264 @@ func (e *CanvasEngine) NewRound(ctx context.Context, framesch chan<- []byte, inp
 	}()
 }
 
-// State returns the current state of the canvas engine
-func (e *CanvasEngine) State() struct {
-	PaddleWidth, PaddleHeight float64
-	BallWidth, BallHeight     float64
-	P1PosX, P1PosY            float64
-	P2PosX, P2PosY            float64
-	BallPosX, BallPosY        float64
-	BallVelX, BallVelY        float64
-	FPS, TPS                  float64
-} {
-	return struct {
-		PaddleWidth, PaddleHeight float64
-		BallWidth, BallHeight     float64
-		P1PosX, P1PosY            float64
-		P2PosX, P2PosY            float64
-		BallPosX, BallPosY        float64
-		BallVelX, BallVelY        float64
-		FPS, TPS                  float64
-	}{
-		PaddleWidth:  e.Game.P1.Width,
-		PaddleHeight: e.Game.P1.Height,
-		BallWidth:    e.Game.Ball.Width,
-		BallHeight:   e.Game.Ball.Height,
-		P1PosX:       e.P1Pos.X,
-		P1PosY:       e.P1Pos.Y,
-		P2PosX:       e.P2Pos.X,
-		P2PosY:       e.P2Pos.Y,
-		BallPosX:     e.BallPos.X,
-		BallPosY:     e.BallPos.Y,
-		BallVelX:     e.BallVel.X,
-		BallVelY:     e.BallVel.Y,
-		FPS:          e.FPS,
-		TPS:          e.TPS,
+// -------------------- reset helpers -----------------------------------------
+
+func (e *CanvasEngine) reset() *CanvasEngine {
+	e.Err = nil
+	e.resetBall()
+	e.resetPlayers()
+	e.phy = NewAVBDPhysics(e)
+	return e
+}
+
+func (e *CanvasEngine) resetBall() {
+	cx, cy := e.Game.Width*0.5, e.Game.Height*0.5
+	e.BallPos = Vec2{cx - e.Game.Ball.Width*0.5, cy - e.Game.Ball.Height*0.5}
+	vx := initial_ball_x_vel * e.Game.Width
+	vy := initial_ball_y_vel * e.Game.Height
+	if rand.Intn(2) == 0 {
+		vx = -vx
 	}
+	if rand.Intn(2) == 0 {
+		vy = -vy
+	}
+	e.BallVel = Vec2{vx, vy}
+}
+
+func (e *CanvasEngine) resetPlayers() {
+	h := e.Game.Height * 0.5
+	p1x := e.Game.P1.Width * 1.5
+	p2x := e.Game.Width - e.Game.P2.Width*1.5
+	e.P1Pos = Vec2{p1x - e.Game.P1.Width*0.5, h - e.Game.P1.Height*0.5}
+	e.P2Pos = Vec2{p2x - e.Game.P2.Width*0.5, h - e.Game.P2.Height*0.5}
+	e.P1Vel, e.P2Vel = Vec2{}, Vec2{}
+}
+
+// -------------------- input helpers ----------------------------------------
+
+func (e *CanvasEngine) handleP1Input(k string) {
+	switch k {
+	case "ArrowUp":
+		e.p1Up()
+	case "ArrowDown":
+		e.p1Down()
+	case "ArrowUpStop":
+		if e.P1Vel.Y < 0 {
+			e.P1Vel.Y = 0
+		}
+	case "ArrowDownStop":
+		if e.P1Vel.Y > 0 {
+			e.P1Vel.Y = 0
+		}
+	}
+}
+func (e *CanvasEngine) handleP2Input(k string) {
+	switch k {
+	case "ArrowUp":
+		e.p2Up()
+	case "ArrowDown":
+		e.p2Down()
+	case "ArrowUpStop":
+		if e.P2Vel.Y < 0 {
+			e.P2Vel.Y = 0
+		}
+	case "ArrowDownStop":
+		if e.P2Vel.Y > 0 {
+			e.P2Vel.Y = 0
+		}
+	}
+}
+
+// -------------------- paddle motion ----------------------------------------
+
+func (e *CanvasEngine) p1Up()   { e.P1Vel = Vec2{0, -y_vel_ratio * e.Game.Height} }
+func (e *CanvasEngine) p1Down() { e.P1Vel = Vec2{0, y_vel_ratio * e.Game.Height} }
+func (e *CanvasEngine) p2Up()   { e.P2Vel = Vec2{0, -y_vel_ratio * e.Game.Height} }
+func (e *CanvasEngine) p2Down() { e.P2Vel = Vec2{0, y_vel_ratio * e.Game.Height} }
+
+// -------------------- collision helpers (reuse physics code) ---------------
+
+func (e *CanvasEngine) ballRect() Rect {
+	return Rect{e.BallPos.X + e.Game.Ball.Width*0.5, e.BallPos.Y + e.Game.Ball.Height*0.5, e.Game.Ball.Width * 0.5, e.Game.Ball.Height * 0.5}
+}
+func (e *CanvasEngine) p1Rect() Rect {
+	return Rect{e.P1Pos.X + e.Game.P1.Width*0.5, e.P1Pos.Y + e.Game.P1.Height*0.5, e.Game.P1.Width * 0.5, e.Game.P1.Height * 0.5}
+}
+func (e *CanvasEngine) p2Rect() Rect {
+	return Rect{e.P2Pos.X + e.Game.P2.Width*0.5, e.P2Pos.Y + e.Game.P2.Height*0.5, e.Game.P2.Width * 0.5, e.Game.P2.Height * 0.5}
+}
+func (e *CanvasEngine) topRect() Rect {
+	return Rect{e.Game.Width * 0.5, canvas_border_correction * 0.5, e.Game.Width * 0.5, canvas_border_correction * 0.5}
+}
+func (e *CanvasEngine) bottomRect() Rect {
+	return Rect{e.Game.Width * 0.5, e.Game.Height - canvas_border_correction*0.5, e.Game.Width * 0.5, canvas_border_correction * 0.5}
+}
+
+func intersects(a, b Rect) bool {
+	return math.Abs(a.Cx-b.Cx) <= a.HalfW+b.HalfW && math.Abs(a.Cy-b.Cy) <= a.HalfH+b.HalfH
+}
+
+func (e *CanvasEngine) detectColl() engine.Collision {
+	br, p1r, p2r := e.ballRect(), e.p1Rect(), e.p2Rect()
+	tr, brw := e.topRect(), e.bottomRect()
+
+	if intersects(br, p1r) {
+		if math.Abs(br.Cy-p1r.Cy) > p1r.HalfH*0.8 {
+			if br.Cy < p1r.Cy {
+				return engine.CollP1Top
+			}
+			return engine.CollP1Bottom
+		}
+		return engine.CollP1
+	}
+	if intersects(br, p2r) {
+		if math.Abs(br.Cy-p2r.Cy) > p2r.HalfH*0.8 {
+			if br.Cy < p2r.Cy {
+				return engine.CollP2Top
+			}
+			return engine.CollP2Bottom
+		}
+		return engine.CollP2
+	}
+	if intersects(br, tr) {
+		if br.Cx <= p1r.Cx+p1r.HalfW {
+			return engine.CollTopLeft
+		}
+		if br.Cx >= p2r.Cx-p2r.HalfW {
+			return engine.CollTopRight
+		}
+		return engine.CollTop
+	}
+	if intersects(br, brw) {
+		if br.Cx <= p1r.Cx+p1r.HalfW {
+			return engine.CollBottomLeft
+		}
+		if br.Cx >= p2r.Cx-p2r.HalfW {
+			return engine.CollBottomRight
+		}
+		return engine.CollBottom
+	}
+	if br.Cx-br.HalfW <= 0 {
+		return engine.CollLeft
+	}
+	if br.Cx+br.HalfW >= e.Game.Width {
+		return engine.CollRight
+	}
+	return engine.CollNone
+}
+
+func (e *CanvasEngine) deOutOfBoundsPlayers() {
+	p1r, p2r := e.p1Rect(), e.p2Rect()
+	if p1r.Cy-p1r.HalfH <= 0 {
+		p1r.Cy = p1r.HalfH
+		e.P1Pos.Y = p1r.Cy - p1r.HalfH
+		e.P1Vel.Y = 0
+	}
+	if p1r.Cy+p1r.HalfH >= e.Game.Height {
+		p1r.Cy = e.Game.Height - p1r.HalfH
+		e.P1Pos.Y = p1r.Cy - p1r.HalfH
+		e.P1Vel.Y = 0
+	}
+	if p2r.Cy-p2r.HalfH <= 0 {
+		p2r.Cy = p2r.HalfH
+		e.P2Pos.Y = p2r.Cy - p2r.HalfH
+		e.P2Vel.Y = 0
+	}
+	if p2r.Cy+p2r.HalfH >= e.Game.Height {
+		p2r.Cy = e.Game.Height - p2r.HalfH
+		e.P2Pos.Y = p2r.Cy - p2r.HalfH
+		e.P2Vel.Y = 0
+	}
+}
+
+func (e *CanvasEngine) deOutOfBoundsBall() {
+	br := e.ballRect()
+	if br.Cy-br.HalfH <= 0 {
+		br.Cy = br.HalfH
+		e.BallPos.Y = br.Cy - br.HalfH
+	}
+	if br.Cy+br.HalfH >= e.Game.Height {
+		br.Cy = e.Game.Height - br.HalfH
+		e.BallPos.Y = br.Cy - br.HalfH
+	}
+	p1r, p2r := e.p1Rect(), e.p2Rect()
+	if br.Cx-br.HalfW <= p1r.Cx+p1r.HalfW {
+		dx := (br.HalfW + p1r.HalfW) - math.Abs(br.Cx-p1r.Cx)
+		if dx > 0 {
+			if br.Cx > p1r.Cx {
+				br.Cx += dx
+			} else {
+				br.Cx = p1r.Cx + p1r.HalfW + br.HalfW
+			}
+			e.BallPos.X = br.Cx - br.HalfW
+		}
+	}
+	if br.Cx+br.HalfW >= p2r.Cx-p2r.HalfW {
+		dx := (br.HalfW + p2r.HalfW) - math.Abs(br.Cx-p2r.Cx)
+		if dx > 0 {
+			if br.Cx < p2r.Cx {
+				br.Cx -= dx
+			} else {
+				br.Cx = p2r.Cx - p2r.HalfW - br.HalfW
+			}
+			e.BallPos.X = br.Cx - br.HalfW
+		}
+	}
+}
+
+// -------------------- public state snapshot (unchanged) --------------------
+
+func (e *CanvasEngine) State() struct{ PaddleWidth, PaddleHeight, BallWidth, BallHeight, P1PosX, P1PosY, P2PosX, P2PosY, BallPosX, BallPosY, BallVelX, BallVelY, FPS, TPS float64 } {
+	return struct{ PaddleWidth, PaddleHeight, BallWidth, BallHeight, P1PosX, P1PosY, P2PosX, P2PosY, BallPosX, BallPosY, BallVelX, BallVelY, FPS, TPS float64 }{
+		PaddleWidth: e.Game.P1.Width, PaddleHeight: e.Game.P1.Height, BallWidth: e.Game.Ball.Width, BallHeight: e.Game.Ball.Height,
+		P1PosX: e.P1Pos.X, P1PosY: e.P1Pos.Y, P2PosX: e.P2Pos.X, P2PosY: e.P2Pos.Y, BallPosX: e.BallPos.X, BallPosY: e.BallPos.Y,
+		BallVelX: e.BallVel.X, BallVelY: e.BallVel.Y, FPS: e.FPS, TPS: e.TPS}
+}
+
+// -----------------------------------------------------------------------------
+//  Tick – one simulation / gameplay step
+// -----------------------------------------------------------------------------
+
+func (e *CanvasEngine) tick() {
+	dt := 1.0 / e.FPS
+
+	// 1. integrar os paddles (cinemática simples)
+	e.P1Pos = e.P1Pos.Add(e.P1Vel.Scale(dt))
+	e.P2Pos = e.P2Pos.Add(e.P2Vel.Scale(dt))
+
+	// 2. step de física AVBD
+	StepPhysics(e, dt)
+
+	// 3. detectar colisão depois das posições atualizadas
+	coll := e.detectColl()
+
+	// 4. reagir à colisão (bounce, ponto, etc.)
+	switch coll {
+	case engine.CollP1, engine.CollP1Top, engine.CollP1Bottom,
+		engine.CollP2, engine.CollP2Top, engine.CollP2Bottom:
+		e.applyPaddleBounce(coll) // calcula novo vetor
+		e.BallVel = clampBallSpeed(e.BallVel, e.Game.Width)
+
+	case engine.CollTop:
+		e.BallVel.Y = -math.Abs(e.BallVel.Y)
+		bounceWall(e, +1) // teto → Vy positivo depois de inverter
+
+	case engine.CollBottom:
+		e.BallVel.Y = math.Abs(e.BallVel.Y)
+		bounceWall(e, -1) // piso → Vy negativo depois de inverter
+
+	case engine.CollTopLeft, engine.CollBottomLeft, engine.CollLeft:
+		e.Err = engine.ErrP2Win
+		return
+	case engine.CollTopRight, engine.CollBottomRight, engine.CollRight:
+		e.Err = engine.ErrP1Win
+		return
+	}
+
+	// 5. correções de segurança de posição
+	e.deOutOfBoundsBall()
+	e.deOutOfBoundsPlayers()
+
+	// 6. clamp global (última barreira de segurança)
+	e.BallVel = clampBallSpeed(e.BallVel, e.Game.Width)
 }
