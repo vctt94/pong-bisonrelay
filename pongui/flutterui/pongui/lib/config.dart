@@ -46,7 +46,7 @@ class Config {
     set("default", "server", serverAddr);
     set("default", "grpccertpath", grpcCertPath);
     set("clientrpc", "rpccertpath", rpcCertPath);
-    set("log", "debuglevel", debugLevel);
+    set("log", "debug", debugLevel);
     set("clientrpc", "rpcwebsocketurl", rpcWebsocketURL);
     set("clientrpc", "rpcclientcertpath", rpcClientCertPath);
     set("clientrpc", "rpcclientkeypath", rpcClientKeyPath);
@@ -70,11 +70,12 @@ class Config {
       rpcCertPath: f.get("clientrpc", "rpccertpath") ?? "",
       rpcClientCertPath: f.get("clientrpc", "rpcclientcertpath") ?? "",
       rpcClientKeyPath: f.get("clientrpc", "rpcclientkeypath") ?? "",
-      debugLevel: f.get("log", "debuglevel") ?? "info",
+      debugLevel: f.get("log", "debug") ?? "info",
       rpcUser: f.get("clientrpc", "rpcuser") ?? "",
       rpcPass: f.get("clientrpc", "rpcpass") ?? "",
       rpcWebsocketURL: f.get("clientrpc", "rpcwebsocketurl") ?? "",
       wantsLogNtfns: f.get("clientrpc", "wantsLogNtfns") == "1",
+      dataDir: await defaultAppDataDir(),
     );
   }
 }
@@ -157,7 +158,8 @@ Future<Config> loadConfig(String filepath) async {
       rpcClientKeyPath: getPath("clientrpc", "rpcclientkeypath", ""),
       rpcUser: f.get("clientrpc", "rpcuser") ?? "",
       rpcPass: f.get("clientrpc", "rpcpass") ?? "",
-      wantsLogNtfns: getBool("clientrpc", "wantsLogNtfns"));
+      wantsLogNtfns: getBool("clientrpc", "wantsLogNtfns"),
+      dataDir: await defaultAppDataDir());
 
   return c;
 }
