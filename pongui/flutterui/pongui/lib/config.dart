@@ -94,8 +94,9 @@ Future<String> defaultAppDataDir() async {
     return path.join(baseDir, APPNAME);
   }
 
-  final dir = await getApplicationSupportDirectory();
-  return dir.path;
+  // For other platforms, get the parent directory to avoid bundle identifier paths
+  final dir = (await getApplicationSupportDirectory()).parent;
+  return path.join(dir.path, APPNAME);
 }
 
 // Function to get the default app data directory based on the platform
@@ -114,7 +115,7 @@ Future<String> defaultAppDataBRUIGDir() async {
   }
 
   final dir = await getApplicationSupportDirectory();
-  return dir.path;
+  return path.join(dir.path, BRUIGNAME);
 }
 
 final usageException = Exception("Usage Displayed");
@@ -137,7 +138,7 @@ Future<Config> loadConfig(String filepath) async {
     var v = f.get(section, opt);
     return v == "yes" || v == "true" || v == "1";
   }
-  
+
   try {
     f = ini.Config.fromStrings(File(configDir).readAsLinesSync());
   } catch (e) {
